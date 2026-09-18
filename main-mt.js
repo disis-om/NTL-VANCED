@@ -3938,6 +3938,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
+    {v:"5.54", d:"18 Sep 2026", t:"Stable build with the finished updater: every-start check, two manifest mirrors, instant CDN purge on release."},
     { v: "5.53", d: "18 Sep 2026", t: "Update check reads two mirrors (GitHub raw + jsDelivr) so a fresh release shows up within seconds instead of after the CDN cache." },
     { v: "5.52", d: "18 Sep 2026", t: "Updater checks on every start (stable, and beta when enabled) and shows the popup right away." },
     { v: "5.51-beta", d: "18 Sep 2026", t: "Beta channel test build on the new loader — nothing new, just proving that over-the-air updates work." },

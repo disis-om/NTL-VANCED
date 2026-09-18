@@ -1,12 +1,12 @@
 {
-  "version": "5.53",
+  "version": "5.54",
   "channel": "stable",
   "date": "2026-09-18",
-  "size": 7912413,
-  "sha256": "3d808cbdd798440c6308bfe0665c885d61087f595a503146da72573aefd45f0b",
+  "size": 7912562,
+  "sha256": "52accdb3bd25220b1700ec11eb30f2205b4abaa4b9b380d34f38838e2e1c3d45",
   "minLoader": 3,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.53/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.53/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.53/NTL-VANCED-v5.53.zip",
-  "notes": "# v5.53\nUpdate check reads two mirrors (GitHub raw + jsDelivr) so a fresh release shows up within seconds instead of after the CDN cache."
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.54/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.54/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.54/NTL-VANCED-v5.54.zip",
+  "notes": "# v5.54\nSee the changelog in Vanced › Changelog."
 }
