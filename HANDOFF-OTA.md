@@ -25,3 +25,10 @@ Facts established:
 
 ## Files touched today
 `tinyscr.js` (loader v1→v2), `main-mt.js` (`NTL_UP`, Vanced section, SHA-256 JS, parse check), `tools/release.js`, `tools/mkzip.ps1` (repo-aware, exclusions), `updates/*.json`, `README.md`, `.gitignore`, `.gitattributes` (`* -text`), `WYRM-MOD-NOTES.md` §3.6ab, `tools/e2e_ota.js`, `tools/harness/{up_test,inj_test}.html`.
+
+## Later on 18 Sep (after the OTA fix) — all released, all verified
+- **5.52–5.56**: every-start update check (stable + beta), popup returns until installed (no snooze), two manifest mirrors (raw + jsDelivr, newest wins) + jsDelivr purge in `release.js`, a check requested during a running check is queued (Beta toggle right after start). 5.55-beta / 5.56 stable were the owner's channel tests — passed.
+- **5.57-beta → 5.58 stable**: arrow-control touch layer `#wy-arcap` (z 118, mobile, only while a round runs) so panels never eat steering touches; roster solo-dot (NTL `h3/I3`) via delegated hover/tap in `NTL_TP`; **Content transparency** slider (`--wy-fg-a`, `wy_fg_a`) next to Panel transparency.
+- **5.58–5.59**: server picker search on touch (stop touch events at `#sv-box`/`#sv-search`, focus on touchend) + search by id/`#id`/ip/country code/country name (`CN` map, code from NTL `R9` via the flag cell's `data-srv-flag`). **5.59 real fix:** hidden rows stayed visible because `#sv-body #select-srv-body > div{display:grid!important}` (2 ids) beat `#sv-body .sv-hide`; hide rule now `#sv-body #select-srv-body > div.sv-hide …`. Verified with `tools/e2e_sv.js` (real Chrome for Testing + extension).
+- **Rule learned:** harness pages lie about NTL's real DOM/CSS — for anything touching NTL's own elements, verify with the Chrome-for-Testing e2e scripts (`tools/e2e_*.js`, binary in `tools/cft/`, ignored by git).
+- Chrome's extensions page shows the **zip's** manifest version (e.g. 5.50) — it cannot follow OTA; the running version is in Vanced / the HUD.
