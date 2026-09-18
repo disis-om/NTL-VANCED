@@ -2,7 +2,7 @@
 
 ## Where things are
 - Repo **github.com/disis-om/NTL-VANCED** = the mod folder `Desktop\wyrm\NTL EyesBack Mod` (git, branch `main`). Releases so far: **v5.47** (stable), **v5.48** (stable, current `updates/stable.json`), **v5.49-beta** (beta, current `updates/beta.json`).
-- Local working copy is at **5.50 (unreleased)**: loader v2 + parse check (see below). `tools/release.js` has `MIN_LOADER = 2` → 5.50 must ship as a **zip** (the loader changed); OTA from 5.48/5.49 will show "GET THE ZIP".
+- **v5.50 released (stable)** with loader v3 — OTA verified end-to-end. Anyone on ≤5.49 must install the 5.50 zip once (`minLoader: 3`); after that everything is OTA.
 - `tools/release.js` (stable) / `--beta` does everything (updates json, zip via `tools/mkzip.ps1`, commit, tag, push, GitHub release). Zips land in `Desktop\wyrm`.
 
 ## How the updater works (short)
