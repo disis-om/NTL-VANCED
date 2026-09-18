@@ -3709,7 +3709,28 @@ var NTL_UP = (function () {
   var status = "";
   /* ---------- install ---------- */
   var busy = false, progress = 0;
-  function sha256(buf) { return crypto.subtle.digest("SHA-256", buf).then(function (h) { return Array.prototype.map.call(new Uint8Array(h), function (b) { return ("0" + b.toString(16)).slice(-2); }).join(""); }); }
+  function hex(u8) { var o = ""; for (var i = 0; i < u8.length; i++) o += ("0" + u8[i].toString(16)).slice(-2); return o; }
+  /* plain-JS SHA-256 (FIPS 180-4) for the http origin, where crypto.subtle does not exist */
+  function sha256js(buf) {
+    var K = [0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2];
+    var H = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+    var m = new Uint8Array(buf), l = m.length, padLen = ((l + 9 + 63) >> 6) << 6, p = new Uint8Array(padLen); p.set(m); p[l] = 0x80;
+    var bits = l * 8; p[padLen - 4] = (bits >>> 24) & 255; p[padLen - 3] = (bits >>> 16) & 255; p[padLen - 2] = (bits >>> 8) & 255; p[padLen - 1] = bits & 255; p[padLen - 5] = Math.floor(l / 0x20000000) & 255;
+    var W = new Int32Array(64), dv = new DataView(p.buffer);
+    for (var off = 0; off < padLen; off += 64) {
+      for (var i = 0; i < 16; i++) W[i] = dv.getInt32(off + i * 4);
+      for (i = 16; i < 64; i++) { var w15 = W[i - 15], w2 = W[i - 2]; var s0 = ((w15 >>> 7) | (w15 << 25)) ^ ((w15 >>> 18) | (w15 << 14)) ^ (w15 >>> 3); var s1 = ((w2 >>> 17) | (w2 << 15)) ^ ((w2 >>> 19) | (w2 << 13)) ^ (w2 >>> 10); W[i] = (W[i - 16] + s0 + W[i - 7] + s1) | 0; }
+      var a = H[0], b = H[1], c = H[2], d = H[3], e = H[4], f = H[5], g2 = H[6], h = H[7];
+      for (i = 0; i < 64; i++) { var S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7)); var ch = (e & f) ^ (~e & g2); var t1 = (h + S1 + ch + K[i] + W[i]) | 0; var S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10)); var mj = (a & b) ^ (a & c) ^ (b & c); var t2 = (S0 + mj) | 0; h = g2; g2 = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0; }
+      H[0] = (H[0] + a) | 0; H[1] = (H[1] + b) | 0; H[2] = (H[2] + c) | 0; H[3] = (H[3] + d) | 0; H[4] = (H[4] + e) | 0; H[5] = (H[5] + f) | 0; H[6] = (H[6] + g2) | 0; H[7] = (H[7] + h) | 0;
+    }
+    var out = new Uint8Array(32); for (i = 0; i < 8; i++) { out[i * 4] = H[i] >>> 24; out[i * 4 + 1] = (H[i] >>> 16) & 255; out[i * 4 + 2] = (H[i] >>> 8) & 255; out[i * 4 + 3] = H[i] & 255; }
+    return hex(out);
+  }
+  function sha256(buf) {
+    if (typeof crypto !== "undefined" && crypto.subtle && crypto.subtle.digest) return crypto.subtle.digest("SHA-256", buf).then(function (h) { return hex(new Uint8Array(h)); }).catch(function () { return sha256js(buf); });
+    return new Promise(function (res) { setTimeout(function () { res(sha256js(buf)); }, 0); });
+  }
   function download(url, onProg) {
     return fetch(url, { cache: "no-store" }).then(function (r) {
       if (!r.ok) throw new Error("HTTP " + r.status);
@@ -3905,6 +3926,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
+    { v: "5.48", d: "18 Sep 2026", t: "Vanced gets an Updates & About section (updater controls + about); downloads verify on http too (JS SHA-256 fallback)." },
     { v: "5.47", d: "18 Sep 2026", t: "Over-the-air updates from GitHub: the extension checks the NTL VANCED repo, shows the release notes and updates itself on tap \u2014 no reinstall. Beta channel switch, STABLE fallback and a rollback guard in Vanced \u203a General \u203a Updates." },
     { v: "5.46", d: "18 Sep 2026", t: "PLAY icon sits on the PLAY button again; tiny EXPERIMENTAL tag on the live battledomes button." },
     { v: "5.45", d: "18 Sep 2026", t: "Release notes for this build in What\u2019s new, with a richer look (gradient title, section bars, card bullets, highlighted keywords)." },
@@ -4198,19 +4220,6 @@ var NTL_VS = (function () {
       var gkW = el("div", "vs-cols"); gkW.appendChild(gkIn); gkW.appendChild(gkB); gfGrp.appendChild(vsRow("KLIPY key", "the built-in key is shared and rate-limited (100 searches/hour); get your own free key at klipy.com/developers", gkW));
       c2g.appendChild(gfGrp); S.appendChild(c2g);
     }
-    if (typeof NTL_UP !== "undefined") {
-      var UP = NTL_UP, cU = card();
-      var upSt = el("div", "vs-note"), upRow = el("div", "vs-cols");
-      var upChk = el("button", "vs-btn", "CHECK NOW"), upGo = el("button", "vs-btn pri", "UPDATE"), upFb = el("button", "vs-btn", "STABLE"), upPk = el("button", "vs-btn", "PACKAGED");
-      upChk.onclick = function () { UP.check(""); }; upGo.onclick = function () { UP.install(); }; upFb.onclick = function () { UP.fallbackStable(); }; upPk.onclick = function () { UP.usePackaged(); };
-      upRow.appendChild(upChk); upRow.appendChild(upGo); upRow.appendChild(upFb); upRow.appendChild(upPk);
-      cU.appendChild(vsRow("Updates", "running v" + UP.version + " (" + (UP.source === "ota" ? "over-the-air" : "packaged in the extension, v" + UP.packaged) + ") \u00b7 updates come from github.com/" + UP.REPO, upRow));
-      cU.appendChild(vsRow("Beta updates", "get experimental builds before everyone else; STABLE puts you back on the latest stable release", vsSwitch(UP.cfg.beta, function (v) { UP.setBeta(v); })));
-      cU.appendChild(upSt);
-      var upRef = function () { var a = UP.avail; upSt.textContent = (UP.status || (a ? "v" + a.version + " available" + (a.channel === "beta" ? " (beta)" : "") : (UP.cfg.last ? "Up to date \u00b7 checked " + new Date(UP.cfg.last).toLocaleTimeString() : "Not checked yet"))) + (UP.busy ? " \u00b7 " + Math.round(UP.progress * 100) + "%" : ""); upGo.style.display = a || UP.manifest ? "" : "none"; upGo.disabled = UP.busy; upFb.disabled = UP.busy; upPk.style.display = UP.source === "ota" ? "" : "none"; };
-      UP.onChange(upRef); upRef();
-      S.appendChild(cU);
-    }
     var akb = el("button", "vs-btn pri", "OPEN EDITOR"); akb.onclick = function () { close(); if (typeof NTL_TC !== "undefined") NTL_TC.edit(); };
     c2.appendChild(vsRow("On-screen controls", "place touch buttons, a boost button, joystick and zoom bar — any action by name", akb));
     S.appendChild(c2);
@@ -4420,7 +4429,22 @@ var NTL_VS = (function () {
     }
 
     /* ================= ABOUT ================= */
-    S = section("about", "About");
+    S = section("about", "Updates & About", "NEW");
+    h(S, "Updates", "over-the-air updates from github.com/disis-om/NTL-VANCED \u2014 no reinstall, the extension updates itself");
+    try { if (typeof NTL_UP !== "undefined") {
+      var UP = NTL_UP, cU = card();
+      var upSt = el("div", "vs-note"), upRow = el("div", "vs-cols");
+      var upChk = el("button", "vs-btn", "CHECK NOW"), upGo = el("button", "vs-btn pri", "UPDATE"), upFb = el("button", "vs-btn", "STABLE"), upPk = el("button", "vs-btn", "PACKAGED");
+      upChk.onclick = function () { UP.check(""); }; upGo.onclick = function () { UP.install(); }; upFb.onclick = function () { UP.fallbackStable(); }; upPk.onclick = function () { UP.usePackaged(); };
+      upRow.appendChild(upChk); upRow.appendChild(upGo); upRow.appendChild(upFb); upRow.appendChild(upPk);
+      cU.appendChild(vsRow("Updates", "running v" + UP.version + " (" + (UP.source === "ota" ? "over-the-air" : "packaged in the extension, v" + UP.packaged) + ") \u00b7 updates come from github.com/" + UP.REPO, upRow));
+      cU.appendChild(vsRow("Beta updates", "get experimental builds before everyone else; STABLE puts you back on the latest stable release", vsSwitch(UP.cfg.beta, function (v) { UP.setBeta(v); })));
+      cU.appendChild(upSt);
+      var upRef = function () { var a = UP.avail; upSt.textContent = (UP.status || (a ? "v" + a.version + " available" + (a.channel === "beta" ? " (beta)" : "") : (UP.cfg.last ? "Up to date \u00b7 checked " + new Date(UP.cfg.last).toLocaleTimeString() : "Not checked yet"))) + (UP.busy ? " \u00b7 " + Math.round(UP.progress * 100) + "%" : ""); upGo.style.display = a || UP.manifest ? "" : "none"; upGo.disabled = UP.busy; upFb.disabled = UP.busy; upPk.style.display = UP.source === "ota" ? "" : "none"; };
+      UP.onChange(upRef); upRef();
+      S.appendChild(cU);
+    } } catch (eUP) { try { console.warn("NTL VANCED updates card", eUP); } catch (e2) {} }
+    h(S, "About", "");
     var ab = el("div", "vs-ab");
     ab.innerHTML = '<div style="margin-top:4px"><span class="vs-ab-logo">NTL VANCED</span><span class="vs-ab-ver">v' + VER + '</span></div>' +
       '<p>A modern, feature-rich makeover of the classic NTL MOD for slither.io — a clean premium UI, smarter menus, and extra tactical tools, all built on top of the original mod without breaking anything.</p>' +

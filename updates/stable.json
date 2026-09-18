@@ -1,12 +1,12 @@
 {
-  "version": "5.47",
+  "version": "5.48",
   "channel": "stable",
   "date": "2026-09-18",
-  "size": 7906556,
-  "sha256": "21e9db19df91d14783b8418098598b05129925dec9fae75028bd35f62b2243f4",
+  "size": 7909983,
+  "sha256": "1cb9d740c8b90bc8def9e66a7f4cae20d20f3ae776d2c56c3067aa94c5cacaef",
   "minLoader": 1,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.47/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.47/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.47/NTL-VANCED-v5.47.zip",
-  "notes": "# Chat, arenas and a lot of polish\nThis build turns the chat into a proper messenger, puts your team on the home screen and lets you watch Battledome live.\n\n## One chat picker\n- Tap the **GIF** button in the chat: **Emoji · GIF · Stickers · Memes** in one place, powered by KLIPY\n- Emoji go into your message; GIFs, stickers and memes are sent on tap and show as the image for NTL VANCED players\n- Category chips, **Recent**, search with autocomplete, bento grid\n\n## TEAM | GLOBAL in one box\n- The Global chat now lives inside NTL’s chat box as a second tab — unread badge, USERS and NICK right there\n- The picker works in both chats\n\n## Team map on the home screen\n- **BATTLEDOME · 2220 · 8828** with the live arena picture, your team members as their NTL icons, player counts and top ten\n- Tap a member to see their arena, **JOIN** to go there\n\n## Live Battledomes (experimental)\n- **VIEW LIVE BATTLEDOMES** above PLAY: a live rendered preview of the arena — zone ring, food, snakes with names — plus players, top score, zone radius, top ten and JOIN, POWERED BY WYRM.\n\n## Mobile controls, refined\n- **Arrow control** runs on a virtual cursor: clamped to the screen, centre dead zone, re-seeds along your heading on every new touch — steady and predictable\n- **Arrow & cursor skins** open a visual gallery in **Vanced › Controls** — every skin drawn, tap to use\n- **Eleven new neon arrows**: Neon Ice / Magenta / Sunset / Aqua / Jade, Volt / Twin Volt / Heat / Streak, Inferno / Chrome\n- On-screen **toggle buttons light up** while that mode is on (bot, SOS, spine, eyes, hide chat, assist lock…) — even if you flipped it with a key\n- On-screen **Open settings** and **Realtime leaderboards** work mid-game, no bot mode needed\n- **Revamp Keys** bindings now actually apply after Save\n- On-screen keys respond while another finger is steering; controls never leak touches into the game\n\n## Also\n- **UI size** is a − / + stepper and now scales every popup\n- New menu background; custom arena background accepts any image (png, webp, gif…)\n- Home screen buttons appear instantly\n- Mod panels sit on NTL’s own layer, so nothing floats over the settings page\n"
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.48/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.48/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.48/NTL-VANCED-v5.48.zip",
+  "notes": "# v5.48\nVanced gets an Updates & About section (updater controls + about); downloads verify on http too (JS SHA-256 fallback)."
 }
