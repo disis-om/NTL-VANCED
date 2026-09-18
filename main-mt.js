@@ -4771,9 +4771,28 @@ var NTL_AR = (function () {
   function build() {
     if (lay) return; css();
     lay = document.createElement("div"); lay.id = "wy-ar";
+    line = document.createElement("canvas"); line.id = "ar-line"; line.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;"; lay.appendChild(line);
     dot = document.createElement("div"); dot.id = "ar-a"; lay.appendChild(dot); document.body.appendChild(lay);
     paint();
   }
+  /* assist line: NTL draws its assist line (Ka) to the mouse, which on touch is nowhere useful — while NTL's assist
+     mode (xe) is on and arrow control is steering, draw the line from the snake's head to the arrow ourselves */
+  var line = null;
+  function drawLine() {
+    if (!line) return;
+    var on = cfg.on && playing() && !!g("xe") && g("snake") && !g("snake").I, W = window.innerWidth, H = window.innerHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (line.width !== Math.round(W * dpr) || line.height !== Math.round(H * dpr)) { line.width = Math.round(W * dpr); line.height = Math.round(H * dpr); }
+    var K = line.getContext("2d"); K.setTransform(dpr, 0, 0, dpr, 0, 0); K.clearRect(0, 0, W, H);
+    if (!on) return;
+    var sn = g("snake"), gsc = g("gsc") || 1, P8 = g("P8") || 1;
+    var hx = W / 2 + (sn.xx + (sn.fx || 0) - g("view_xx")) * gsc * P8, hy = H / 2 + (sn.yy + (sn.fy || 0) - g("view_yy")) * gsc * P8;
+    var ax = W / 2 + cx, ay = H / 2 + cy;
+    K.save(); K.lineCap = "round"; K.shadowColor = "rgba(0,0,0,.8)"; K.shadowBlur = 6;
+    K.strokeStyle = cfg.c1 || "#c9b6ff"; K.globalAlpha = 0.85; K.lineWidth = Math.max(2, 4 * gsc * P8);
+    K.setLineDash([Math.max(4, 10 * gsc * P8), Math.max(4, 8 * gsc * P8)]);
+    K.beginPath(); K.moveTo(hx, hy); K.lineTo(ax, ay); K.stroke(); K.restore();
+  }
+  (function lineLoop() { try { drawLine(); } catch (e) {} requestAnimationFrame(lineLoop); })();
   function paint() { if (!dot || typeof NTL_CU === "undefined") return; var s = NTL_CU.paint(dot, cfg.skin, cfg.size, cfg.c1, cfg.c2); art = { rot: s.rot, left: s.left }; }
 
   /* ---- the virtual cursor (screen px, relative to the centre) ---- */
