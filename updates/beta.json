@@ -1,12 +1,12 @@
 {
-  "version": "5.54",
-  "channel": "stable",
+  "version": "5.55-beta",
+  "channel": "beta",
   "date": "2026-09-18",
-  "size": 7912562,
-  "sha256": "52accdb3bd25220b1700ec11eb30f2205b4abaa4b9b380d34f38838e2e1c3d45",
+  "size": 7912826,
+  "sha256": "40ad0c1059174f78fdb8e72d54b0a3d34b6e1dbf68aea31356447ba15c51c163",
   "minLoader": 3,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.54/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.54/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.54/NTL-VANCED-v5.54.zip",
-  "notes": "# v5.54\nSee the changelog in Vanced › Changelog."
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.55-beta/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.55-beta/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.55-beta/NTL-VANCED-v5.55-beta.zip",
+  "notes": "# Beta 5.55 landed\nOver-the-air, from the beta channel.\n\n- **STABLE** in Vanced › Updates & About goes back to the stable release\n- Nothing else changed\n"
 }
