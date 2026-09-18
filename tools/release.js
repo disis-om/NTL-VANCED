@@ -10,7 +10,7 @@
    from the main branch and the bundle from jsDelivr at the tag (raw.github as
    fallback), so a release is live the moment the push lands. */
 const fs = require("fs"), path = require("path"), cp = require("child_process"), crypto = require("crypto");
-const ROOT = path.resolve(__dirname, ".."), REPO = "disis-om/NTL-VANCED", MIN_LOADER = 1;
+const ROOT = path.resolve(__dirname, ".."), REPO = "disis-om/NTL-VANCED", MIN_LOADER = 2;
 const args = process.argv.slice(2), beta = args.includes("--beta"), dry = args.includes("--dry");
 function sh(cmd, opts) { console.log("  $ " + cmd); if (dry) return ""; return cp.execSync(cmd, Object.assign({ cwd: ROOT, stdio: ["ignore", "pipe", "inherit"], encoding: "utf8" }, opts || {})).trim(); }
 

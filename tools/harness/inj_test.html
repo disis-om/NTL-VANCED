@@ -1,0 +1,10 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><pre id="o">loading…</pre>
+<script>
+window.__errs=[];window.addEventListener("error",e=>{__errs.push((e.message||"")+" @"+e.lineno+":"+e.colno)});
+(async()=>{const r=await fetch("https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.49-beta/main-mt.js");const buf=await r.arrayBuffer();const code=new TextDecoder("utf-8").decode(buf);
+document.getElementById("o").textContent="bytes "+buf.byteLength+" chars "+code.length;
+try{new Function(code);document.getElementById("o").textContent+="\nparse OK";}catch(e){document.getElementById("o").textContent+="\nPARSE ERR "+e.message;}
+localStorage.setItem("tinyscrID","testid");
+const t=document.createElement("script");t.textContent=code+"\n//# sourceURL=chrome-extension://testid/main-mt.js?ota=5.49-beta";document.documentElement.appendChild(t);
+setTimeout(()=>{document.getElementById("o").textContent+="\nerrs: "+JSON.stringify(__errs.slice(0,3))+"\nNTL_UP:"+typeof NTL_UP+" NTL_HM:"+typeof NTL_HM;},1500);})();
+</script></body></html>

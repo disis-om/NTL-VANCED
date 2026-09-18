@@ -1,6 +1,6 @@
 # NTL VANCED (Wyrm Mod) — Developer Notes
 
-> **STATUS (18 Sep 2026): v5.47 released on GitHub** — repo **github.com/disis-om/NTL-VANCED** (public; this folder IS the repo: extension source + `updates/` + `tools/`). Over-the-air updates are live: users install the zip once, later versions arrive in-game. Pro Guard and AI coach stay **LOCKED**. Pending: KLIPY production key; `radius` field in the Wyrm feed (optional).
+> **STATUS (18 Sep 2026): OTA updater shipped (v5.47/5.48 stable, 5.49-beta) but the OTA bundle does not boot on the owner's machine (blank page → rollback). Working copy = 5.50 unreleased (loader v2 with error capture + watchdog). READ `HANDOFF-OTA.md` FIRST.** Repo github.com/disis-om/NTL-VANCED. Pro Guard / AI coach LOCKED.
 
 ## 0. Quick map for a new agent
 

@@ -3754,6 +3754,9 @@ var NTL_UP = (function () {
       return sha256(buf).then(function (h) {
         if (m.sha256 && h !== String(m.sha256).toLowerCase()) throw new Error("checksum mismatch — download rejected");
         var code = new TextDecoder("utf-8").decode(buf);
+        status = "Checking…"; emit();
+        try { new Function(code); } catch (pe) { throw new Error("downloaded file does not parse (" + (pe && pe.message || pe) + ")"); }
+        if (code.indexOf("var NTL_UP") < 0) throw new Error("downloaded file is not an NTL VANCED bundle");
         status = "Installing…"; emit();
         return ext({ greeting: "ntlStorageSet", data: { wyrm_bundle: { version: m.version, channel: m.channel || "stable", sha256: h, at: Date.now(), code: code } } });
       });
@@ -3927,6 +3930,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
+    { v: "5.50", d: "18 Sep 2026", t: "Updater: loader v2 with error capture and an automatic rollback + reload if an update never starts; downloads are parse-checked before they are installed." },
     { v: "5.49-beta", d: "18 Sep 2026", t: "Beta channel test build — nothing new, just proving that over-the-air updates work." },
     { v: "5.48", d: "18 Sep 2026", t: "Vanced gets an Updates & About section (updater controls + about); downloads verify on http too (JS SHA-256 fallback)." },
     { v: "5.47", d: "18 Sep 2026", t: "Over-the-air updates from GitHub: the extension checks the NTL VANCED repo, shows the release notes and updates itself on tap \u2014 no reinstall. Beta channel switch, STABLE fallback and a rollback guard in Vanced \u203a General \u203a Updates." },
