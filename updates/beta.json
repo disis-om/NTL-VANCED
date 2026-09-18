@@ -1,12 +1,12 @@
 {
-  "version": "5.57-beta",
-  "channel": "beta",
+  "version": "5.58",
+  "channel": "stable",
   "date": "2026-09-18",
-  "size": 7916968,
-  "sha256": "68aee641b93b6ff5df48bd7e4d1f8d6af0199071c78c7405efe4d5daef021b81",
+  "size": 7919858,
+  "sha256": "1b02dd50c1eead1dd104606716f9b1a114f07eb5da74aede223596ab75e2be82",
   "minLoader": 3,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.57-beta/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.57-beta/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.57-beta/NTL-VANCED-v5.57-beta.zip",
-  "notes": "# v5.57-beta\nArrow control keeps steering when your finger drifts over the leaderboard, chat or logs (touch layer above the panels). Team roster: hover or tap a member to show only their dot on the minimap. New Content transparency slider for the text inside panels."
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.58/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.58/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.58/NTL-VANCED-v5.58.zip",
+  "notes": "# v5.58\nServer picker search works on touch and matches id, IP, country code and country name. Includes the 5.57 beta fixes: arrow-control touch layer, roster solo-dot on hover/tap, content transparency slider."
 }

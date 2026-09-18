@@ -1965,8 +1965,10 @@ var NTL_SV = (function () {
     var head = el("div"); head.id = "sv-head";
     var tw = el("div"); tw.appendChild(el("div", "sv-title", "SELECT SERVER")); tw.appendChild(el("div", "sv-sub", "Click a row to play there · click the IPv6 cell to use IPv6 · ★ marks a favourite"));
     head.appendChild(tw);
-    var search = el("input"); search.id = "sv-search"; search.placeholder = "Search id / ip … or type ip:port"; search.autocomplete = "off"; search.spellcheck = false;
+    var search = el("input"); search.id = "sv-search"; search.placeholder = "Search id, ip, country … or type ip:port"; search.autocomplete = "off"; search.spellcheck = false;
     search.addEventListener("input", function () { filter(search.value); });
+    ["touchstart", "touchend", "touchmove", "pointerdown"].forEach(function (t) { search.addEventListener(t, function (e) { e.stopPropagation(); }, { passive: true }); });
+    search.addEventListener("touchend", function () { setTimeout(function () { try { search.focus(); } catch (e) {} }, 0); });
     search.addEventListener("keydown", function (e) { e.stopPropagation(); if (e.key === "Escape") { if (search.value) { search.value = ""; filter(""); } else close(true); } if (e.key === "Enter" && isAddr(search.value.trim())) useCustom(search.value.trim()); });
     head.appendChild(search);
     var addBtn = el("button", "sv-addbtn", "+ Add arena"); addBtn.id = "sv-addbtn";
@@ -2076,14 +2078,24 @@ var NTL_SV = (function () {
       if (lastQ) applyFilter(lastQ);
     } finally { decorating = false; }
   }
-  function filter(q) { lastQ = (q || "").trim().toLowerCase(); applyFilter(lastQ); }
+  var CN = { us: "united states usa america", ca: "canada", mx: "mexico", br: "brazil", ar: "argentina", cl: "chile", co: "colombia", pe: "peru", gb: "united kingdom uk england britain", ie: "ireland", fr: "france", de: "germany", nl: "netherlands holland", be: "belgium", es: "spain", pt: "portugal", it: "italy", ch: "switzerland", at: "austria", pl: "poland", cz: "czech", sk: "slovakia", hu: "hungary", ro: "romania", bg: "bulgaria", gr: "greece", tr: "turkey turkiye", ua: "ukraine", ru: "russia", by: "belarus", lt: "lithuania", lv: "latvia", ee: "estonia", fi: "finland", se: "sweden", no: "norway", dk: "denmark", is: "iceland", rs: "serbia", hr: "croatia", si: "slovenia", ba: "bosnia", mk: "macedonia", al: "albania", md: "moldova", ge: "georgia", am: "armenia", az: "azerbaijan", kz: "kazakhstan", uz: "uzbekistan", in: "india", pk: "pakistan", bd: "bangladesh", lk: "sri lanka", np: "nepal", cn: "china", hk: "hong kong", tw: "taiwan", jp: "japan", kr: "korea south korea", sg: "singapore", my: "malaysia", id: "indonesia", th: "thailand", vn: "vietnam", ph: "philippines", au: "australia", nz: "new zealand", za: "south africa", ng: "nigeria", ke: "kenya", eg: "egypt", ma: "morocco", dz: "algeria", tn: "tunisia", il: "israel", sa: "saudi arabia", ae: "uae united arab emirates dubai", qa: "qatar", kw: "kuwait", bh: "bahrain", om: "oman", ir: "iran", iq: "iraq", jo: "jordan", lb: "lebanon", cy: "cyprus", mt: "malta", lu: "luxembourg" };
+  function rowText(r) {
+    if (r.__wyQ && r.__wyQAt === r.textContent.length) return r.__wyQ;
+    var t = r.textContent.toLowerCase(), f = r.querySelector("[data-srv-flag]"), ip = f ? f.getAttribute("data-srv-flag") : "", code = "";
+    try { var R = window.R9; if (R && ip && R[ip]) code = String(R[ip]).toLowerCase(); } catch (e) {}
+    if (!code && f) { var im = f.querySelector("img"); var m2 = im && /\/([a-z]{2})\.[a-z]+(\?|$)/i.exec(im.getAttribute("src") || ""); if (m2) code = m2[1].toLowerCase(); }
+    if (code) t += " " + code + " " + (CN[code] || "");
+    r.__wyQ = t; r.__wyQAt = r.textContent.length; return t;
+  }
+  function filter(q) { lastQ = (q || "").trim().toLowerCase().replace(/^#/, ""); applyFilter(lastQ); }
+  setInterval(function () { var b = $("sv-box"); if (b && !b.__wyTouch) { b.__wyTouch = 1; ["touchstart", "touchend", "touchmove"].forEach(function (t) { b.addEventListener(t, function (e) { e.stopPropagation(); }, { passive: true }); }); } }, 1000);
   function applyFilter(q) {
     var sb = $("select-srv-body"), custom = $("sv-custom"); if (!sb) return;
     var kids = sb.children, exact = false, groupsSeen = {};
     for (var i = 0; i < kids.length; i++) {
       var r = kids[i]; if (r.classList.contains("sv-hdr")) continue;
       if (r.classList.contains("sv-group")) { r.style.display = ""; continue; }
-      var t = r.textContent.toLowerCase(), hit = !q || t.indexOf(q) >= 0;
+      var t = rowText(r), hit = !q || t.indexOf(q) >= 0;
       r.classList.toggle("sv-hide", !hit);
       if (hit) { var c = r.children; if (c[6] && c[6].textContent.trim().toLowerCase() === q) exact = true; if (c[7] && c[7].textContent.trim().toLowerCase() === q) exact = true; }
     }
@@ -3958,6 +3970,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
+    { v: "5.58", d: "18 Sep 2026", t: "Server picker search works on touch and matches id, IP, country code and country name. Includes the 5.57 beta fixes: arrow-control touch layer, roster solo-dot on hover/tap, content transparency slider." },
     { v: "5.57-beta", d: "18 Sep 2026", t: "Arrow control keeps steering when your finger drifts over the leaderboard, chat or logs (touch layer above the panels). Team roster: hover or tap a member to show only their dot on the minimap. New Content transparency slider for the text inside panels." },
     { v: "5.56", d: "18 Sep 2026", t: "Stable release: the finished over-the-air updater (every-start check on both channels, popup until installed, two manifest mirrors, instant CDN purge)." },
     {v:"5.54", d:"18 Sep 2026", t:"Stable build with the finished updater: every-start check, two manifest mirrors, instant CDN purge on release."},
