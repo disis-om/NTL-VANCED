@@ -1,12 +1,12 @@
 {
-  "version": "5.48",
+  "version": "5.50",
   "channel": "stable",
   "date": "2026-09-18",
-  "size": 7909983,
-  "sha256": "1cb9d740c8b90bc8def9e66a7f4cae20d20f3ae776d2c56c3067aa94c5cacaef",
-  "minLoader": 1,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.48/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.48/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.48/NTL-VANCED-v5.48.zip",
-  "notes": "# v5.48\nVanced gets an Updates & About section (updater controls + about); downloads verify on http too (JS SHA-256 fallback)."
+  "size": 7911037,
+  "sha256": "16e5a946f6b2709e88001d6cff1925849bf07a62991ab90e9169cb4c66965c06",
+  "minLoader": 3,
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.50/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.50/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.50/NTL-VANCED-v5.50.zip",
+  "notes": "# v5.50\nOver-the-air updates actually boot now: MV3 blocks inline scripts made by a content script, so the loader (v3) hands the downloaded bundle to a tiny extension script (ota-boot.js) that runs it. Error capture, an automatic rollback + reload if an update never starts, and a parse check before installing."
 }

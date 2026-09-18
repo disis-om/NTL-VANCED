@@ -10,7 +10,10 @@
 - Rollback: loader sets `wyrm_boot=version` before injecting; the bundle's `NTL_UP` sets `wyrm_boot_ok=version` 1.5 s after it ran. Next load: boot set but ok missing → bundle deleted, packaged runs, `wyrmrolledback` toast.
 - `NTL_UP` (module in main-mt.js, before WHAT'S NEW): checks `raw.githubusercontent.com/disis-om/NTL-VANCED/main/updates/{stable,beta}.json`, popup with notes, UPDATE → download (jsDelivr `@v<ver>/main-mt.js`, raw fallback) → SHA-256 (crypto.subtle **or the JS fallback — slither.io is http, no SubtleCrypto**) → `ntlStorageSet {wyrm_bundle}` via `chrome.runtime.sendMessage(FA, …)` → reload. Vanced › **Updates & About** section: CHECK NOW / UPDATE / STABLE / PACKAGED, Beta switch.
 
-## OPEN BUG (the thing being debugged when context ran out)
+## SOLVED (18 Sep, late): OTA bundle did not boot
+**Cause:** in MV3 the content-script world carries the extension's CSP (`script-src 'self' …`), so an inline `<script>` created by `tinyscr.js` is blocked (CDP log: "Executing inline script violates … script-src 'self'"); a CDP-made isolated world has no CSP, which is why harness injection worked. **Fix (loader v3):** park the bundle in `<script type=text/plain id=wyrm-ota-src>` and load `ota-boot.js` (extension URL = allowed by `'self'`, web-accessible), which `eval`s it in the page world under the page's (absent) CSP, with an error catcher. Verified with `tools/e2e_ota.js` (Chrome for Testing + real GitHub): install → reload → `src=ota`, launcher built, `wyrm_boot_ok` set. 5.50 ships as a zip (`MIN_LOADER=3`).
+
+## Original bug notes
 Owner on **5.48** (desktop Chrome, also SlitherControl+ installed) turned Beta on → popup → UPDATE → "Installed — reloading" → after reload the page is **blank** (only the SlitherControl+ bar, no NTL launcher) → Ctrl+R → loader rolled back → 5.48 packaged runs again. So the **OTA bundle does not execute** on his machine.
 Facts established:
 - The 5.49-beta bundle from jsDelivr **parses and runs** when injected inline from page context (`tools/harness/inj_test.html`: parse OK, modules defined; fails only at jQuery which the real page provides). Hash matches. No CSP on slither.io / slither.com/io.

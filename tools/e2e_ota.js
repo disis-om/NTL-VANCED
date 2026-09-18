@@ -8,7 +8,7 @@ const CHROME = path.resolve(__dirname, "cft/chrome/win64-153.0.8010.52/chrome-wi
 const EXT = path.resolve(__dirname, "..", "NTL EyesBack Mod");
 const PROFILE = fs.mkdtempSync(path.join(os.tmpdir(), "ntlv-e2e-"));
 const PORT = 9333;
-const chrome = cp.spawn(CHROME, ["--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--remote-debugging-port=" + PORT, "--user-data-dir=" + PROFILE, "--load-extension=" + EXT, "--window-size=1400,900", "about:blank"], { stdio: "ignore" });
+const chrome = cp.spawn(CHROME, ["--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--remote-debugging-port=" + PORT, "--user-data-dir=" + PROFILE, "--load-extension=" + EXT, "--window-size=1400,900", "--disable-features=HttpsFirstBalancedModeAutoEnable,HttpsUpgrades,HttpsFirstModeV2ForEngagedSites", "--allow-running-insecure-content", "about:blank"], { stdio: "ignore" });
 function getJSON(url) { return new Promise((res, rej) => http.get(url, r => { let d = ""; r.on("data", c => d += c); r.on("end", () => { try { res(JSON.parse(d)); } catch (e) { rej(e); } }); }).on("error", rej)); }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function cdp(wsUrl) {
@@ -16,18 +16,19 @@ async function cdp(wsUrl) {
   let id = 0; const pending = {}; const events = [];
   ws.onmessage = ev => { const m = JSON.parse(ev.data); if (m.id && pending[m.id]) { pending[m.id](m); delete pending[m.id]; } else if (m.method) events.push(m); };
   const send = (method, params) => new Promise(r => { const i = ++id; pending[i] = r; ws.send(JSON.stringify({ id: i, method, params: params || {} })); });
-  const evalp = async expr => { const r = await send("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true }); return r.result && r.result.result ? r.result.result.value : r; };
+  const evalp = async expr => { const r = await send("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true }); if (r.result && r.result.exceptionDetails) return "EXC " + JSON.stringify(r.result.exceptionDetails.exception && r.result.exceptionDetails.exception.description || r.result.exceptionDetails.text); return r.result && r.result.result ? r.result.result.value : JSON.stringify(r); };
   return { send, evalp, events, close: () => ws.close() };
 }
 (async () => {
   try {
     await sleep(2500);
     let targets = await getJSON("http://127.0.0.1:" + PORT + "/json");
-    let page = targets.find(t => t.type === "page");
+    console.log("targets:", targets.map(t => t.type + " " + t.url).join(" | ")); let page = targets.find(t => t.type === "page");
     const c = await cdp(page.webSocketDebuggerUrl);
     await c.send("Page.enable"); await c.send("Runtime.enable");
     await c.send("Page.navigate", { url: "http://slither.io/" });
     await sleep(9000);
+    console.log("url:", await c.evalp("location.href + \" | \" + document.title"));
     const s1 = await c.evalp(`JSON.stringify({login:!!document.getElementById("login"), mybox:!!document.getElementById("mybox"), ver:localStorage.getItem("wyrmversion"), src:localStorage.getItem("wyrmsource"), loader:localStorage.getItem("wyrmloader"), up:typeof NTL_UP, err:localStorage.getItem("wyrm_err")})`);
     console.log("boot (packaged):", s1);
     /* install the beta bundle for real */
@@ -44,6 +45,7 @@ async function cdp(wsUrl) {
     const s2 = await c2.evalp(`JSON.stringify({login:!!document.getElementById("login"), mybox:!!document.getElementById("mybox"), ver:localStorage.getItem("wyrmversion"), src:localStorage.getItem("wyrmsource"), err:localStorage.getItem("wyrm_err"), rolled:localStorage.getItem("wyrmrolledback"), up:typeof NTL_UP, title:document.title})`);
     console.log("after OTA reload:", s2);
     await sleep(8000);                 // watchdog window
+    console.log("modules:", await c2.evalp("typeof NTL_DX + \"/\" + typeof NTL_UP + \" mybox:\" + !!document.getElementById(\"mybox\")"));
     const s3 = await c2.evalp(`JSON.stringify({login:!!document.getElementById("login"), ver:localStorage.getItem("wyrmversion"), src:localStorage.getItem("wyrmsource"), err:localStorage.getItem("wyrm_err"), rolled:localStorage.getItem("wyrmrolledback")})`);
     console.log("after watchdog window:", s3);
     const sw = (await getJSON("http://127.0.0.1:" + PORT + "/json")).find(t => t.type === "service_worker" || /background/.test(t.url));

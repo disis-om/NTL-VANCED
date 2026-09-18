@@ -3930,7 +3930,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
-    { v: "5.50", d: "18 Sep 2026", t: "Updater: loader v2 with error capture and an automatic rollback + reload if an update never starts; downloads are parse-checked before they are installed." },
+    { v: "5.50", d: "18 Sep 2026", t: "Over-the-air updates actually boot now: MV3 blocks inline scripts made by a content script, so the loader (v3) hands the downloaded bundle to a tiny extension script (ota-boot.js) that runs it. Error capture, an automatic rollback + reload if an update never starts, and a parse check before installing." },
     { v: "5.49-beta", d: "18 Sep 2026", t: "Beta channel test build — nothing new, just proving that over-the-air updates work." },
     { v: "5.48", d: "18 Sep 2026", t: "Vanced gets an Updates & About section (updater controls + about); downloads verify on http too (JS SHA-256 fallback)." },
     { v: "5.47", d: "18 Sep 2026", t: "Over-the-air updates from GitHub: the extension checks the NTL VANCED repo, shows the release notes and updates itself on tap \u2014 no reinstall. Beta channel switch, STABLE fallback and a rollback guard in Vanced \u203a General \u203a Updates." },

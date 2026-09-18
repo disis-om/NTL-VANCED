@@ -74,6 +74,7 @@
             "*://slither.com/*"
          ],
          "resources": [
+            "ota-boot.js",
             "*.json",
             "*.js",
             "*.txt",
