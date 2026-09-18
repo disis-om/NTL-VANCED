@@ -1872,7 +1872,7 @@ var NTL_SV = (function () {
     /* ---- NTL's list, re-skinned inside the popup ---- */
     "#sv-body #select-srv-menu{display:block!important;position:static!important;transform:none!important;left:auto!important;top:auto!important;width:100%!important;max-width:none!important;min-width:0!important;max-height:none!important;background:transparent!important;border:none!important;border-radius:0!important;margin:0!important;overflow:visible!important;color:#e6e9ef!important;font-family:inherit;}",
     "#sv-body #select-srv-status{padding:40px 10px!important;text-align:center;color:#8b93a7;font-size:13px;letter-spacing:.5px;}",
-    "#sv-body .sv-hide{display:none!important;}",
+    "#sv-body #select-srv-body > div.sv-hide,#sv-box #select-srv-body > div.sv-hide,#select-srv-body > div.sv-hide,#sv-body .sv-hide,#sv-saved .sv-hide{display:none!important;}",
     "#sv-body #select-srv-body > div{display:grid!important;grid-template-columns:40px 66px 66px 62px 52px 34px 150px minmax(170px,1fr)!important;column-gap:6px!important;align-items:center!important;font-family:Consolas,Menlo,monospace!important;font-size:12px!important;border-radius:9px;background:transparent!important;transition:background .12s;}",
     "#sv-body #select-srv-body > div > div{padding:7px 6px!important;}",
     "#sv-body #select-srv-body > div.sv-row:hover{background:rgba(128,88,208,.14)!important;}",
@@ -3970,6 +3970,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
+    { v: "5.59", d: "18 Sep 2026", t: "Server picker search finally filters NTL’s list: the hide rule lost to the row layout rule (two ids beat id + class); verified in a real Chrome run." },
     { v: "5.58", d: "18 Sep 2026", t: "Server picker search works on touch and matches id, IP, country code and country name. Includes the 5.57 beta fixes: arrow-control touch layer, roster solo-dot on hover/tap, content transparency slider." },
     { v: "5.57-beta", d: "18 Sep 2026", t: "Arrow control keeps steering when your finger drifts over the leaderboard, chat or logs (touch layer above the panels). Team roster: hover or tap a member to show only their dot on the minimap. New Content transparency slider for the text inside panels." },
     { v: "5.56", d: "18 Sep 2026", t: "Stable release: the finished over-the-air updater (every-start check on both channels, popup until installed, two manifest mirrors, instant CDN purge)." },

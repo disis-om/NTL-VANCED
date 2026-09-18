@@ -1,12 +1,12 @@
 {
-  "version": "5.58",
+  "version": "5.59",
   "channel": "stable",
   "date": "2026-09-18",
-  "size": 7919858,
-  "sha256": "1b02dd50c1eead1dd104606716f9b1a114f07eb5da74aede223596ab75e2be82",
+  "size": 7920181,
+  "sha256": "1f648e7a2f71092f170fdde72728dbe9c841b7e8a3972b43220e8bf799a14360",
   "minLoader": 3,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.58/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.58/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.58/NTL-VANCED-v5.58.zip",
-  "notes": "# v5.58\nServer picker search works on touch and matches id, IP, country code and country name. Includes the 5.57 beta fixes: arrow-control touch layer, roster solo-dot on hover/tap, content transparency slider."
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.59/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.59/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.59/NTL-VANCED-v5.59.zip",
+  "notes": "# v5.59\nServer picker search finally filters NTL’s list: the hide rule lost to the row layout rule (two ids beat id + class); verified in a real Chrome run."
 }
