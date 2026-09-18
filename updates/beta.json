@@ -1,12 +1,12 @@
 {
-  "version": "5.50",
-  "channel": "stable",
+  "version": "5.51-beta",
+  "channel": "beta",
   "date": "2026-09-18",
-  "size": 7911037,
-  "sha256": "16e5a946f6b2709e88001d6cff1925849bf07a62991ab90e9169cb4c66965c06",
+  "size": 7911532,
+  "sha256": "e11fa318c5ecba88ff95ba7cb3a7609c3d6c260f69805226e5853743af87485c",
   "minLoader": 3,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.50/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.50/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.50/NTL-VANCED-v5.50.zip",
-  "notes": "# v5.50\nOver-the-air updates actually boot now: MV3 blocks inline scripts made by a content script, so the loader (v3) hands the downloaded bundle to a tiny extension script (ota-boot.js) that runs it. Error capture, an automatic rollback + reload if an update never starts, and a parse check before installing."
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.51-beta/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.51-beta/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.51-beta/NTL-VANCED-v5.51-beta.zip",
+  "notes": "# Beta channel works\nIf you can read this, the over-the-air update just landed — downloaded from GitHub, verified, installed, no reinstall.\n\n- **STABLE** in Vanced › Updates & About takes you back to the stable release\n- **PACKAGED** runs the version that shipped in the zip\n- Nothing else changed in this build\n"
 }
