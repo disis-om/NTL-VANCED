@@ -18,7 +18,7 @@ if (Test-Path $Out) { Remove-Item $Out -Force }
 $srcFull = (Resolve-Path $Src).Path.TrimEnd('\') + '\'
 $files = Get-ChildItem -Path $Src -Recurse -File -Force | Where-Object {
   $rel = $_.FullName.Substring($srcFull.Length)
-  ($rel -notlike "_metadata\*") -and ($rel -notlike ".git\*") -and ($rel -notlike "tools\*") -and ($rel -notlike "updates\*") -and ($rel -notlike ".github\*") -and ($_.Name -ne ".gitignore") -and ($_.Extension -ne ".md") -and ($_.Extension -ne ".zip")
+  ($rel -notlike "_metadata\*") -and ($rel -notlike ".git\*") -and ($rel -notlike "tools\*") -and ($rel -notlike "updates\*") -and ($rel -notlike ".github\*") -and ($_.Name -ne ".gitignore") -and ($_.Name -ne ".gitattributes") -and ($_.Extension -ne ".md") -and ($_.Extension -ne ".zip")
 }
 
 $zip = [System.IO.Compression.ZipFile]::Open($Out, [System.IO.Compression.ZipArchiveMode]::Create)
