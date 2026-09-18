@@ -3803,8 +3803,7 @@ var NTL_UP = (function () {
     if (!document.body) { setTimeout(boot, 50); return; }
     try { var rb = localStorage.getItem("wyrmrolledback"); if (rb) { localStorage.removeItem("wyrmrolledback"); setTimeout(function () { try { if (typeof R === "function" && typeof J !== "undefined") R(J, "Update v" + rb + " failed to start \u2014 rolled back to v" + ver()); } catch (e) {} }, 3000); } } catch (e) {}
     setTimeout(bootOk, 1500);                                          // the bundle parsed and ran → good (parse errors never get here)
-    var due = !cfg.last || Date.now() - cfg.last > CHECK_EVERY;
-    setTimeout(function () { check(due ? "" : "silent"); }, due ? 2500 : 60000);
+    setTimeout(function () { check(""); }, 2500);                     // every start: stable (+ beta when on); the popup shows unless that version was snoozed
     setInterval(function () { check("silent"); }, CHECK_EVERY);
   }
   boot();
@@ -3931,6 +3930,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
+    { v: "5.52", d: "18 Sep 2026", t: "Updater checks on every start (stable, and beta when enabled) and shows the popup right away." },
     { v: "5.51-beta", d: "18 Sep 2026", t: "Beta channel test build on the new loader — nothing new, just proving that over-the-air updates work." },
     { v: "5.50", d: "18 Sep 2026", t: "Over-the-air updates actually boot now: MV3 blocks inline scripts made by a content script, so the loader (v3) hands the downloaded bundle to a tiny extension script (ota-boot.js) that runs it. Error capture, an automatic rollback + reload if an update never starts, and a parse check before installing." },
     { v: "5.49-beta", d: "18 Sep 2026", t: "Beta channel test build — nothing new, just proving that over-the-air updates work." },
