@@ -1,12 +1,12 @@
 {
-  "version": "5.52",
+  "version": "5.53",
   "channel": "stable",
   "date": "2026-09-18",
-  "size": 7911683,
-  "sha256": "9d2e69173d210fe41f2294b811976bf7e802ce0cd9b8a38caac20389ccfedd93",
+  "size": 7912413,
+  "sha256": "3d808cbdd798440c6308bfe0665c885d61087f595a503146da72573aefd45f0b",
   "minLoader": 3,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.52/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.52/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.52/NTL-VANCED-v5.52.zip",
-  "notes": "# v5.52\nUpdater checks on every start (stable, and beta when enabled) and shows the popup right away."
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.53/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.53/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.53/NTL-VANCED-v5.53.zip",
+  "notes": "# v5.53\nUpdate check reads two mirrors (GitHub raw + jsDelivr) so a fresh release shows up within seconds instead of after the CDN cache."
 }

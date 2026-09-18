@@ -3642,7 +3642,7 @@ var NTL_LV = (function () {
    loader change) → the popup links the zip instead.
    localStorage.wy_upd = {beta, last, avail}. */
 var NTL_UP = (function () {
-  var REPO = "disis-om/NTL-VANCED", RAW = "https://raw.githubusercontent.com/" + REPO + "/main/updates/", CHECK_EVERY = 6 * 3600 * 1000;
+  var REPO = "disis-om/NTL-VANCED", RAW = "https://raw.githubusercontent.com/" + REPO + "/main/updates/", CDN = "https://cdn.jsdelivr.net/gh/" + REPO + "@main/updates/", CHECK_EVERY = 6 * 3600 * 1000;
   var cfg = { beta: false, last: 0, avail: null, snooze: "" };
   try { var j = JSON.parse(localStorage.getItem("wy_upd") || "null"); if (j) for (var k in cfg) if (k in j) cfg[k] = j[k]; } catch (e) {}
   function save() { try { localStorage.setItem("wy_upd", JSON.stringify(cfg)); } catch (e) {} }
@@ -3689,13 +3689,21 @@ var NTL_UP = (function () {
   /* ---------- check ---------- */
   var manifest = null, checking = false, listeners = [];
   function emit() { for (var i = 0; i < listeners.length; i++) try { listeners[i](); } catch (e) {} }
-  function fetchJSON(url) { return fetch(url + "?t=" + Date.now(), { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }); }
+  function fetchOne(url) { return fetch(url + "?t=" + Date.now(), { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }); }
+  function fetchJSON(name) {   // both mirrors, newest version wins; one failing is fine, both failing throws
+    return Promise.all([fetchOne(RAW + name).catch(function (e) { return { __err: e }; }), fetchOne(CDN + name).catch(function (e) { return { __err: e }; })]).then(function (r) {
+      var a = r[0].__err ? null : r[0], b = r[1].__err ? null : r[1];
+      if (!a && !b) throw (r[0].__err || r[1].__err);
+      if (a && b) return num(b.version) > num(a.version) ? b : a;
+      return a || b;
+    });
+  }
   function check(force) {
     if (checking) return Promise.resolve(manifest);
     checking = true;
-    var chain = fetchJSON(RAW + "stable.json").then(function (st) {
+    var chain = fetchJSON("stable.json").then(function (st) {
       if (!cfg.beta) return st;
-      return fetchJSON(RAW + "beta.json").then(function (bt) { return bt && num(bt.version) > num(st.version) ? bt : st; }, function () { return st; });
+      return fetchJSON("beta.json").then(function (bt) { return bt && num(bt.version) > num(st.version) ? bt : st; }, function () { return st; });
     });
     return chain.then(function (m) {
       checking = false; cfg.last = Date.now();
@@ -3768,7 +3776,7 @@ var NTL_UP = (function () {
   }
   function fallbackStable() {
     cfg.beta = false; save(); status = "Fetching the stable release…"; emit();
-    return fetchJSON(RAW + "stable.json").then(function (st) {
+    return fetchJSON("stable.json").then(function (st) {
       if (!st || !st.version) throw new Error("no stable manifest");
       if (st.version === ver() && source() !== "packaged") { status = "Already on stable v" + st.version; emit(); return false; }
       return install(st);
@@ -3930,6 +3938,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
+    { v: "5.53", d: "18 Sep 2026", t: "Update check reads two mirrors (GitHub raw + jsDelivr) so a fresh release shows up within seconds instead of after the CDN cache." },
     { v: "5.52", d: "18 Sep 2026", t: "Updater checks on every start (stable, and beta when enabled) and shows the popup right away." },
     { v: "5.51-beta", d: "18 Sep 2026", t: "Beta channel test build on the new loader — nothing new, just proving that over-the-air updates work." },
     { v: "5.50", d: "18 Sep 2026", t: "Over-the-air updates actually boot now: MV3 blocks inline scripts made by a content script, so the loader (v3) hands the downloaded bundle to a tiny extension script (ota-boot.js) that runs it. Error capture, an automatic rollback + reload if an update never starts, and a parse check before installing." },

@@ -66,4 +66,6 @@ sh("git push -f origin " + tag);
 const notesFile = path.join(require("os").tmpdir(), "ntlv-notes-" + ver + ".md");
 if (!dry) fs.writeFileSync(notesFile, notes);
 sh("gh release create " + tag + " \"" + zipOut + "\" --title \"NTL VANCED " + tag + (beta ? " (beta)" : "") + "\" --notes-file \"" + notesFile + "\"" + (beta ? " --prerelease" : " --latest") + " --repo " + REPO + " || gh release upload " + tag + " \"" + zipOut + "\" --clobber --repo " + REPO);
-console.log("done: " + tag + " → " + channel + " · " + info.url);
+/* 6. jsDelivr purge so the @main manifests refresh at once */
+if (!dry) { const https = require("https"); for (const p of ["updates/stable.json", "updates/beta.json"]) https.get("https://purge.jsdelivr.net/gh/" + REPO + "@main/" + p, res => { console.log("  purge " + p + " → " + res.statusCode); res.resume(); }).on("error", () => {}); }
+setTimeout(() => console.log("done: " + tag + " → " + channel + " · " + info.url), 1500);
