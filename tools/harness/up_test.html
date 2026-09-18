@@ -1,0 +1,247 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{background:#1a1d26;margin:0}</style></head><body><div id="login"></div>
+<script>var playing=false;localStorage.setItem("wyrmversion","5.46");localStorage.setItem("wyrmloader","1");localStorage.setItem("wyrmsource","packaged");localStorage.setItem("tinyscrID","fakeid");localStorage.removeItem("wy_upd");
+window.fakeStore={};window.chrome={runtime:{sendMessage:function(id,msg,cb){if(msg.greeting==="ntlStorageSet"){Object.assign(fakeStore,msg.data);cb({ok:true});}else if(msg.greeting==="ntlStorageRemove"){msg.keys.forEach(k=>delete fakeStore[k]);cb({ok:true});}else cb({ok:false});}}};
+var reloaded=false;window.__reload=function(){reloaded=true};
+var NTL_WN = (function () {
+  var SEEN = "wy_seen_ver";
+  var NOTES = {
+    "5.47": "# Chat, arenas and a lot of polish\nThis build turns the chat into a proper messenger, puts your team on the home screen and lets you watch Battledome live.\n\n## One chat picker\n- Tap the **GIF** button in the chat: **Emoji · GIF · Stickers · Memes** in one place, powered by KLIPY\n- Emoji go into your message; GIFs, stickers and memes are sent on tap and show as the image for NTL VANCED players\n- Category chips, **Recent**, search with autocomplete, bento grid\n\n## TEAM | GLOBAL in one box\n- The Global chat now lives inside NTL’s chat box as a second tab — unread badge, USERS and NICK right there\n- The picker works in both chats\n\n## Team map on the home screen\n- **BATTLEDOME · 2220 · 8828** with the live arena picture, your team members as their NTL icons, player counts and top ten\n- Tap a member to see their arena, **JOIN** to go there\n\n## Live Battledomes (experimental)\n- **VIEW LIVE BATTLEDOMES** above PLAY: a live rendered preview of the arena — zone ring, food, snakes with names — plus players, top score, zone radius, top ten and JOIN, POWERED BY WYRM.\n\n## Mobile controls, refined\n- **Arrow control** runs on a virtual cursor: clamped to the screen, centre dead zone, re-seeds along your heading on every new touch — steady and predictable\n- **Arrow & cursor skins** open a visual gallery in **Vanced › Controls** — every skin drawn, tap to use\n- **Eleven new neon arrows**: Neon Ice / Magenta / Sunset / Aqua / Jade, Volt / Twin Volt / Heat / Streak, Inferno / Chrome\n- On-screen **toggle buttons light up** while that mode is on (bot, SOS, spine, eyes, hide chat, assist lock…) — even if you flipped it with a key\n- On-screen **Open settings** and **Realtime leaderboards** work mid-game, no bot mode needed\n- **Revamp Keys** bindings now actually apply after Save\n- On-screen keys respond while another finger is steering; controls never leak touches into the game\n\n## Also\n- **UI size** is a − / + stepper and now scales every popup\n- New menu background; custom arena background accepts any image (png, webp, gif…)\n- Home screen buttons appear instantly\n- Mod panels sit on NTL’s own layer, so nothing floats over the settings page\n",
+    "5.13": "# Toggle buttons that show they\u2019re on\nOn-screen action buttons for toggles (bot, SOS, spine, eyes, hide chat, assist lock, \u2026) stay lit with a green dot while that mode is on \u2014 including if you flipped it with a key.\n",
+    "5.12": "# Settings from a touch button\nThe on-screen **Open settings** button no longer needs bot mode in a live game. It opens NTL settings in keep-playing mode, same as the keyboard path was supposed to.\n\n- Place **Open settings** in the on-screen editor\n- Tap it in a game \u2014 no bot required\n- Realtime leaderboards button is the same\n",
+    "5.11": "# Keys that actually save\nRevamp Keys was writing the new map, then NTL\u2019s saver `w()` had already been overwritten by a game table \u2014 so the live key index never rebuilt.\n\n- Open **Revamp Keys**, bind, **Save changes**\n- Double-tap actions still need two taps unless you click the mode chip to **TAP**\n",
+    "5.10": "# Eleven new arrows\nA neon pack in the skin gallery \u2014 every one is drawn, tap to use. The old Pointer skin is gone.\n\n- **Neon Ice / Magenta / Sunset / Aqua / Jade** \u2014 glossy bubble arrows\n- **Volt / Twin Volt / Heat / Streak** \u2014 chevrons and speed blades\n- **Inferno / Chrome** \u2014 faceted metal\n- Open **Vanced \u203a Controls**, tap the arrow chip, pick one.\n",
+    "5.9": "# Pick an arrow you can actually see\nThe name-only dropdown is gone.\n\n- Open **Vanced \u203a Controls** and tap the arrow (or cursor) chip\n- A gallery **slides into the centre** with every skin drawn \u2014 3D arrows, Vanced, pointer, custom\n- Tap one to use it. Custom with no image opens your file picker.\n",
+    "5.4": "# Faster, sharper, smarter\nThis build is about two things: getting more frames out of your device, and seeing your snake the way pros see it.\n\n## Performance mode\nOne key — **=** — and the game drops everything that costs frames but not gameplay: the pulsing glow around food, the boost glow around snakes, the shadow copies behind every name, and the blur behind menus. You get an engine-style gauge on screen the moment it kicks in, and the same when you switch back to full quality.\n\n- Press **=** in game to toggle it any time (remap it in **Home › Keys**)\n- **Vanced › General › Performance** has the switch plus a **Render scale** slider — lower it on phones and the GPU has far fewer pixels to fill\n- Want numbers? **Vanced › About › Diagnostics** now shows frame time, 1% lows, canvas size, ping jitter and what each mod feature costs per frame\n\n## Spine mode\nPress **P** and your own body disappears — only its spine is drawn, from the exact collision point down to the tail, with a ring showing your real hitbox. It is client-side only; everyone else still sees your full snake.\n\n- Make it yours in **Vanced › Spine mode**: eyes on or off, head circle, width, colour after your snake or a custom one, with a live preview\n- If NTL's own boost glow is on, the spine glows while you boost\n\n## Also in this build\n- Minor bug fixes and polish across the menus\n- Every past change is listed in **Vanced › Changelog**"
+  };
+  var PLACEHOLDER = "## Release notes\nThe notes for this version are still being written.\n\n- What changed in this build will be listed here before it is shared.\n- Every past change is in **Vanced › Changelog**.";
+  function ver() { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } }
+  var CSS = [
+    "#wn-ov{position:fixed;inset:0;z-index:2147483100;background:rgba(4,6,12,.66);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);display:flex;align-items:center;justify-content:center;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;animation:svFade .18s ease;color:#e6e9ef;text-shadow:none;}",
+    "#wn-box{width:min(640px,94vw);max-height:min(680px,92vh);display:flex;flex-direction:column;background:linear-gradient(165deg,#181b24 0%,#0f1117 60%,#0c0e13 100%);border:1px solid rgba(255,255,255,.09);border-radius:18px;box-shadow:0 30px 90px rgba(0,0,0,.75),inset 0 1px 0 rgba(255,255,255,.06);overflow:hidden;animation:svPop .22s cubic-bezier(.2,.9,.3,1.15);}",
+    "#wn-x{position:absolute;right:16px;top:16px;width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#aab2c5;font-size:19px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;}#wn-x:active{background:rgba(255,80,80,.18);color:#ff8a8a;}",
+    "#wn-head{position:relative;padding:22px 60px 16px 26px;background:linear-gradient(90deg,rgba(128,88,208,.25),rgba(58,123,213,.14) 60%,transparent);border-bottom:1px solid rgba(255,255,255,.07);flex:none;}",
+    "#wn-head .k{font:bold 9.5px Arial;letter-spacing:2px;color:#8b93a7;margin-bottom:6px;}",
+    "#wn-head .t{font-size:22px;font-weight:bold;letter-spacing:1px;background:linear-gradient(90deg,#c9b6ff,#7fb3ff);-webkit-background-clip:text;background-clip:text;color:transparent;}",
+    "#wn-body{flex:1;min-height:0;overflow:auto;padding:16px 26px 10px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.14) transparent;font-size:13px;line-height:1.6;color:#c3cad9;}",
+    "#wn-body::-webkit-scrollbar{width:7px}#wn-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:7px}",
+    "#wn-body h1{font-size:21px;font-weight:bold;margin:6px 0 4px;letter-spacing:.3px;line-height:1.25;background:linear-gradient(90deg,#fff,#c9b6ff 60%,#7fb3ff);-webkit-background-clip:text;background-clip:text;color:transparent;}",
+    "#wn-body h1 + p{color:#8b93a7;font-size:12.5px;margin:0 0 14px;line-height:1.55;}",
+    "#wn-body h2{position:relative;display:flex;align-items:center;gap:8px;margin:18px 0 8px;padding:0;font:bold 10.5px Arial;letter-spacing:1.8px;text-transform:uppercase;color:#c9b6ff;}",
+    "#wn-body h2:before{content:'';width:4px;height:14px;border-radius:2px;background:linear-gradient(180deg,#8058d0,#3a7bd5);flex:none;}",
+    "#wn-body h2:after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(255,255,255,.12),transparent);}",
+    "#wn-body p{margin:6px 0;color:#c3cad9;}",
+    "#wn-body ul{list-style:none;margin:0 0 4px;padding:0;display:flex;flex-direction:column;gap:4px;}",
+    "#wn-body li{position:relative;margin:0;padding:7px 10px 7px 26px;border-radius:9px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.05);line-height:1.5;color:#d3d9e6;}",
+    "#wn-body li:before{content:'';position:absolute;left:11px;top:13px;width:7px;height:7px;border-radius:50%;background:linear-gradient(135deg,#c9b6ff,#3a7bd5);box-shadow:0 0 8px rgba(128,88,208,.6);}",
+    "#wn-body b{color:#fff;font-weight:bold;padding:0 4px;border-radius:5px;background:rgba(128,88,208,.18);box-shadow:inset 0 0 0 1px rgba(201,182,255,.14);}#wn-body code{font:12px Consolas,Menlo,monospace;color:#c9b6ff;padding:1px 6px;border-radius:5px;background:rgba(128,88,208,.16);}",
+    "#wn-foot{padding:14px 26px 18px;border-top:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:12px;flex:none;}",
+    "#wn-foot small{color:#6b7385;font-size:11px;line-height:1.5;flex:1;}",
+    "#wn-ok{height:38px;padding:0 22px;border-radius:11px;border:1px solid rgba(255,255,255,.28);background:linear-gradient(90deg,#8058d0,#3a7bd5);color:#fff;font:bold 12px Arial;letter-spacing:1.4px;cursor:pointer;box-shadow:0 10px 30px rgba(128,88,208,.35);}",
+    "#wn-ok:active{transform:translateY(1px);}",
+    "@media (max-width:600px){#wn-box{width:100vw;max-height:100vh;border-radius:0;}#wn-head,#wn-body,#wn-foot{padding-left:16px;padding-right:16px;}}"
+  ].join("\n");
+  var ov = null;
+  function css() { if (document.getElementById("wn-css")) return; var st = document.createElement("style"); st.id = "wn-css"; st.textContent = CSS; (document.head || document.documentElement).appendChild(st); }
+  function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  /* tiny markdown: headings, bullets, paragraphs, **bold**, `code` */
+  function inline(t) { return esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>"); }
+  function md(src) {
+    var lines = String(src || "").replace(/\r/g, "").split("\n"), out = [], list = false, para = [];
+    function flushP() { if (para.length) { out.push("<p>" + inline(para.join(" ")) + "</p>"); para = []; } }
+    function flushL() { if (list) { out.push("</ul>"); list = false; } }
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i], m;
+      if (!l.trim()) { flushP(); flushL(); continue; }
+      if ((m = l.match(/^##\s+(.*)/))) { flushP(); flushL(); out.push("<h2>" + inline(m[1]) + "</h2>"); }
+      else if ((m = l.match(/^#\s+(.*)/))) { flushP(); flushL(); out.push("<h1>" + inline(m[1]) + "</h1>"); }
+      else if ((m = l.match(/^\s*[-*]\s+(.*)/))) { flushP(); if (!list) { out.push("<ul>"); list = true; } out.push("<li>" + inline(m[1]) + "</li>"); }
+      else para.push(l.trim());
+    }
+    flushP(); flushL();
+    return out.join("");
+  }
+  function show() {
+    if (ov) return; css();
+    var V = ver(), notes = NOTES[V] || PLACEHOLDER;
+    ov = el("div"); ov.id = "wn-ov";
+    var box = el("div"); box.id = "wn-box";
+    box.addEventListener("mousedown", function (e) { e.stopPropagation(); });
+    box.addEventListener("keydown", function (e) { e.stopPropagation(); });
+    var head = el("div"); head.id = "wn-head"; head.innerHTML = '<div class="k">NTL VANCED</div><div class="t">What’s new in v' + esc(V) + "</div>";
+    var x = el("button", null, "×"); x.id = "wn-x"; x.title = "Close (shows again next time)"; x.onclick = close;   // close WITHOUT acknowledging
+    head.appendChild(x); box.appendChild(head);
+    var body = el("div"); body.id = "wn-body"; body.innerHTML = md(notes); box.appendChild(body);
+    var foot = el("div"); foot.id = "wn-foot";
+    foot.appendChild(el("small", null, ""));
+    var ok = el("button", null, "OKAY, GOT IT"); ok.id = "wn-ok";
+    ok.onclick = function () { try { localStorage.setItem(SEEN, V); } catch (e) {} close(); };
+    foot.appendChild(ok); box.appendChild(foot);
+    ov.appendChild(box); document.body.appendChild(ov);
+  }
+  function close() { if (ov) { ov.remove(); ov = null; } }
+  function homeVisible() { var b = document.getElementById("mybox"), l = document.getElementById("login"); return !!(b && l && getComputedStyle(l).display !== "none" && b.getClientRects().length); }
+  var shown = false;
+  function check() {
+    if (shown || ov) return;
+    var V = ver(); if (!V) return;
+    var seen = ""; try { seen = localStorage.getItem(SEEN) || ""; } catch (e) {}
+    if (seen === V) { shown = true; return; }
+    if (typeof playing !== "undefined" && playing) return;
+    if (!homeVisible()) return;
+    shown = true; setTimeout(show, 900);   // after the launcher skeleton has settled
+  }
+  function boot() { if (!document.body) { setTimeout(boot, 50); return; } setInterval(check, 800); }
+  boot();
+  return { show: show, close: close, NOTES: NOTES, md: md };
+})();
+/* ========================== END WHAT'S NEW ================================= */
+var NTL_UP = (function () {
+  var REPO = "disis-om/NTL-VANCED", RAW = "https://raw.githubusercontent.com/" + REPO + "/main/updates/", CHECK_EVERY = 6 * 3600 * 1000;
+  var cfg = { beta: false, last: 0, avail: null, snooze: "" };
+  try { var j = JSON.parse(localStorage.getItem("wy_upd") || "null"); if (j) for (var k in cfg) if (k in j) cfg[k] = j[k]; } catch (e) {}
+  function save() { try { localStorage.setItem("wy_upd", JSON.stringify(cfg)); } catch (e) {} }
+  function g(n) { try { return window[n]; } catch (e) { return undefined; } }
+  function ver() { try { return localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } }
+  function loader() { try { return +localStorage.getItem("wyrmloader") || 0; } catch (e) { return 0; } }
+  function packaged() { try { return localStorage.getItem("wyrmpackaged") || ""; } catch (e) { return ""; } }
+  function source() { try { return localStorage.getItem("wyrmsource") || "packaged"; } catch (e) { return "packaged"; } }
+  function num(v) { var p = String(v || "0").split(/[.\-]/); return (+p[0] || 0) * 1e6 + (+p[1] || 0) * 1e3 + (+p[2] || 0); }
+  function isBeta(v) { return /beta|b\d/i.test(String(v)); }
+  function esc(t) { return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+  /* page → extension (same channel NTL uses for its storage) */
+  function ext(msg) {
+    return new Promise(function (res) {
+      var id = g("FA"); try { id = id || localStorage.getItem("tinyscrID"); } catch (e) {}
+      if (!id || typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.sendMessage) return res(null);
+      try { chrome.runtime.sendMessage(id, msg, function (r) { res(!chrome.runtime.lastError && r && r.ok ? r : null); }); } catch (e) { res(null); }
+    });
+  }
+  var CSS = [
+    "#up-ov{position:fixed;inset:0;z-index:2147483150;background:rgba(4,6,12,.66);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);display:flex;align-items:center;justify-content:center;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;color:#e6e9ef;}",
+    "#up-box{width:min(560px,94vw);max-height:min(640px,92vh);display:flex;flex-direction:column;background:linear-gradient(165deg,#181b24 0%,#0f1117 60%,#0c0e13 100%);border:1px solid rgba(255,255,255,.09);border-radius:18px;box-shadow:0 30px 90px rgba(0,0,0,.75),inset 0 1px 0 rgba(255,255,255,.06);overflow:hidden;zoom:var(--wy-scale,1);}",
+    "#up-head{position:relative;padding:20px 60px 14px 24px;background:linear-gradient(90deg,rgba(128,88,208,.25),rgba(58,123,213,.14) 60%,transparent);border-bottom:1px solid rgba(255,255,255,.07);flex:none;}",
+    "#up-head .k{font:bold 9.5px Arial;letter-spacing:2px;color:#8b93a7;margin-bottom:6px;}",
+    "#up-head .t{font-size:21px;font-weight:bold;letter-spacing:.6px;background:linear-gradient(90deg,#c9b6ff,#7fb3ff);-webkit-background-clip:text;background-clip:text;color:transparent;}",
+    "#up-head .s{font:11px Arial;color:#8b93a7;margin-top:4px;}",
+    "#up-head .b{display:inline-block;margin-left:8px;padding:1px 7px;border-radius:7px;font:bold 8.5px Arial;letter-spacing:1.2px;color:#ffd166;border:1px solid rgba(255,209,102,.4);background:rgba(255,209,102,.12);vertical-align:middle;}",
+    "#up-x{position:absolute;right:16px;top:16px;width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#aab2c5;font-size:19px;line-height:1;cursor:pointer;}",
+    "#up-body{flex:1;min-height:0;overflow:auto;padding:14px 24px 8px;font-size:13px;line-height:1.55;color:#c3cad9;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.14) transparent;}",
+    "#up-body h1{font-size:18px;margin:6px 0 4px;background:linear-gradient(90deg,#fff,#c9b6ff 60%,#7fb3ff);-webkit-background-clip:text;background-clip:text;color:transparent;}#up-body h1 + p{color:#8b93a7;font-size:12px;margin:0 0 10px;}",
+    "#up-body h2{display:flex;align-items:center;gap:8px;margin:14px 0 6px;font:bold 10px Arial;letter-spacing:1.8px;text-transform:uppercase;color:#c9b6ff;}#up-body h2:before{content:'';width:4px;height:13px;border-radius:2px;background:linear-gradient(180deg,#8058d0,#3a7bd5);}",
+    "#up-body ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;}#up-body li{position:relative;padding:6px 10px 6px 24px;border-radius:8px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.05);}#up-body li:before{content:'';position:absolute;left:10px;top:12px;width:6px;height:6px;border-radius:50%;background:linear-gradient(135deg,#c9b6ff,#3a7bd5);}",
+    "#up-body b{color:#fff;padding:0 4px;border-radius:5px;background:rgba(128,88,208,.18);}#up-body code{font:12px Consolas,Menlo,monospace;color:#c9b6ff;padding:1px 6px;border-radius:5px;background:rgba(128,88,208,.16);}",
+    "#up-foot{padding:12px 24px 18px;border-top:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:10px;flex:none;}",
+    "#up-foot .st{flex:1;font:11px Arial;color:#8b93a7;}",
+    "#up-foot .bar{flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden;display:none;}#up-foot .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#8058d0,#3a7bd5);transition:width .2s;}",
+    ".up-btn{height:38px;padding:0 20px;border-radius:11px;border:1px solid rgba(255,255,255,.28);background:linear-gradient(90deg,#8058d0,#3a7bd5);color:#fff;font:bold 12px Arial;letter-spacing:1.4px;cursor:pointer;box-shadow:0 10px 28px rgba(128,88,208,.35);}",
+    ".up-btn.sec{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12);color:#aab2c5;box-shadow:none;}.up-btn[disabled]{opacity:.5;cursor:default;}.up-btn:active{transform:translateY(1px);}",
+    "@media (max-width:600px){#up-box{width:100vw;max-height:100vh;border-radius:0;}}"
+  ].join("\n");
+  function css() { if (!document.getElementById("up-css")) { var st = document.createElement("style"); st.id = "up-css"; st.textContent = CSS; (document.head || document.documentElement).appendChild(st); } }
+
+  /* ---------- check ---------- */
+  var manifest = null, checking = false, listeners = [];
+  function emit() { for (var i = 0; i < listeners.length; i++) try { listeners[i](); } catch (e) {} }
+  function fetchJSON(url) { return fetch(url + "?t=" + Date.now(), { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }); }
+  function check(force) {
+    if (checking) return Promise.resolve(manifest);
+    checking = true;
+    var chain = fetchJSON(RAW + "stable.json").then(function (st) {
+      if (!cfg.beta) return st;
+      return fetchJSON(RAW + "beta.json").then(function (bt) { return bt && num(bt.version) > num(st.version) ? bt : st; }, function () { return st; });
+    });
+    return chain.then(function (m) {
+      checking = false; cfg.last = Date.now();
+      manifest = m && m.version ? m : null;
+      cfg.avail = manifest && num(manifest.version) > num(ver()) ? { version: manifest.version, channel: manifest.channel || "stable" } : null;
+      save(); emit();
+      if (cfg.avail && force !== "silent" && cfg.snooze !== manifest.version) offer();
+      return manifest;
+    }, function (e) { checking = false; cfg.last = Date.now(); save(); status = "Could not reach GitHub (" + (e && e.message || "offline") + ")"; emit(); return null; });
+  }
+  var status = "";
+  /* ---------- install ---------- */
+  var busy = false, progress = 0;
+  function sha256(buf) { return crypto.subtle.digest("SHA-256", buf).then(function (h) { return Array.prototype.map.call(new Uint8Array(h), function (b) { return ("0" + b.toString(16)).slice(-2); }).join(""); }); }
+  function download(url, onProg) {
+    return fetch(url, { cache: "no-store" }).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      var total = +r.headers.get("content-length") || 0, got = 0, reader = r.body && r.body.getReader ? r.body.getReader() : null;
+      if (!reader) return r.arrayBuffer();
+      var chunks = [];
+      return (function pump() { return reader.read().then(function (x) { if (x.done) { var out = new Uint8Array(got), o = 0; chunks.forEach(function (c) { out.set(c, o); o += c.length; }); return out.buffer; } chunks.push(x.value); got += x.value.length; if (onProg) onProg(total ? got / total : 0, got); return pump(); }); })();
+    });
+  }
+  function install(m) {
+    if (busy || !m) return Promise.resolve(false);
+    if (m.minLoader && m.minLoader > loader()) { status = "This update needs the new extension zip"; emit(); return Promise.resolve(false); }
+    busy = true; progress = 0; status = "Downloading v" + m.version + "…"; emit();
+    var urls = [m.url, m.fallbackUrl].filter(Boolean);
+    function tryUrl(i) {
+      if (i >= urls.length) return Promise.reject(new Error("download failed"));
+      return download(urls[i], function (p, got) { progress = p; status = "Downloading v" + m.version + " · " + (got / 1048576).toFixed(1) + " MB"; emit(); }).catch(function () { return tryUrl(i + 1); });
+    }
+    return tryUrl(0).then(function (buf) {
+      status = "Verifying…"; emit();
+      return sha256(buf).then(function (h) {
+        if (m.sha256 && h !== String(m.sha256).toLowerCase()) throw new Error("checksum mismatch — download rejected");
+        var code = new TextDecoder("utf-8").decode(buf);
+        status = "Installing…"; emit();
+        return ext({ greeting: "ntlStorageSet", data: { wyrm_bundle: { version: m.version, channel: m.channel || "stable", sha256: h, at: Date.now(), code: code } } });
+      });
+    }).then(function (ok) {
+      if (!ok) throw new Error("could not store the bundle");
+      busy = false; cfg.avail = null; save(); status = "Installed v" + m.version + " — reloading"; emit();
+      setTimeout(function () { window.__reload(); }, 700); return true;
+    }).catch(function (e) { busy = false; status = "Update failed: " + (e && e.message || e); emit(); return false; });
+  }
+  function fallbackStable() {
+    cfg.beta = false; save(); status = "Fetching the stable release…"; emit();
+    return fetchJSON(RAW + "stable.json").then(function (st) {
+      if (!st || !st.version) throw new Error("no stable manifest");
+      if (st.version === ver() && source() !== "packaged") { status = "Already on stable v" + st.version; emit(); return false; }
+      return install(st);
+    }).catch(function (e) { status = "Fallback failed: " + (e && e.message || e); emit(); return false; });
+  }
+  function usePackaged() {   // drop the OTA bundle → the loader falls back to the packaged main-mt.js
+    return ext({ greeting: "ntlStorageRemove", keys: ["wyrm_bundle", "wyrm_boot"] }).then(function () { location.reload(); });
+  }
+  /* ---------- popup ---------- */
+  var ov = null;
+  function md(src) { try { return typeof NTL_WN !== "undefined" && NTL_WN.md ? NTL_WN.md(src) : "<p>" + esc(src) + "</p>"; } catch (e) { return "<p>" + esc(src) + "</p>"; } }
+  function offer() {
+    if (ov || !manifest) return; css();
+    var m = manifest, needZip = m.minLoader && m.minLoader > loader();
+    ov = el("div"); ov.id = "up-ov";
+    var box = el("div"); box.id = "up-box";
+    ["mousedown", "keydown", "wheel", "touchstart"].forEach(function (t) { box.addEventListener(t, function (e) { e.stopPropagation(); }, { passive: t === "wheel" || t === "touchstart" }); });
+    box.innerHTML = '<div id="up-head"><div class="k">NTL VANCED · UPDATE</div><div class="t">v' + esc(m.version) + ' is ready' + (isBeta(m.version) || m.channel === "beta" ? '<span class="b">BETA</span>' : "") + '</div><div class="s">You are on v' + esc(ver()) + (m.size ? " · " + (m.size / 1048576).toFixed(1) + " MB" : "") + (m.date ? " · " + esc(m.date) : "") + '</div><button id="up-x" title="Later">×</button></div>' +
+      '<div id="up-body">' + md(m.notes || "No release notes.") + '</div>' +
+      '<div id="up-foot"><span class="st"></span><span class="bar"><i></i></span><button class="up-btn sec" id="up-later">LATER</button><button class="up-btn" id="up-go">' + (needZip ? "GET THE ZIP" : "UPDATE") + '</button></div>';
+    ov.appendChild(box); document.body.appendChild(ov);
+    var st = box.querySelector(".st"), bar = box.querySelector(".bar"), go = box.querySelector("#up-go");
+    function refresh() { st.textContent = status; bar.style.display = busy ? "block" : "none"; bar.firstChild.style.width = Math.round(progress * 100) + "%"; go.disabled = busy; }
+    listeners.push(refresh); refresh();
+    box.querySelector("#up-x").onclick = box.querySelector("#up-later").onclick = function () { if (busy) return; cfg.snooze = m.version; save(); closeP(); };
+    go.onclick = function () { if (needZip) { try { window.open(m.zip || "https://github.com/" + REPO + "/releases/latest", "_blank", "noopener"); } catch (e) {} return; } install(m); };
+  }
+  function closeP() { if (ov) { ov.remove(); ov = null; } }
+  /* ---------- boot ---------- */
+  function bootOk() { try { ext({ greeting: "ntlStorageSet", data: { wyrm_boot_ok: ver() } }); } catch (e) {} }
+  function boot() {
+    if (!document.body) { setTimeout(boot, 50); return; }
+    try { var rb = localStorage.getItem("wyrmrolledback"); if (rb) { localStorage.removeItem("wyrmrolledback"); setTimeout(function () { try { if (typeof R === "function" && typeof J !== "undefined") R(J, "Update v" + rb + " failed to start \u2014 rolled back to v" + ver()); } catch (e) {} }, 3000); } } catch (e) {}
+    setTimeout(bootOk, 1500);                                          // the bundle parsed and ran → good (parse errors never get here)
+    var due = !cfg.last || Date.now() - cfg.last > CHECK_EVERY;
+    setTimeout(function () { check(due ? "" : "silent"); }, due ? 2500 : 60000);
+    setInterval(function () { check("silent"); }, CHECK_EVERY);
+  }
+  boot();
+  return { cfg: cfg, check: check, install: function () { return manifest ? install(manifest) : check("").then(function (m) { return m ? install(m) : false; }); }, fallbackStable: fallbackStable, usePackaged: usePackaged, offer: offer,
+    setBeta: function (v) { cfg.beta = !!v; save(); check(""); }, onChange: function (f) { listeners.push(f); },
+    get status() { return status; }, get busy() { return busy; }, get progress() { return progress; }, get manifest() { return manifest; }, get version() { return ver(); }, get source() { return source(); }, get packaged() { return packaged(); }, get loader() { return loader(); }, get avail() { return cfg.avail; }, REPO: REPO };
+})();
+/* ========================== END UPDATER ==================================== */
+</script></body></html>
