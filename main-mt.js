@@ -3687,7 +3687,7 @@ var NTL_UP = (function () {
   function css() { if (!document.getElementById("up-css")) { var st = document.createElement("style"); st.id = "up-css"; st.textContent = CSS; (document.head || document.documentElement).appendChild(st); } }
 
   /* ---------- check ---------- */
-  var manifest = null, checking = false, listeners = [];
+  var manifest = null, checking = false, recheck = false, listeners = [];
   function emit() { for (var i = 0; i < listeners.length; i++) try { listeners[i](); } catch (e) {} }
   function fetchOne(url) { return fetch(url + "?t=" + Date.now(), { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }); }
   function fetchJSON(name) {   // both mirrors, newest version wins; one failing is fine, both failing throws
@@ -3699,8 +3699,8 @@ var NTL_UP = (function () {
     });
   }
   function check(force) {
-    if (checking) return Promise.resolve(manifest);
-    checking = true;
+    if (checking) { recheck = true; return Promise.resolve(manifest); }
+    checking = true; status = "Checking…"; emit();
     var chain = fetchJSON("stable.json").then(function (st) {
       if (!cfg.beta) return st;
       return fetchJSON("beta.json").then(function (bt) { return bt && num(bt.version) > num(st.version) ? bt : st; }, function () { return st; });
@@ -3710,9 +3710,11 @@ var NTL_UP = (function () {
       manifest = m && m.version ? m : null;
       cfg.avail = manifest && num(manifest.version) > num(ver()) ? { version: manifest.version, channel: manifest.channel || "stable" } : null;
       save(); emit();
-      if (cfg.avail && force !== "silent" && cfg.snooze !== manifest.version) offer();
+      status = cfg.avail ? "v" + cfg.avail.version + " available" : "";
+      if (cfg.avail && force !== "silent") offer();
+      if (recheck) { recheck = false; setTimeout(function () { check(force); }, 300); }
       return manifest;
-    }, function (e) { checking = false; cfg.last = Date.now(); save(); status = "Could not reach GitHub (" + (e && e.message || "offline") + ")"; emit(); return null; });
+    }, function (e) { checking = false; cfg.last = Date.now(); save(); status = "Could not reach GitHub (" + (e && e.message || "offline") + ")"; emit(); if (recheck) { recheck = false; setTimeout(function () { check(force); }, 300); } return null; });
   }
   var status = "";
   /* ---------- install ---------- */
@@ -3801,7 +3803,7 @@ var NTL_UP = (function () {
     var st = box.querySelector(".st"), bar = box.querySelector(".bar"), go = box.querySelector("#up-go");
     function refresh() { st.textContent = status; bar.style.display = busy ? "block" : "none"; bar.firstChild.style.width = Math.round(progress * 100) + "%"; go.disabled = busy; }
     listeners.push(refresh); refresh();
-    box.querySelector("#up-x").onclick = box.querySelector("#up-later").onclick = function () { if (busy) return; cfg.snooze = m.version; save(); closeP(); };
+    box.querySelector("#up-x").onclick = box.querySelector("#up-later").onclick = function () { if (busy) return; closeP(); };
     go.onclick = function () { if (needZip) { try { window.open(m.zip || "https://github.com/" + REPO + "/releases/latest", "_blank", "noopener"); } catch (e) {} return; } install(m); };
   }
   function closeP() { if (ov) { ov.remove(); ov = null; } }
@@ -3833,7 +3835,6 @@ var NTL_UP = (function () {
 var NTL_WN = (function () {
   var SEEN = "wy_seen_ver";
   var NOTES = {
-    "5.55-beta": "# Beta 5.55 landed\nOver-the-air, from the beta channel.\n\n- **STABLE** in Vanced › Updates & About goes back to the stable release\n- Nothing else changed\n",
     "5.51-beta": "# Beta channel works\nIf you can read this, the over-the-air update just landed — downloaded from GitHub, verified, installed, no reinstall.\n\n- **STABLE** in Vanced › Updates & About takes you back to the stable release\n- **PACKAGED** runs the version that shipped in the zip\n- Nothing else changed in this build\n",
     "5.49-beta": "# Beta channel works\nIf you can read this, the over-the-air update just landed.\n\n- Downloaded from GitHub, verified, installed — no reinstall\n- **STABLE** in Vanced › Updates & About takes you back to the stable release\n- Nothing else changed in this build\n",
     "5.47": "# Chat, arenas and a lot of polish\nThis build turns the chat into a proper messenger, puts your team on the home screen and lets you watch Battledome live.\n\n## One chat picker\n- Tap the **GIF** button in the chat: **Emoji · GIF · Stickers · Memes** in one place, powered by KLIPY\n- Emoji go into your message; GIFs, stickers and memes are sent on tap and show as the image for NTL VANCED players\n- Category chips, **Recent**, search with autocomplete, bento grid\n\n## TEAM | GLOBAL in one box\n- The Global chat now lives inside NTL’s chat box as a second tab — unread badge, USERS and NICK right there\n- The picker works in both chats\n\n## Team map on the home screen\n- **BATTLEDOME · 2220 · 8828** with the live arena picture, your team members as their NTL icons, player counts and top ten\n- Tap a member to see their arena, **JOIN** to go there\n\n## Live Battledomes (experimental)\n- **VIEW LIVE BATTLEDOMES** above PLAY: a live rendered preview of the arena — zone ring, food, snakes with names — plus players, top score, zone radius, top ten and JOIN, POWERED BY WYRM.\n\n## Mobile controls, refined\n- **Arrow control** runs on a virtual cursor: clamped to the screen, centre dead zone, re-seeds along your heading on every new touch — steady and predictable\n- **Arrow & cursor skins** open a visual gallery in **Vanced › Controls** — every skin drawn, tap to use\n- **Eleven new neon arrows**: Neon Ice / Magenta / Sunset / Aqua / Jade, Volt / Twin Volt / Heat / Streak, Inferno / Chrome\n- On-screen **toggle buttons light up** while that mode is on (bot, SOS, spine, eyes, hide chat, assist lock…) — even if you flipped it with a key\n- On-screen **Open settings** and **Realtime leaderboards** work mid-game, no bot mode needed\n- **Revamp Keys** bindings now actually apply after Save\n- On-screen keys respond while another finger is steering; controls never leak touches into the game\n\n## Also\n- **UI size** is a − / + stepper and now scales every popup\n- New menu background; custom arena background accepts any image (png, webp, gif…)\n- Home screen buttons appear instantly\n- Mod panels sit on NTL’s own layer, so nothing floats over the settings page\n",
