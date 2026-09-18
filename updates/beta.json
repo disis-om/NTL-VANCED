@@ -1,0 +1,12 @@
+{
+  "version": "5.49-beta",
+  "channel": "beta",
+  "date": "2026-09-18",
+  "size": 7910405,
+  "sha256": "1d2f3c8e48dea1c4dbeb0348777c137a6146a3d99f50cb58e448ac22e99916f1",
+  "minLoader": 1,
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.49-beta/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.49-beta/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.49-beta/NTL-VANCED-v5.49-beta.zip",
+  "notes": "# Beta channel works\nIf you can read this, the over-the-air update just landed.\n\n- Downloaded from GitHub, verified, installed — no reinstall\n- **STABLE** in Vanced › Updates & About takes you back to the stable release\n- Nothing else changed in this build\n"
+}
