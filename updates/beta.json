@@ -1,12 +1,12 @@
 {
-  "version": "5.55-beta",
-  "channel": "beta",
+  "version": "5.56",
+  "channel": "stable",
   "date": "2026-09-18",
-  "size": 7912826,
-  "sha256": "40ad0c1059174f78fdb8e72d54b0a3d34b6e1dbf68aea31356447ba15c51c163",
+  "size": 7913308,
+  "sha256": "232824b7f953d44ef9283bc1fdfe59e5aa4396f2bc58d8315068ead0755c48b3",
   "minLoader": 3,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.55-beta/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.55-beta/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.55-beta/NTL-VANCED-v5.55-beta.zip",
-  "notes": "# Beta 5.55 landed\nOver-the-air, from the beta channel.\n\n- **STABLE** in Vanced › Updates & About goes back to the stable release\n- Nothing else changed\n"
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.56/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.56/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.56/NTL-VANCED-v5.56.zip",
+  "notes": "# Stable 5.56\nThe over-the-air updater is done.\n\n- Updates are checked on every start — stable, and beta when you enable it\n- The popup comes back until you install (or use STABLE / PACKAGED)\n- **Beta** builds appear first on the beta channel; **STABLE** always brings you back here\n"
 }
