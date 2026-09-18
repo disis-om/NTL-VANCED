@@ -1,12 +1,12 @@
 {
-  "version": "5.56",
-  "channel": "stable",
+  "version": "5.57-beta",
+  "channel": "beta",
   "date": "2026-09-18",
-  "size": 7913308,
-  "sha256": "232824b7f953d44ef9283bc1fdfe59e5aa4396f2bc58d8315068ead0755c48b3",
+  "size": 7916968,
+  "sha256": "68aee641b93b6ff5df48bd7e4d1f8d6af0199071c78c7405efe4d5daef021b81",
   "minLoader": 3,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.56/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.56/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.56/NTL-VANCED-v5.56.zip",
-  "notes": "# Stable 5.56\nThe over-the-air updater is done.\n\n- Updates are checked on every start — stable, and beta when you enable it\n- The popup comes back until you install (or use STABLE / PACKAGED)\n- **Beta** builds appear first on the beta channel; **STABLE** always brings you back here\n"
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.57-beta/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.57-beta/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.57-beta/NTL-VANCED-v5.57-beta.zip",
+  "notes": "# v5.57-beta\nArrow control keeps steering when your finger drifts over the leaderboard, chat or logs (touch layer above the panels). Team roster: hover or tap a member to show only their dot on the minimap. New Content transparency slider for the text inside panels."
 }

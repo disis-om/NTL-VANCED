@@ -2601,6 +2601,8 @@ var NTL_CH = (function () {
     "#bchat #chat{position:absolute!important;left:6px!important;right:6px!important;top:6px!important;width:auto!important;height:auto!important;bottom:38px!important;font-size:12px!important;line-height:1.35!important;padding-right:2px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.14) transparent;}",
     "#bchat #chat::-webkit-scrollbar{width:6px}#bchat #chat::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:6px}",
     /* ---- messages ---- */
+    "#divtl .wy-tp.solo{outline:1px solid rgba(201,182,255,.6);background:rgba(128,88,208,.16)!important;}",
+    "#bchat > #chat, #bchat > #divChat, #bchat > #wy-ctab, #bchat > #wy-gc, #divtl > *, #divpl > *, #wy-hud > *, #time-hud > *, #timebot-hud > *, #wy-log > *, #eemenu > *, #clq > *{opacity:var(--wy-fg-a,1);}",
     "#chat .wy-msg{position:relative;margin:0 0 3px;padding:4px 44px 4px 8px;border-radius:8px;background:rgba(255,255,255,.055);word-break:break-word;text-shadow:0 1px 1px rgba(0,0,0,.6);}",
     "#chat .wy-msg.wy-sys{background:transparent;padding:1px 8px;font-size:11px;opacity:.95;}",
     "#chat .wy-nick{font-weight:bold;margin-right:6px;}",
@@ -2808,6 +2810,7 @@ var NTL_EE = (function () {
    so a future NTL VANCED setting can control their opacity in one place.
    ============================================================================ */
 var NTL_TP = (function () {
+  function g(n) { try { return window[n]; } catch (e) { return undefined; } }
   var CSS = [
     ":root{--wy-bg-a:.28}",
     "#divpl{display:none!important}",   /* the old right-side team box: its HTML now renders inside #divtl */
@@ -2861,7 +2864,8 @@ var NTL_TP = (function () {
   function card(mb, own, kb, same) {
     if (typeof Ig !== "undefined" && Ig) return '<span class="wy-tp-flags"><img src="' + lo(mb.nick) + '"></span>';   // NTL's compact "flags only" mode (L key)
     var menu = "_GAME_MENU_" == mb.srv, nick = D4(mb.nick.slice(8)), owner = D4(mb.owner || "");
-    var h = '<div class="' + (same ? "plist " : "") + "wy-tp" + (own ? " me" : "") + (same ? " same" : "") + '"' + (same ? ' onmouseover="' + h3.name + "(" + kb + ');" onmouseout="' + I3.name + "(" + kb + ');"' : "") + ">";
+    var soloOn = same && g("S5") && g("N5") === mb.nick;
+    var h = '<div class="' + (same ? "plist " : "") + "wy-tp" + (own ? " me" : "") + (same ? " same" : "") + (soloOn ? " solo" : "") + '" data-kb="' + kb + '"' + (same ? ' title="hover or tap: show only this member on the minimap"' : "") + ">";
     h += '<div class="wy-tp-row"><img src="' + lo(mb.nick) + '"><span class="wy-tp-name"' + (own ? ' style="color:' + Li + '"' : "") + ">" + nick + "</span>";
     if (owner && owner !== nick) h += '<span class="wy-tp-owner" title="key owner">' + owner + "</span>";
     if ("" != mb.mmm) h += '<span class="wy-tp-b msg" title="has a message">!</span>';
@@ -2877,7 +2881,20 @@ var NTL_TP = (function () {
     h += (menu ? "in game menu" : same ? "" : mb.srv) + "</div></div>";
     return h;
   }
-  function boot() { if (!document.body) { setTimeout(boot, 50); return; } css(); }
+  /* NTL's own solo-dot feature (h3/I3 with S5/N5) wired through delegated listeners, so it survives the list re-rendering
+     every few seconds and works on touch: hover = solo while hovering, tap = sticky solo until tapped again / tap elsewhere */
+  function idx(el) { var c = el && el.closest ? el.closest(".wy-tp.same") : null; if (!c) return -1; var k = +c.getAttribute("data-kb"); return isNaN(k) ? -1 : k; }
+  function solo(k) { try { if (typeof h3 === "function" && g("Y") && g("Y")[k]) h3(k); } catch (e) {} }
+  function unsolo() { try { if (typeof I3 === "function" && g("S5")) I3(0); } catch (e) {} }
+  var sticky = false;
+  function wire() {
+    var box = document.getElementById("divtl"); if (!box || box.__wySolo) return; box.__wySolo = 1;
+    box.addEventListener("pointerover", function (e) { if (e.pointerType !== "mouse" || sticky) return; var k = idx(e.target); if (k >= 0) solo(k); });
+    box.addEventListener("pointerout", function (e) { if (e.pointerType !== "mouse" || sticky) return; if (idx(e.target) >= 0 && idx(e.relatedTarget) < 0) unsolo(); });
+    box.addEventListener("click", function (e) { var k = idx(e.target); if (k < 0) return; var Y = g("Y") || []; if (sticky && g("N5") === (Y[k] || {}).nick) { sticky = false; unsolo(); } else { sticky = true; solo(k); } e.stopPropagation(); }, true);
+    document.addEventListener("pointerdown", function (e) { if (sticky && !(e.target && e.target.closest && e.target.closest("#divtl"))) { sticky = false; unsolo(); } }, true);
+  }
+  function boot() { if (!document.body) { setTimeout(boot, 50); return; } css(); setInterval(wire, 1000); }
   boot();
   return { dt: dt, card: card };
 })();
@@ -3941,6 +3958,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
+    { v: "5.57-beta", d: "18 Sep 2026", t: "Arrow control keeps steering when your finger drifts over the leaderboard, chat or logs (touch layer above the panels). Team roster: hover or tap a member to show only their dot on the minimap. New Content transparency slider for the text inside panels." },
     { v: "5.56", d: "18 Sep 2026", t: "Stable release: the finished over-the-air updater (every-start check on both channels, popup until installed, two manifest mirrors, instant CDN purge)." },
     {v:"5.54", d:"18 Sep 2026", t:"Stable build with the finished updater: every-start check, two manifest mirrors, instant CDN purge on release."},
     { v: "5.53", d: "18 Sep 2026", t: "Update check reads two mirrors (GitHub raw + jsDelivr) so a fresh release shows up within seconds instead of after the CDN cache." },
@@ -4163,6 +4181,7 @@ var NTL_VS = (function () {
   };
   function css() { if (document.getElementById("vs-css")) return; var st = document.createElement("style"); st.id = "vs-css"; st.textContent = CSS; document.head.appendChild(st); }
   function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+  function applyFg(a) { document.documentElement.style.setProperty("--wy-fg-a", a); try { localStorage.setItem("wy_fg_a", a); } catch (e) {} }
   function applyAlpha(a) { document.documentElement.style.setProperty("--wy-bg-a", a); try { localStorage.setItem("wy_bg_a", a); } catch (e) {} }
   function applyScale(x) { document.documentElement.style.setProperty("--wy-scale", x); try { localStorage.setItem("wy_ui_scale", x); } catch (e) {} }
 
@@ -4218,6 +4237,8 @@ var NTL_VS = (function () {
     var c1 = card("Appearance");
     var a0 = parseFloat(localStorage.getItem("wy_bg_a")); if (isNaN(a0)) a0 = .28;
     c1.appendChild(vsSlider("Panel transparency", "background of HUD, chat, lists, menus — the panel fades while you drag so you can judge it live", 0, 0.9, 0.01, a0, function (v) { return Math.round(v * 100) + "%"; }, function (v) { applyAlpha(v); }, true));
+    var f0 = parseFloat(localStorage.getItem("wy_fg_a")); if (isNaN(f0)) f0 = 1;
+    c1.appendChild(vsSlider("Content transparency", "the text, icons and rows inside those panels — independent of the background", 0.2, 1, 0.01, f0, function (v) { return Math.round(v * 100) + "%"; }, function (v) { applyFg(v); }, true));
     var sc0 = parseFloat(localStorage.getItem("wy_ui_scale")); if (isNaN(sc0)) sc0 = 1;
     c1.appendChild(vsStepper("UI size", "scale the whole interface — the mod’s panels, popups and NTL’s own; tap the value to reset", 0.7, 1.6, 0.05, sc0, function (v) { return Math.round(v * 100) + "%"; }, function (v) { applyScale(v); }));
     S.appendChild(c1);
@@ -4496,7 +4517,7 @@ var NTL_VS = (function () {
     close();
   }
   function close() { if (!ov) return; window.removeEventListener("keydown", esc, true); ov.remove(); ov = null; }
-  try { var s0 = parseFloat(localStorage.getItem("wy_bg_a")); if (!isNaN(s0)) document.documentElement.style.setProperty("--wy-bg-a", s0); } catch (e) {}
+  try { var s0 = parseFloat(localStorage.getItem("wy_bg_a")); if (!isNaN(s0)) document.documentElement.style.setProperty("--wy-bg-a", s0); var f1 = parseFloat(localStorage.getItem("wy_fg_a")); if (!isNaN(f1)) document.documentElement.style.setProperty("--wy-fg-a", f1); } catch (e) {}
   try { var sc9 = parseFloat(localStorage.getItem("wy_ui_scale")); if (!isNaN(sc9)) document.documentElement.style.setProperty("--wy-scale", sc9); } catch (e) {}
   (function b() { if (!document.head) { setTimeout(b, 50); return; } css(); })();   // stylesheet at load: it also themes NTL's iframe popups (.popup-data)
   /* key (keymap id "vancedset", default O) — works on the home screen and in game */
@@ -4722,6 +4743,7 @@ var NTL_AR = (function () {
 
   var CSS = [
     "#wy-ar{position:fixed;inset:0;z-index:60;pointer-events:none;overflow:hidden;}",
+    "#wy-arcap{position:fixed;inset:0;z-index:118;display:none;background:transparent;touch-action:none;}html.wy-mobile #wy-arcap.on{display:block;}",
     "#ar-a{position:absolute;left:0;top:0;opacity:0;will-change:transform,opacity;transition:opacity .22s ease;transform-origin:50% 50%;filter:drop-shadow(0 2px 6px rgba(0,0,0,.6));}",
     ".ar-prev{position:relative;height:118px;margin:8px 0 2px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:radial-gradient(circle at 24% 50%,#16401a,#071207);overflow:hidden;}",
     ".ar-prev:before{content:'LIVE PREVIEW';position:absolute;left:10px;top:8px;font:bold 8.5px Arial;letter-spacing:1.3px;color:rgba(255,255,255,.3);}",
@@ -4751,8 +4773,16 @@ var NTL_AR = (function () {
   function feed() {
     try { g4 = cx; o4 = cy; l8 = (g("Dl") || window.innerWidth) / 2 + cx; Q8 = (g("d") || window.innerHeight) / 2 + cy; } catch (x) {}
   }
+  /* touch layer: sits above the info boxes / chat / log (z 100) and below the on-screen controls (z 120), so a finger that
+     wanders over a panel keeps steering. Only on touch devices while arrow mode is on and a round is running. */
+  var cap = null;
+  function capTick() {
+    if (!cap) { cap = document.createElement("div"); cap.id = "wy-arcap"; (document.body || document.documentElement).appendChild(cap); }
+    cap.classList.toggle("on", !!(cfg.on && playing()));
+  }
+  setInterval(capTick, 400);
   function onDown(e) {
-    if (!cfg.on || !playing() || isUI(e.target) || down) return;
+    if (!cfg.on || !playing() || (isUI(e.target) && !(e.target && e.target.id === "wy-arcap")) || down) return;
     down = true; finger = e.pointerId; lastEvt = Date.now(); lastPos = [e.clientX, e.clientY];
     var r = Math.max(DEAD + 4, cfg.seed);                      // re-seed on the last heading
     cx = Math.cos(lastAng) * r; cy = Math.sin(lastAng) * r; clamp(); feed(); show(true); place();
@@ -4779,7 +4809,7 @@ var NTL_AR = (function () {
      run while arrow mode owns the play surface. UI targets are left alone. */
   function sealTouch(e) {
     if ((e.type === "touchend" || e.type === "touchcancel") && e.touches && e.touches.length === 0 && down) end();
-    if (!cfg.on || !playing() || isUI(e.target)) return;
+    if (!cfg.on || !playing() || (isUI(e.target) && !(e.target && e.target.id === "wy-arcap"))) return;
     e.stopPropagation();
     if (e.cancelable) e.preventDefault();
   }
