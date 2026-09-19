@@ -1,12 +1,12 @@
 {
-  "version": "5.59",
+  "version": "5.60",
   "channel": "stable",
-  "date": "2026-09-18",
-  "size": 7920181,
-  "sha256": "1f648e7a2f71092f170fdde72728dbe9c841b7e8a3972b43220e8bf799a14360",
+  "date": "2026-09-19",
+  "size": 7935959,
+  "sha256": "f5197a65a335d0cea3bed286739f54f0ad6147d294d214fec35a42db5311214b",
   "minLoader": 3,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.59/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.59/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.59/NTL-VANCED-v5.59.zip",
-  "notes": "# v5.59\nServer picker search finally filters NTL’s list: the hide rule lost to the row layout rule (two ids beat id + class); verified in a real Chrome run."
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.60/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.60/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.60/NTL-VANCED-v5.60.zip",
+  "notes": "# Assist line for arrow mode\nNTL's assist line used to point at the mouse — useless on a phone. It now follows the arrow.\n\n## Arrow control\n- Turn on NTL assist while steering with the arrow: a dashed line is drawn from your snake's head to the arrow, in the arrow's colour\n- It appears only while your finger is down and disappears together with the arrow\n\n## Fine tuning\n- Release notes are now the GitHub release notes of the version you are running — the same text you see on GitHub, with images, video, tables and code\n- Small fixes and clean-ups\n"
 }

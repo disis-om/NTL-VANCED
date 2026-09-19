@@ -25,10 +25,12 @@ cp.execSync("node --check \"" + bundlePath + "\"", { stdio: "inherit" });
 const buf = fs.readFileSync(bundlePath), sha = crypto.createHash("sha256").update(buf).digest("hex");
 console.log("  main-mt.js " + (buf.length / 1048576).toFixed(2) + " MB sha256 " + sha.slice(0, 16) + "…");
 
-/* 2. notes: NTL_WN.NOTES[ver] (styled markdown) else the top changelog line */
+/* 2. notes: updates/notes/<ver>.md, else NTL_WN.NOTES[ver], else the top changelog line */
 const src = buf.toString("utf8");
 let notes = "";
 {
+  const nf = path.join(ROOT, "updates", "notes", ver + ".md");   // preferred: updates/notes/<ver>.md = the GitHub release body
+  if (fs.existsSync(nf)) notes = fs.readFileSync(nf, "utf8").trim() + "\n";
   const m = new RegExp('"' + ver.replace(/\./g, "\\.") + '": (".*?")(?=,\\n|\\n  \\})', "s").exec(src.slice(src.indexOf("var NOTES = {"), src.indexOf("var NOTES = {") + 200000));
   if (m) { try { notes = JSON.parse(m[1]); } catch (e) {} }
   if (!notes) { const c = /\{ v: "([^"]+)", d: "([^"]+)", t: "((?:[^"\\]|\\.)*)" \}/.exec(src.slice(src.indexOf("var CHANGELOG = ["))); if (c && c[1] === ver) notes = "# v" + ver + "\n" + JSON.parse('"' + c[3] + '"'); }

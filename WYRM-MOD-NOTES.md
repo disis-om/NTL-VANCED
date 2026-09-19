@@ -1,6 +1,6 @@
 # NTL VANCED (Wyrm Mod) — Developer Notes
 
-> **STATUS (18 Sep 2026, night): v5.59 stable released via OTA** — updater complete and owner-tested on both channels. See `HANDOFF-OTA.md` (bottom section) for 5.52–5.59 details. Repo github.com/disis-om/NTL-VANCED. Pro Guard / AI coach LOCKED.
+> **STATUS (18 Sep 2026, night): v5.60 (19 Sep: arrow assist line, What's new = GitHub release notes via updates/notes/<ver>.md — see HANDOFF-OTA.md) stable released via OTA** — updater complete and owner-tested on both channels. See `HANDOFF-OTA.md` (bottom section) for 5.52–5.59 details. Repo github.com/disis-om/NTL-VANCED. Pro Guard / AI coach LOCKED.
 
 ## 0. Quick map for a new agent
 

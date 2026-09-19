@@ -32,3 +32,10 @@ Facts established:
 - **5.58–5.59**: server picker search on touch (stop touch events at `#sv-box`/`#sv-search`, focus on touchend) + search by id/`#id`/ip/country code/country name (`CN` map, code from NTL `R9` via the flag cell's `data-srv-flag`). **5.59 real fix:** hidden rows stayed visible because `#sv-body #select-srv-body > div{display:grid!important}` (2 ids) beat `#sv-body .sv-hide`; hide rule now `#sv-body #select-srv-body > div.sv-hide …`. Verified with `tools/e2e_sv.js` (real Chrome for Testing + extension).
 - **Rule learned:** harness pages lie about NTL's real DOM/CSS — for anything touching NTL's own elements, verify with the Chrome-for-Testing e2e scripts (`tools/e2e_*.js`, binary in `tools/cft/`, ignored by git).
 - Chrome's extensions page shows the **zip's** manifest version (e.g. 5.50) — it cannot follow OTA; the running version is in Vanced / the HUD.
+
+## 19 Sep — 5.60 stable: release notes come from GitHub
+- **Write notes in `updates/notes/<ver>.md`** (GitHub-flavoured markdown: images, video URLs, tables, code, nested/ordered/task lists, inline HTML). `tools/release.js` uses that file as the GitHub release body *and* as `notes` in `updates/<channel>.json`. `NTL_WN.NOTES[...]` is now only a fallback for old versions — stop adding to it.
+- `NTL_WN.loadNotes(ver)`: GitHub API `releases/tags/v<ver>` body → raw `updates/notes/<ver>.md` → jsDelivr → built-in `NOTES`; cached 1 h in `localStorage.wy_wn_md`. The What's new popup opens with a spinner and fills when the notes arrive; foot has "View on GitHub". Update popup (`#up-body`) renders the json `notes` with the same renderer (`.wy-md` class, CSS in `NTL_WN`, injected at load).
+- Renderer = `NTL_WN.md()`; whitelisted inline HTML only, `on*=` / `javascript:` stripped. Bare `github.com/user-attachments/assets/…` URL on its own line = video; `![]()` = always image.
+- Arrow control: `#ar-line` canvas in `#wy-ar` draws NTL's assist (`xe`) from head to arrow while the finger is down and the arrow is visible.
+- Verify with `node tools/e2e_wn.js <released version>` (real Chrome for Testing; binary at `Desktop\wyrm\tools\cft`).

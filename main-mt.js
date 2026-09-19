@@ -3826,7 +3826,7 @@ var NTL_UP = (function () {
     var box = el("div"); box.id = "up-box";
     ["mousedown", "keydown", "wheel", "touchstart"].forEach(function (t) { box.addEventListener(t, function (e) { e.stopPropagation(); }, { passive: t === "wheel" || t === "touchstart" }); });
     box.innerHTML = '<div id="up-head"><div class="k">NTL VANCED · UPDATE</div><div class="t">v' + esc(m.version) + ' is ready' + (isBeta(m.version) || m.channel === "beta" ? '<span class="b">BETA</span>' : "") + '</div><div class="s">You are on v' + esc(ver()) + (m.size ? " · " + (m.size / 1048576).toFixed(1) + " MB" : "") + (m.date ? " · " + esc(m.date) : "") + '</div><button id="up-x" title="Later">×</button></div>' +
-      '<div id="up-body">' + md(m.notes || "No release notes.") + '</div>' +
+      '<div id="up-body" class="wy-md">' + md(m.notes || "No release notes.") + '</div>' +
       '<div id="up-foot"><span class="st"></span><span class="bar"><i></i></span><button class="up-btn sec" id="up-later">LATER</button><button class="up-btn" id="up-go">' + (needZip ? "GET THE ZIP" : "UPDATE") + '</button></div>';
     ov.appendChild(box); document.body.appendChild(ov);
     var st = box.querySelector(".st"), bar = box.querySelector(".bar"), go = box.querySelector("#up-go");
@@ -3886,46 +3886,183 @@ var NTL_WN = (function () {
     "#wn-head .t{font-size:22px;font-weight:bold;letter-spacing:1px;background:linear-gradient(90deg,#c9b6ff,#7fb3ff);-webkit-background-clip:text;background-clip:text;color:transparent;}",
     "#wn-body{flex:1;min-height:0;overflow:auto;padding:16px 26px 10px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.14) transparent;font-size:13px;line-height:1.6;color:#c3cad9;}",
     "#wn-body::-webkit-scrollbar{width:7px}#wn-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:7px}",
-    "#wn-body h1{font-size:21px;font-weight:bold;margin:6px 0 4px;letter-spacing:.3px;line-height:1.25;background:linear-gradient(90deg,#fff,#c9b6ff 60%,#7fb3ff);-webkit-background-clip:text;background-clip:text;color:transparent;}",
-    "#wn-body h1 + p{color:#8b93a7;font-size:12.5px;margin:0 0 14px;line-height:1.55;}",
-    "#wn-body h2{position:relative;display:flex;align-items:center;gap:8px;margin:18px 0 8px;padding:0;font:bold 10.5px Arial;letter-spacing:1.8px;text-transform:uppercase;color:#c9b6ff;}",
-    "#wn-body h2:before{content:'';width:4px;height:14px;border-radius:2px;background:linear-gradient(180deg,#8058d0,#3a7bd5);flex:none;}",
-    "#wn-body h2:after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(255,255,255,.12),transparent);}",
-    "#wn-body p{margin:6px 0;color:#c3cad9;}",
-    "#wn-body ul{list-style:none;margin:0 0 4px;padding:0;display:flex;flex-direction:column;gap:4px;}",
-    "#wn-body li{position:relative;margin:0;padding:7px 10px 7px 26px;border-radius:9px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.05);line-height:1.5;color:#d3d9e6;}",
-    "#wn-body li:before{content:'';position:absolute;left:11px;top:13px;width:7px;height:7px;border-radius:50%;background:linear-gradient(135deg,#c9b6ff,#3a7bd5);box-shadow:0 0 8px rgba(128,88,208,.6);}",
-    "#wn-body b{color:#fff;font-weight:bold;padding:0 4px;border-radius:5px;background:rgba(128,88,208,.18);box-shadow:inset 0 0 0 1px rgba(201,182,255,.14);}#wn-body code{font:12px Consolas,Menlo,monospace;color:#c9b6ff;padding:1px 6px;border-radius:5px;background:rgba(128,88,208,.16);}",
+    "#wn-body h1,.wy-md h1{font-size:21px;font-weight:bold;margin:6px 0 4px;letter-spacing:.3px;line-height:1.25;background:linear-gradient(90deg,#fff,#c9b6ff 60%,#7fb3ff);-webkit-background-clip:text;background-clip:text;color:transparent;}",
+    "#wn-body h1 + p,.wy-md h1 + p{color:#8b93a7;font-size:12.5px;margin:0 0 14px;line-height:1.55;}",
+    "#wn-body h2,.wy-md h2{position:relative;display:flex;align-items:center;gap:8px;margin:18px 0 8px;padding:0;font:bold 10.5px Arial;letter-spacing:1.8px;text-transform:uppercase;color:#c9b6ff;}",
+    "#wn-body h2:before,.wy-md h2:before{content:'';width:4px;height:14px;border-radius:2px;background:linear-gradient(180deg,#8058d0,#3a7bd5);flex:none;}",
+    "#wn-body h2:after,.wy-md h2:after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(255,255,255,.12),transparent);}",
+    "#wn-body p,.wy-md p{margin:6px 0;color:#c3cad9;}",
+    "#wn-body ul,.wy-md ul{list-style:none;margin:0 0 4px;padding:0;display:flex;flex-direction:column;gap:4px;}",
+    "#wn-body li,.wy-md li{position:relative;margin:0;padding:7px 10px 7px 26px;border-radius:9px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.05);line-height:1.5;color:#d3d9e6;}",
+    "#wn-body li:before,.wy-md li:before{content:'';position:absolute;left:11px;top:13px;width:7px;height:7px;border-radius:50%;background:linear-gradient(135deg,#c9b6ff,#3a7bd5);box-shadow:0 0 8px rgba(128,88,208,.6);}",
+    "#wn-body b,.wy-md b{color:#fff;font-weight:bold;padding:0 4px;border-radius:5px;background:rgba(128,88,208,.18);box-shadow:inset 0 0 0 1px rgba(201,182,255,.14);}#wn-body code,.wy-md code{font:12px Consolas,Menlo,monospace;color:#c9b6ff;padding:1px 6px;border-radius:5px;background:rgba(128,88,208,.16);}",
     "#wn-foot{padding:14px 26px 18px;border-top:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:12px;flex:none;}",
     "#wn-foot small{color:#6b7385;font-size:11px;line-height:1.5;flex:1;}",
     "#wn-ok{height:38px;padding:0 22px;border-radius:11px;border:1px solid rgba(255,255,255,.28);background:linear-gradient(90deg,#8058d0,#3a7bd5);color:#fff;font:bold 12px Arial;letter-spacing:1.4px;cursor:pointer;box-shadow:0 10px 30px rgba(128,88,208,.35);}",
     "#wn-ok:active{transform:translateY(1px);}",
-    "@media (max-width:600px){#wn-box{width:100vw;max-height:100vh;border-radius:0;}#wn-head,#wn-body,#wn-foot{padding-left:16px;padding-right:16px;}}"
+    "@media (max-width:600px){#wn-box{width:100vw;max-height:100vh;border-radius:0;}#wn-head,#wn-body,#wn-foot{padding-left:16px;padding-right:16px;}}",
+    ".wn-load{display:flex;align-items:center;gap:10px;padding:26px 0;color:#8b93a7;font-size:12px;}.wn-load i{width:16px;height:16px;border-radius:50%;border:2px solid rgba(201,182,255,.25);border-top-color:#c9b6ff;animation:wnSpin .8s linear infinite;}@keyframes wnSpin{to{transform:rotate(360deg)}}",
+    "#wn-foot small a{color:#8b93a7;text-decoration:none;}#wn-foot small a:hover{color:#c9b6ff;}",
+    ".wy-md h3,.wy-md h4,.wy-md h5,.wy-md h6{margin:14px 0 6px;font-size:13.5px;font-weight:bold;color:#e6e9ef;}.wy-md h4,.wy-md h5,.wy-md h6{font-size:12.5px;color:#c3cad9;}",
+    ".wy-md a{color:#7fb3ff;text-decoration:none;border-bottom:1px solid rgba(127,179,255,.35);}.wy-md a:hover{color:#c9b6ff;border-color:rgba(201,182,255,.6);}",
+    ".wy-md i,.wy-md em{color:#d3d9e6;}.wy-md s,.wy-md del{color:#6b7385;}.wy-md kbd{font:11px Consolas,Menlo,monospace;color:#e6e9ef;padding:1px 6px;border-radius:5px;border:1px solid rgba(255,255,255,.18);border-bottom-width:2px;background:rgba(255,255,255,.06);}",
+    ".wy-md ol{margin:0 0 4px;padding:0 0 0 4px;display:flex;flex-direction:column;gap:4px;counter-reset:wy;list-style:none;}.wy-md ol > li{position:relative;padding:7px 10px 7px 32px;border-radius:9px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.05);line-height:1.5;color:#d3d9e6;counter-increment:wy;}",
+    ".wy-md ol > li:before{content:counter(wy);position:absolute;left:9px;top:8px;width:17px;height:17px;border-radius:6px;font:bold 9.5px Arial;line-height:17px;text-align:center;color:#fff;background:linear-gradient(135deg,#8058d0,#3a7bd5);}",
+    ".wy-md li > ul,.wy-md li > ol{margin-top:6px;}.wy-md li > ul > li,.wy-md li > ol > li{background:rgba(255,255,255,.025);}",
+    ".wy-md li.task:before{width:13px;height:13px;border-radius:4px;background:transparent;border:1px solid rgba(201,182,255,.5);box-shadow:none;left:8px;top:10px;}.wy-md li.task.done:before{background:linear-gradient(135deg,#8058d0,#3a7bd5);border-color:transparent;}.wy-md li.task.done{color:#8b93a7;text-decoration:line-through;}",
+    ".wy-md pre{margin:8px 0;padding:10px 12px;overflow:auto;border-radius:10px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.07);scrollbar-width:thin;}.wy-md pre code{display:block;padding:0;background:none;color:#dfe4f0;font:12px/1.5 Consolas,Menlo,monospace;white-space:pre;}",
+    ".wy-md blockquote{margin:8px 0;padding:8px 14px;border-left:3px solid #8058d0;border-radius:0 10px 10px 0;background:rgba(128,88,208,.08);color:#aab2c5;}.wy-md blockquote p{margin:2px 0;}",
+    ".wy-md hr{border:0;height:1px;margin:14px 0;background:linear-gradient(90deg,rgba(255,255,255,.14),transparent);}",
+    ".wy-md table{width:100%;margin:8px 0;border-collapse:separate;border-spacing:0;font-size:12.5px;border:1px solid rgba(255,255,255,.08);border-radius:10px;overflow:hidden;}.wy-md th{padding:8px 10px;text-align:left;font:bold 10px Arial;letter-spacing:1.4px;text-transform:uppercase;color:#c9b6ff;background:rgba(128,88,208,.14);border-bottom:1px solid rgba(255,255,255,.08);}.wy-md td{padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.05);color:#d3d9e6;vertical-align:top;}.wy-md tr:last-child td{border-bottom:0;}.wy-md tbody tr:nth-child(even) td{background:rgba(255,255,255,.02);}",
+    ".wy-md img{max-width:100%;height:auto;vertical-align:middle;border-radius:10px;}.wy-md p > img:only-child,.wy-md p.media img{display:block;margin:8px 0;border:1px solid rgba(255,255,255,.08);box-shadow:0 10px 30px rgba(0,0,0,.4);}",
+    ".wy-md video{display:block;width:100%;max-height:60vh;margin:8px 0;border-radius:10px;background:#000;border:1px solid rgba(255,255,255,.08);box-shadow:0 10px 30px rgba(0,0,0,.4);}",
+    ".wy-md details{margin:8px 0;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);}.wy-md summary{cursor:pointer;color:#c9b6ff;font-weight:bold;}",
+    ".wy-md center,.wy-md p[align=center]{text-align:center;}",
+    ".wy-md > :first-child{margin-top:0;}.wy-md > :last-child{margin-bottom:0;}"
   ].join("\n");
   var ov = null;
   function css() { if (document.getElementById("wn-css")) return; var st = document.createElement("style"); st.id = "wn-css"; st.textContent = CSS; (document.head || document.documentElement).appendChild(st); }
+  setTimeout(function () { try { css(); } catch (e) {} }, 0);
   function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
   function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
-  /* tiny markdown: headings, bullets, paragraphs, **bold**, `code` */
-  function inline(t) { return esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>"); }
-  function md(src) {
-    var lines = String(src || "").replace(/\r/g, "").split("\n"), out = [], list = false, para = [];
-    function flushP() { if (para.length) { out.push("<p>" + inline(para.join(" ")) + "</p>"); para = []; } }
-    function flushL() { if (list) { out.push("</ul>"); list = false; } }
-    for (var i = 0; i < lines.length; i++) {
-      var l = lines[i], m;
-      if (!l.trim()) { flushP(); flushL(); continue; }
-      if ((m = l.match(/^##\s+(.*)/))) { flushP(); flushL(); out.push("<h2>" + inline(m[1]) + "</h2>"); }
-      else if ((m = l.match(/^#\s+(.*)/))) { flushP(); flushL(); out.push("<h1>" + inline(m[1]) + "</h1>"); }
-      else if ((m = l.match(/^\s*[-*]\s+(.*)/))) { flushP(); if (!list) { out.push("<ul>"); list = true; } out.push("<li>" + inline(m[1]) + "</li>"); }
-      else para.push(l.trim());
+  /* ---- markdown (GitHub flavour, the parts release notes use) ----
+     blocks: # headings, paragraphs (newline = <br>, like GitHub comments), - * + 1. lists (nested, task boxes), > quotes,
+     ``` code, | tables |, ---, bare image / video URLs on their own line, inline HTML (img, video, details, kbd, …);
+     inline: **bold** *em* ~~strike~~ `code` [link](url) ![img](url) bare urls.  Output is only ever our own notes, but
+     scripts / handlers / javascript: urls are stripped anyway. */
+  var TAGS = "a|b|i|em|strong|s|u|del|kbd|sub|sup|code|br|hr|img|video|source|picture|details|summary|p|div|span|center|small|h[1-6]|ul|ol|li|table|thead|tbody|tr|th|td|blockquote|figure|figcaption";
+  var TAG_RE = new RegExp("<(\\/?)(" + TAGS + ")(\\s[^<>]*?)?\\s*(\\/?)>", "gi");
+  function safeUrl(u) { u = String(u || "").trim(); return /^(https?:|data:image\/|\/|#)/i.test(u) ? u : "#"; }
+  function isVid(u) { return /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i.test(u) || /github\.com\/user-attachments\/assets\//i.test(u); }
+  function isImg(u) { return /\.(png|jpe?g|gif|webp|svg|avif|bmp)(\?|#|$)/i.test(u); }
+  function attrs(a) {
+    return String(a || "").replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "").replace(/\s(href|src|poster)\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/gi, function (m, k, v, q1, q2, q3) { return " " + k + '="' + safeUrl(q1 != null ? q1 : q2 != null ? q2 : q3).replace(/"/g, "&quot;") + '"'; });
+  }
+  function tagHtml(close, name, a, selfc) {
+    name = name.toLowerCase(); var extra = "";
+    if (!close) { if (name === "a") extra = ' target="_blank" rel="noopener"'; if (name === "video") extra = ' controls playsinline preload="metadata"'; if (name === "img") extra = ' loading="lazy"'; }
+    return "<" + close + name + attrs(a) + extra + (selfc ? "/" : "") + ">";
+  }
+  /* escape text, keep whitelisted tags */
+  function escKeep(t) {
+    var out = "", last = 0, m; TAG_RE.lastIndex = 0; t = String(t);
+    while ((m = TAG_RE.exec(t))) { out += esc(t.slice(last, m.index)) + tagHtml(m[1], m[2], m[3], m[4]); last = m.index + m[0].length; }
+    return out + esc(t.slice(last));
+  }
+  function media(url, alt, img) {
+    url = safeUrl(url);
+    if (!img && isVid(url) && !isImg(url)) return '<video controls playsinline preload="metadata" src="' + esc(url) + '"></video>';
+    return '<img loading="lazy" src="' + esc(url) + '" alt="' + esc(alt || "") + '">';
+  }
+  function inline(t) {
+    var keep = [];
+    function hold(h) { keep.push(h); return "\u0000" + (keep.length - 1) + "\u0000"; }
+    t = String(t == null ? "" : t);
+    t = t.replace(/``([\s\S]+?)``|`([^`\n]+)`/g, function (m, a, b) { return hold("<code>" + esc((a != null ? a : b).trim()) + "</code>"); });
+    t = t.replace(/!\[([^\]]*)\]\(\s*<?([^\s)>]+)>?(?:\s+"[^"]*")?\s*\)/g, function (m, alt, u) { return hold(media(u, alt, true)); });
+    t = t.replace(/\[([^\]]+)\]\(\s*<?([^\s)>]+)>?(?:\s+"[^"]*")?\s*\)/g, function (m, txt, u) { return hold('<a href="' + esc(safeUrl(u)) + '" target="_blank" rel="noopener">' + inline(txt) + "</a>"); });
+    t = t.replace(/(^|[\s(])(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"])/g, function (m, pre, u) { return pre + hold('<a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(u) + "</a>"); });
+    t = escKeep(t);
+    t = t.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/(^|[^\w])__(.+?)__(?!\w)/g, "$1<b>$2</b>");
+    t = t.replace(/~~(.+?)~~/g, "<s>$1</s>");
+    t = t.replace(/(^|[^\w*])\*([^*\n]+?)\*(?!\w)/g, "$1<i>$2</i>").replace(/(^|[^\w_])_([^_\n]+?)_(?!\w)/g, "$1<i>$2</i>");
+    t = t.replace(/\\([\\`*_{}\[\]()#+\-.!|~>])/g, "$1");
+    return t.replace(/\u0000(\d+)\u0000/g, function (m, i) { return keep[+i]; });
+  }
+  var LI = /^(\s*)([-*+]|\d{1,3}[.)])\s+(.*)$/;
+  var HTML_BLOCK = new RegExp("^\\s*<\\/?(" + TAGS + ")\\b", "i");
+  var TABLE_SEP = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
+  function cells(l) { l = l.replace(/\\\|/g, "\u0001").trim(); if (l.charAt(0) === "|") l = l.slice(1); if (l.charAt(l.length - 1) === "|") l = l.slice(0, -1); return l.split("|").map(function (c) { return c.replace(/\u0001/g, "|").trim(); }); }
+  function isBlockStart(l) { return /^\s{0,3}(#{1,6}\s|```|~~~|>|\|)/.test(l) || LI.test(l) || /^\s*([-*_])(\s*\1){2,}\s*$/.test(l) || HTML_BLOCK.test(l); }
+  function renderList(buf) {
+    var m0 = LI.exec(buf[0]), base = m0[1].length, ord = /\d/.test(m0[2]), items = [], cur = null, w = 0;
+    for (var i = 0; i < buf.length; i++) {
+      var l = buf[i], m = LI.exec(l);
+      if (m && m[1].length <= base + 1) { cur = { text: m[3], rest: [] }; items.push(cur); w = m[0].length - m[3].length; }
+      else if (cur) cur.rest.push(l.replace(new RegExp("^\\s{0," + w + "}"), ""));
     }
-    flushP(); flushL();
+    var h = ord ? '<ol start="' + parseInt(m0[2], 10) + '">' : "<ul>";
+    items.forEach(function (it) {
+      var t = it.text, cls = "", tm = /^\[([ xX])\]\s+(.*)$/.exec(t);
+      if (tm) { cls = tm[1] === " " ? ' class="task"' : ' class="task done"'; t = tm[2]; }
+      var body = inline(t); while (it.rest.length && !it.rest[it.rest.length - 1].trim()) it.rest.pop();
+      if (it.rest.length) { var sub = it.rest.join("\n"); body += LI.test(it.rest[0]) || isBlockStart(it.rest[0]) || /^\s*$/.test(it.rest[0]) ? md(sub) : "<br>" + md(sub).replace(/^<p>|<\/p>$/g, ""); }
+      h += "<li" + cls + ">" + body + "</li>";
+    });
+    return h + (ord ? "</ol>" : "</ul>");
+  }
+  function md(src) {
+    var lines = String(src || "").replace(/\r/g, "").replace(/\t/g, "    ").split("\n"), out = [], para = [], i = 0, l, m;
+    function flushP() { if (para.length) { out.push("<p>" + para.map(inline).join("<br>") + "</p>"); para = []; } }
+    while (i < lines.length) {
+      l = lines[i];
+      if (!l.trim()) { flushP(); i++; continue; }
+      if ((m = /^\s{0,3}(```|~~~)\s*(\S*)/.exec(l))) {
+        flushP(); var fence = m[1], lang = m[2], code = []; i++;
+        while (i < lines.length && lines[i].indexOf(fence) !== 0) code.push(lines[i++]);
+        i++; out.push('<pre><code' + (lang ? ' class="lang-' + esc(lang) + '"' : "") + ">" + esc(code.join("\n")) + "</code></pre>"); continue;
+      }
+      if ((m = /^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/.exec(l))) { flushP(); out.push("<h" + m[1].length + ">" + inline(m[2]) + "</h" + m[1].length + ">"); i++; continue; }
+      if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(l)) { flushP(); out.push("<hr>"); i++; continue; }
+      if (/^\s{0,3}>/.test(l)) {
+        flushP(); var q = [];
+        while (i < lines.length && (/^\s{0,3}>/.test(lines[i]) || (lines[i].trim() && q.length && !isBlockStart(lines[i])))) q.push(lines[i++].replace(/^\s{0,3}>\s?/, ""));
+        out.push("<blockquote>" + md(q.join("\n")) + "</blockquote>"); continue;
+      }
+      if (l.indexOf("|") >= 0 && i + 1 < lines.length && TABLE_SEP.test(lines[i + 1]) && lines[i + 1].indexOf("|") >= 0) {
+        flushP(); var head = cells(l), al = cells(lines[i + 1]).map(function (c) { return /^:-+:$/.test(c) ? "center" : /-+:$/.test(c) ? "right" : ""; });
+        var t = "<table><thead><tr>" + head.map(function (c, k) { return "<th" + (al[k] ? ' style="text-align:' + al[k] + '"' : "") + ">" + inline(c) + "</th>"; }).join("") + "</tr></thead><tbody>";
+        i += 2;
+        while (i < lines.length && lines[i].trim() && lines[i].indexOf("|") >= 0) { var r = cells(lines[i++]); t += "<tr>" + head.map(function (c, k) { return "<td" + (al[k] ? ' style="text-align:' + al[k] + '"' : "") + ">" + inline(r[k] || "") + "</td>"; }).join("") + "</tr>"; }
+        out.push(t + "</tbody></table>"); continue;
+      }
+      if (LI.test(l)) {
+        flushP(); var buf = [], L0 = LI.exec(l), base0 = L0[1].length, ord0 = /\d/.test(L0[2]);
+        function sameList(x) { var q = LI.exec(x); return !q || q[1].length > base0 + 1 || /\d/.test(q[2]) === ord0; }
+        while (i < lines.length) {
+          var x = lines[i];
+          if (!x.trim()) { var k = i + 1; while (k < lines.length && !lines[k].trim()) k++; if (k < lines.length && (/^\s+\S/.test(lines[k]) || (LI.test(lines[k]) && sameList(lines[k])))) { buf.push(""); i++; continue; } break; }
+          if ((LI.test(x) && sameList(x)) || /^\s+\S/.test(x) || (!LI.test(x) && !isBlockStart(x))) { buf.push(x); i++; } else break;
+        }
+        out.push(renderList(buf)); continue;
+      }
+      if (HTML_BLOCK.test(l)) {
+        flushP(); var hb = [];
+        while (i < lines.length && lines[i].trim()) hb.push(lines[i++]);
+        out.push(escKeep(hb.join("\n"))); continue;
+      }
+      if ((m = /^\s*(https?:\/\/\S+)\s*$/.exec(l)) && (isVid(m[1]) || isImg(m[1]))) { flushP(); out.push('<p class="media">' + media(m[1]) + "</p>"); i++; continue; }
+      para.push(l.trim()); i++;
+    }
+    flushP();
     return out.join("");
+  }
+  /* ---- release notes of the running version: GitHub release body (api) → updates/notes/<v>.md (raw, jsDelivr) → built-in ---- */
+  var REPO = "disis-om/NTL-VANCED", CACHE = "wy_wn_md";
+  function fetchText(url, json) {
+    return new Promise(function (res, rej) {
+      var t = setTimeout(function () { rej(new Error("timeout")); }, 8000);
+      fetch(url, { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error("http " + r.status); return json ? r.json() : r.text(); })
+        .then(function (v) { clearTimeout(t); res(v); }, function (e) { clearTimeout(t); rej(e); });
+    });
+  }
+  function loadNotes(V) {
+    var tag = "v" + V, cached = null;
+    try { var c = JSON.parse(localStorage.getItem(CACHE) || "null"); if (c && c.v === V && c.md && Date.now() - (c.at || 0) < 3600000) cached = c.md; } catch (e) {}
+    if (cached) return Promise.resolve(cached);
+    var tries = [
+      function () { return fetchText("https://api.github.com/repos/" + REPO + "/releases/tags/" + tag, true).then(function (j) { if (!j || !j.body || !String(j.body).trim()) throw new Error("empty"); return String(j.body); }); },
+      function () { return fetchText("https://raw.githubusercontent.com/" + REPO + "/main/updates/notes/" + V + ".md?t=" + Date.now()); },
+      function () { return fetchText("https://cdn.jsdelivr.net/gh/" + REPO + "@main/updates/notes/" + V + ".md"); }
+    ];
+    return tries.reduce(function (p, f) { return p.catch(f); }, Promise.reject()).then(function (t) {
+      try { localStorage.setItem(CACHE, JSON.stringify({ v: V, md: t, at: Date.now() })); } catch (e) {}
+      return t;
+    }).catch(function () { return NOTES[V] || ""; });
   }
   function show() {
     if (ov) return; css();
-    var V = ver(), notes = NOTES[V] || PLACEHOLDER;
+    var V = ver();
     ov = el("div"); ov.id = "wn-ov";
     var box = el("div"); box.id = "wn-box";
     box.addEventListener("mousedown", function (e) { e.stopPropagation(); });
@@ -3933,9 +4070,10 @@ var NTL_WN = (function () {
     var head = el("div"); head.id = "wn-head"; head.innerHTML = '<div class="k">NTL VANCED</div><div class="t">What’s new in v' + esc(V) + "</div>";
     var x = el("button", null, "×"); x.id = "wn-x"; x.title = "Close (shows again next time)"; x.onclick = close;   // close WITHOUT acknowledging
     head.appendChild(x); box.appendChild(head);
-    var body = el("div"); body.id = "wn-body"; body.innerHTML = md(notes); box.appendChild(body);
+    var body = el("div", "wy-md"); body.id = "wn-body"; body.innerHTML = '<div class="wn-load"><i></i>Loading release notes…</div>'; box.appendChild(body);
     var foot = el("div"); foot.id = "wn-foot";
-    foot.appendChild(el("small", null, ""));
+    foot.appendChild(el("small", null, '<a href="https://github.com/' + REPO + '/releases/tag/v' + esc(V) + '" target="_blank" rel="noopener">View on GitHub ↗</a>'));
+    loadNotes(V).then(function (t) { if (body.isConnected) body.innerHTML = md(t || PLACEHOLDER); });
     var ok = el("button", null, "OKAY, GOT IT"); ok.id = "wn-ok";
     ok.onclick = function () { try { localStorage.setItem(SEEN, V); } catch (e) {} close(); };
     foot.appendChild(ok); box.appendChild(foot);
@@ -3955,7 +4093,7 @@ var NTL_WN = (function () {
   }
   function boot() { if (!document.body) { setTimeout(boot, 50); return; } setInterval(check, 800); }
   boot();
-  return { show: show, close: close, NOTES: NOTES, md: md };
+  return { show: show, close: close, NOTES: NOTES, md: md, loadNotes: loadNotes };
 })();
 /* ========================== END WHAT'S NEW ================================= */
 /* ============================================================================
@@ -3970,6 +4108,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
+    { v: "5.60", d: "19 Sep 2026", t: "Arrow control: NTL's assist line now follows the arrow on mobile (head → arrow, only while you steer). What's new shows the GitHub release notes of the running version with full markdown — images, video, tables, code, nested lists." },
     { v: "5.59", d: "18 Sep 2026", t: "Server picker search finally filters NTL’s list: the hide rule lost to the row layout rule (two ids beat id + class); verified in a real Chrome run." },
     { v: "5.58", d: "18 Sep 2026", t: "Server picker search works on touch and matches id, IP, country code and country name. Includes the 5.57 beta fixes: arrow-control touch layer, roster solo-dot on hover/tap, content transparency slider." },
     { v: "5.57-beta", d: "18 Sep 2026", t: "Arrow control keeps steering when your finger drifts over the leaderboard, chat or logs (touch layer above the panels). Team roster: hover or tap a member to show only their dot on the minimap. New Content transparency slider for the text inside panels." },
