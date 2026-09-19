@@ -4309,6 +4309,16 @@ var NTL_TH = (function () {
     st.backgroundImage = "url(" + (url || ((g("Gs") || "") + "bdemo.webp")) + ")"; st.backgroundSize = "cover"; st.backgroundPosition = "center"; st.backgroundRepeat = "no-repeat";
   }
   function store(url) { try { if (url) { if (typeof ff === "function") ff("menuimg", url); } else if (typeof cf === "function") cf(["menuimg"]); } catch (e) {} }
+  /* ---- wallpaper blur ---- */
+  var blurEl = null;
+  function blurPx() { var v = 0; try { v = +localStorage.getItem("wy_bg_blur") || 0; } catch (e) {} return Math.max(0, Math.min(40, v)); }
+  function setBlur(v) { v = Math.max(0, Math.min(40, Math.round(v))); try { localStorage.setItem("wy_bg_blur", v); } catch (e) {} applyBlur(); }
+  function applyBlur() {
+    var v = blurPx();
+    if (!blurEl) { blurEl = el("div"); blurEl.id = "wy-bgblur"; (document.body || document.documentElement).insertBefore(blurEl, (document.body || document.documentElement).firstChild); }
+    document.documentElement.style.setProperty("--wy-bg-blur", v + "px");
+    blurEl.classList.toggle("on", v > 0 && !g("playing"));
+  }
   var busy = false;
   function apply(t, img) {
     cur = t; setVars(t); save(t); paint();
@@ -4349,6 +4359,12 @@ var NTL_TH = (function () {
     "#wy-th .tile .dots{display:flex;gap:3px;margin-left:auto;flex:none;}#wy-th .tile .dots i{width:8px;height:8px;border-radius:50%;border:1px solid rgba(0,0,0,.4);}",
     "#wy-th .tile .chk{position:absolute;right:6px;top:6px;width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,var(--wy-p),var(--wy-b));color:#fff;font:bold 11px Arial;display:none;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5);}#wy-th .tile.on .chk{display:flex;}",
     "#wy-th .tile.busy .im:after{content:'';width:18px;height:18px;border-radius:50%;border:2px solid rgba(255,255,255,.2);border-top-color:#fff;animation:wnSpin .8s linear infinite;position:absolute;}",
+    "#wy-bgblur{position:fixed;inset:-80px;z-index:-1;pointer-events:none;display:none;backdrop-filter:blur(var(--wy-bg-blur,0px));-webkit-backdrop-filter:blur(var(--wy-bg-blur,0px));}#wy-bgblur.on{display:block;}",
+    "#wy-th .bl{display:flex;align-items:center;gap:12px;padding:10px 14px;border-top:1px solid rgba(255,255,255,.07);flex:none;font:bold 10.5px Arial;letter-spacing:1px;color:#aab2c5;}#wy-th .bl span{flex:none;}#wy-th .bl small{flex:none;min-width:34px;text-align:right;font:bold 10.5px Arial;color:#e6e9ef;}",
+    "#wy-th .bl input[type=range]{flex:1;min-width:0;-webkit-appearance:none;appearance:none;height:6px;border-radius:999px;background:linear-gradient(90deg,var(--wy-p) 0%,var(--wy-b) var(--p,0%),#262b38 var(--p,0%));outline:none;cursor:pointer;box-shadow:inset 0 1px 2px rgba(0,0,0,.4);margin:0;}",
+    "#wy-th .bl input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid var(--wy-p);box-shadow:0 1px 4px rgba(0,0,0,.6),0 0 0 3px rgba(var(--wy-p-rgb),.18);cursor:pointer;}",
+    "#wy-th .bl input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid var(--wy-p);box-shadow:0 1px 4px rgba(0,0,0,.6);cursor:pointer;}",
+    "#wy-th .bl.lb{display:flex;justify-content:space-between;gap:0;font:9px Arial;letter-spacing:1px;color:#6b7385;padding:0 14px 8px;}",
     "#wy-th .ft{padding:9px 14px 11px;border-top:1px solid rgba(255,255,255,.07);font:10.5px Arial;color:#6b7385;line-height:1.45;flex:none;}",
     "#wy-th .q{display:flex;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid rgba(255,255,255,.07);flex:none;font:bold 10.5px Arial;letter-spacing:1px;color:#aab2c5;}#wy-th .q span{flex:1;}",
     "#wy-th .q b{font:bold 10px Arial;letter-spacing:1.4px;padding:5px 11px;border-radius:9px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);color:#e6e9ef;cursor:pointer;}#wy-th .q b.hi{background:linear-gradient(90deg,var(--wy-p),var(--wy-b));border-color:rgba(255,255,255,.28);color:#fff;}",
@@ -4385,7 +4401,7 @@ var NTL_TH = (function () {
   /* every pointer event inside the button / panel is handled here, from a window-capture listener that runs before NTL's */
   function handle(e) {
     var t = e.target; if (!t || !t.closest) return;
-    if (e.type === "pointerdown" || e.type === "mousedown" || e.type === "touchstart") { if (!t.closest("#wy-th .bd")) { if (e.cancelable) e.preventDefault(); } return; }
+    if (e.type === "pointerdown" || e.type === "mousedown" || e.type === "touchstart") { if (!t.closest("#wy-th .bd") && !t.closest("#wy-th .bl")) { if (e.cancelable) e.preventDefault(); } return; }
     if (e.type !== "pointerup" && e.type !== "click") return;
     if (e.type === "click") return;                                   // pointerup already did it; the click is only swallowed
     if (e.button === 2) return;
@@ -4404,29 +4420,33 @@ var NTL_TH = (function () {
   var qClick = function () {};
   function toggle(open) {
     build(); var o = open == null ? !box.classList.contains("open") : !!open;
-    box.classList.toggle("open", o); if (o) { paint(); try { box.__qp(); } catch (e) {} }
+    box.classList.toggle("open", o); if (o) { paint(); try { box.__qp(); box.__bp(); } catch (e) {} }
   }
   function build() {
     if (box) return; css();
     btn = el("button"); btn.id = "wy-thbtn"; btn.type = "button"; btn.title = "Themes";
     btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="var(--wy-l)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 0 0 0 18c1.4 0 2-.9 2-1.8 0-.6-.3-1-.6-1.4-.3-.4-.6-.8-.6-1.4 0-1 .8-1.8 1.8-1.8H16a5 5 0 0 0 5-5c0-3.6-4-6.6-9-6.6z"/><circle cx="7.5" cy="10.5" r="1.2" fill="var(--wy-p)" stroke="none"/><circle cx="12" cy="7.5" r="1.2" fill="var(--wy-b)" stroke="none"/><circle cx="16.5" cy="10.5" r="1.2" fill="var(--wy-s)" stroke="none"/></svg><i></i>';
     box = el("div"); box.id = "wy-th";
-    box.innerHTML = '<div class="hd"><div class="k">NTL VANCED</div><div class="t">Themes</div><button class="x" type="button">×</button></div><div class="bd"></div><div class="q"><span>GRAPHICS QUALITY</span><b id="wy-thq">HIGH</b></div><div class="ft">Pick a wallpaper and the whole mod takes its colours — menus, chat, HUD, popups. Custom: any image, the palette is read from it.</div>';
+    box.innerHTML = '<div class="hd"><div class="k">NTL VANCED</div><div class="t">Themes</div><button class="x" type="button">×</button></div><div class="bd"></div><div class="bl"><span>WALLPAPER BLUR</span><input id="wy-thbl" type="range" min="0" max="40" step="1"><small id="wy-thblv">0</small></div><div class="q"><span>GRAPHICS QUALITY</span><b id="wy-thq">HIGH</b></div><div class="ft">Pick a wallpaper and the whole mod takes its colours — menus, chat, HUD, popups. Custom: any image, the palette is read from it.</div>';
     grid = box.querySelector(".bd");
     /* NTL's graphics button (#grq, hidden with its holder): a 3-step cycle High → Normal → Skinless, state in localStorage.graphics */
     var q = box.querySelector("#wy-thq");
     function qPaint() { var de = 0; try { de = +localStorage.getItem("graphics") || 0; } catch (e) {} q.textContent = ["HIGH", "NORMAL", "SKINLESS"][de] || "HIGH"; q.classList.toggle("hi", de === 0); }
     qClick = function () { var el2 = document.getElementById("grq"); try { if (el2 && el2.onclick) el2.onclick(); else if (el2) el2.click(); } catch (e) {} qPaint(); }; qPaint(); box.__qp = qPaint;
     document.documentElement.classList.add("wy-th");
+    var bl = box.querySelector("#wy-thbl"), blv = box.querySelector("#wy-thblv");
+    function blPaint() { var v = blurPx(); bl.value = v; blv.textContent = v ? v + "px" : "off"; bl.style.setProperty("--p", (v / 40 * 100) + "%"); }
+    bl.addEventListener("input", function () { setBlur(+bl.value); blPaint(); });
+    blPaint(); box.__bp = blPaint;
     window.addEventListener("pointerdown", function (e) { if (box.classList.contains("open") && !inside(e)) toggle(false); }, true);
     document.body.appendChild(btn); document.body.appendChild(box);
   }
   function homeVisible() { var b = document.getElementById("mybox"), l = document.getElementById("login"); return !!(b && l && getComputedStyle(l).display !== "none" && b.getClientRects().length); }
-  function tick() { build(); var h = homeVisible() && !g("playing"); btn.classList.toggle("show", h); if (!h && box.classList.contains("open")) toggle(false); }
+  function tick() { build(); var h = homeVisible() && !g("playing"); btn.classList.toggle("show", h); if (!h && box.classList.contains("open")) toggle(false); if (blurEl) blurEl.classList.toggle("on", blurPx() > 0 && !g("playing")); }
   css();
-  function boot() { if (!document.body) { setTimeout(boot, 50); return; } build(); setInterval(tick, 500); }
+  function boot() { if (!document.body) { setTimeout(boot, 50); return; } build(); applyBlur(); setInterval(tick, 500); }
   boot();
-  return { apply: apply, extract: extract, toggle: toggle, THEMES: THEMES, DEF: DEF, get cur() { return cur; } };
+  return { apply: apply, extract: extract, toggle: toggle, setBlur: setBlur, blurPx: blurPx, THEMES: THEMES, DEF: DEF, get cur() { return cur; } };
 })();
 /* ========================== END THEMES ===================================== */
 /* ============================================================================
