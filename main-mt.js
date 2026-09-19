@@ -4311,7 +4311,7 @@ var NTL_TH = (function () {
   function store(url) { try { if (url) { if (typeof ff === "function") ff("menuimg", url); } else if (typeof cf === "function") cf(["menuimg"]); } catch (e) {} }
   /* ---- wallpaper blur ---- */
   var blurEl = null;
-  function blurPx() { var v = 0; try { v = +localStorage.getItem("wy_bg_blur") || 0; } catch (e) {} return Math.max(0, Math.min(40, v)); }
+  function blurPx() { var v = 20; try { var r = localStorage.getItem("wy_bg_blur"); if (r !== null && r !== "" && !isNaN(+r)) v = +r; } catch (e) {} return Math.max(0, Math.min(40, v)); }   /* default 20px until the slider is touched */
   function setBlur(v) { v = Math.max(0, Math.min(40, Math.round(v))); try { localStorage.setItem("wy_bg_blur", v); } catch (e) {} applyBlur(); }
   function applyBlur() {
     var v = blurPx();
