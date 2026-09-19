@@ -1,12 +1,12 @@
 {
-  "version": "5.61",
+  "version": "5.62",
   "channel": "stable",
   "date": "2026-09-19",
-  "size": 7945296,
-  "sha256": "7fbd4d2499adb8edfd144eee0d47d26a10f729745957d2507d37831f1a6807aa",
+  "size": 7966017,
+  "sha256": "ca40206cc166d3a5245f303d50da04d7bb5741e8aa35ea5adc72826bb21d15cb",
   "minLoader": 3,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.61/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.61/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.61/NTL-VANCED-v5.61.zip",
-  "notes": "# Center eyes, seen by everyone\nCenter eyes used to be a trick only you could see. Now it goes out to the arena.\n\n## Center eyes\n- Press **I** and the pupils settle in the middle on every screen — yours included\n- Same engine as Eyes Back, pointed sideways: the snake still steers exactly where your mouse or arrow points, with the same tiny wobble\n- **Vanced › Controls › Eyes** — switch \"Center eyes visible to others\" off to go back to the old client-only look (nothing is sent, pupils pinned dead centre for you alone)\n- Eyes Back (**U**) and Center eyes (**I**) take over from each other; one is active at a time\n\n## Fine tuning\n- Small fixes and clean-ups\n"
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.62/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.62/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.62/NTL-VANCED-v5.62.zip",
+  "notes": "# Themes\nPick a wallpaper and the whole mod dresses to match.\n\n## Themes button\n- Top-right of the home screen, where slither's graphics-quality icon used to be — that icon now lives inside the panel as **GRAPHICS QUALITY** (High → Normal → Skinless, same as before)\n- Nine wallpapers: Kaboom, Bikini Bottom, Spidey, Smoke, Wine, Paper Orange, Paper Crimson, Clouds, Waves — plus the Vanced default\n- **Custom**: any image from your device; its palette is read from the picture\n\n## What changes with a theme\n- Every menu, popup, chat box, HUD panel, button, heading and icon takes the wallpaper's colours — accents, highlights and the dark card tints\n- The wallpaper is saved with NTL's own menu-image setting, so it is there from the first frame after a reload\n\n## Wallpaper blur\n- Slider in the same panel, 0–40 px, live; **20 px by default**\n- Switches itself off during a round (the arena covers it anyway)\n\n## Fine tuning\n- Small fixes and clean-ups\n"
 }
