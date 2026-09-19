@@ -4455,9 +4455,9 @@ var NTL_TH = (function () {
    After the first round of the session every round end lands here instead of
    NTL's home: final length, your best, nick + server, PLAY (NTL's own connect
    u9()), HOME (back to the normal home) and a QUICK SETTINGS page (placeholder).
-   Not shown while NTL auto-respawn is on. #wy-lb covers the whole viewport
-   above the home (z 2147482900), below every popup and the Themes button; the
-   wallpaper still shows through. Clicks are routed by a window-capture guard
+   Not shown while NTL auto-respawn is on. While it is open html.wy-lobby hides
+   every other body child (visibility) so the home is gone, not covered; only
+   the wallpaper and its blur layer remain. HOME removes the class → home is back. Clicks are routed by a window-capture guard
    (NTL's document handlers eat plain clicks on body-level elements).
    State: localStorage.wy_lb_best (all-time best length).
    ============================================================================ */
@@ -4466,7 +4466,9 @@ var NTL_LB = (function () {
   function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
   function esc(t) { return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   var CSS = [
-    "#wy-lb{position:fixed;inset:0;z-index:2147482900;display:none;flex-direction:column;box-sizing:border-box;overflow:auto;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;color:#e6e9ef;text-shadow:none;background:linear-gradient(180deg,rgba(8,10,16,.82),rgba(8,10,16,.9));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);pointer-events:auto!important;}",
+    "#wy-lb{position:fixed;inset:0;z-index:2147482900;display:none;flex-direction:column;box-sizing:border-box;overflow:auto;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;color:#e6e9ef;text-shadow:none;background:linear-gradient(180deg,rgba(8,10,16,.55),rgba(8,10,16,.8));pointer-events:auto!important;}",
+    /* the lobby IS the page: while it is open nothing of the home (NTL's or the mod's) is rendered — only the wallpaper (+ its blur layer) stays */
+    "html.wy-lobby body > :not(#wy-lb):not(#wy-bgblur){visibility:hidden!important;}",
     "#wy-lb.open{display:flex;}",
     "#lb-page{flex:1;display:flex;flex-direction:column;min-height:100%;zoom:var(--wy-scale,1);}",
     "#lb-bar{display:flex;align-items:center;gap:14px;padding:18px 24px 0;flex:none;}",
@@ -4522,8 +4524,8 @@ var NTL_LB = (function () {
       "</div>" +
       '<div id="lb-qpage"><div class="hd"><button id="lb-back" type="button" data-lb="back">' + IC.back + 'BACK</button><div class="t">Quick settings</div></div><div class="empty"><b>COMING SOON</b>Nothing here yet.</div></div>';
   }
-  function open() { build(); paint(); ov.classList.remove("qs"); ov.classList.add("open"); }
-  function close() { if (ov) { ov.classList.remove("open"); ov.classList.remove("qs"); } }
+  function open() { build(); paint(); ov.classList.remove("qs"); ov.classList.add("open"); document.documentElement.classList.add("wy-lobby"); }
+  function close() { if (ov) { ov.classList.remove("open"); ov.classList.remove("qs"); } document.documentElement.classList.remove("wy-lobby"); }
   function isOpen() { return !!(ov && ov.classList.contains("open")); }
   function play() { close(); try { if (typeof u9 === "function") u9(); else { var b = document.getElementById("connect-btn"); if (b) b.click(); } } catch (e) {} }
   function act(a) {
