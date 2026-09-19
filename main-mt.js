@@ -4450,96 +4450,87 @@ var NTL_TH = (function () {
 })();
 /* ========================== END THEMES ===================================== */
 /* ============================================================================
-   LOBBY  (the screen after a death — replaces the home screen, same theme)
+   LOBBY  (full page after a round — replaces the home screen, same theme)
    ----------------------------------------------------------------------------
-   Pure UI: after the first round of the session, every death lands here
-   instead of NTL's home: final length, session / all-time best, games played,
-   nick + server, PLAY (NTL's own connect u9()), HOME (back to the normal home),
-   SERVER (NTL_SV), VANCED (NTL_VS), and quick toggles driven by NTL_EE's rows.
-   Not shown while NTL auto-respawn is on (the game restarts by itself).
-   Overlay #wy-lb sits above the home (z 2147482900), below every popup and the
-   Themes button. Clicks are routed by a window-capture guard (NTL's document
-   handlers eat plain clicks on body-level elements). State: none persistent
-   except localStorage.wy_lb_best (all-time best length).
+   After the first round of the session every round end lands here instead of
+   NTL's home: final length, your best, nick + server, PLAY (NTL's own connect
+   u9()), HOME (back to the normal home) and a QUICK SETTINGS page (placeholder).
+   Not shown while NTL auto-respawn is on. #wy-lb covers the whole viewport
+   above the home (z 2147482900), below every popup and the Themes button; the
+   wallpaper still shows through. Clicks are routed by a window-capture guard
+   (NTL's document handlers eat plain clicks on body-level elements).
+   State: localStorage.wy_lb_best (all-time best length).
    ============================================================================ */
 var NTL_LB = (function () {
-  var QUICK = ["bot", "smartbot", "eyesback", "eyecenter", "spine", "perf", "autorespawn", "minimap"];
   function g(n) { try { return window[n]; } catch (e) { return undefined; } }
   function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
   function esc(t) { return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   var CSS = [
-    "#wy-lb{position:fixed;inset:0;z-index:2147482900;display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;overflow:auto;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;color:#e6e9ef;text-shadow:none;background:rgba(4,6,12,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);pointer-events:auto!important;}",
+    "#wy-lb{position:fixed;inset:0;z-index:2147482900;display:none;flex-direction:column;box-sizing:border-box;overflow:auto;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;color:#e6e9ef;text-shadow:none;background:linear-gradient(180deg,rgba(8,10,16,.82),rgba(8,10,16,.9));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);pointer-events:auto!important;}",
     "#wy-lb.open{display:flex;}",
-    "#lb-box{width:min(560px,100%);display:flex;flex-direction:column;gap:14px;border-radius:22px;border:1px solid rgba(255,255,255,.09);background:linear-gradient(165deg,var(--wy-bg1) 0%,var(--wy-bg2) 60%,var(--wy-bg3) 100%);box-shadow:0 30px 90px rgba(0,0,0,.75),inset 0 1px 0 rgba(255,255,255,.06);padding:22px 22px 18px;box-sizing:border-box;animation:svPop .22s cubic-bezier(.2,.9,.3,1.15);zoom:var(--wy-scale,1);}",
-    "#lb-box .k{font:bold 9.5px Arial;letter-spacing:2px;color:#8b93a7;}",
-    "#lb-top{display:flex;align-items:flex-start;gap:12px;}#lb-top .k{margin-bottom:4px;}",
-    "#lb-title{font-size:24px;font-weight:bold;letter-spacing:.6px;background:linear-gradient(90deg,var(--wy-l),var(--wy-s));-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1.1;}",
-    "#lb-who{margin-left:auto;text-align:right;font:11px Arial;color:#8b93a7;line-height:1.5;max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}#lb-who b{color:#e6e9ef;font-size:12px;display:block;}",
-    "#lb-score{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:10px;}",
-    "#lb-score .c{position:relative;padding:14px 14px 12px;border-radius:14px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06);overflow:hidden;}",
-    "#lb-score .c.main{background:linear-gradient(135deg,rgba(var(--wy-p-rgb),.28),rgba(var(--wy-b-rgb),.16));border-color:rgba(var(--wy-l-rgb),.25);}",
-    "#lb-score .c .v{font-size:30px;font-weight:bold;letter-spacing:.5px;color:#fff;line-height:1.05;margin-top:4px;}#lb-score .c.main .v{font-size:38px;background:linear-gradient(90deg,#fff,var(--wy-l) 60%,var(--wy-s));-webkit-background-clip:text;background-clip:text;color:transparent;}",
-    "#lb-score .c .v small{font-size:11px;color:#8b93a7;font-weight:bold;letter-spacing:1px;margin-left:4px;-webkit-text-fill-color:#8b93a7;}",
-    "#lb-score .c .nb{position:absolute;right:10px;top:10px;padding:2px 7px;border-radius:7px;font:bold 8.5px Arial;letter-spacing:1.2px;color:#9be7b5;border:1px solid rgba(155,231,181,.4);background:rgba(155,231,181,.12);}",
-    "#lb-play{position:relative;height:56px;border-radius:16px;border:1px solid rgba(255,255,255,.28);background:linear-gradient(90deg,var(--wy-p),var(--wy-b));color:#fff;font:bold 16px Arial;letter-spacing:3px;cursor:pointer;box-shadow:0 14px 40px rgba(var(--wy-p-rgb),.4);display:flex;align-items:center;justify-content:center;gap:12px;width:100%;}",
-    "#lb-play:active{transform:translateY(1px);}#lb-play svg{width:20px;height:20px;}",
-    "#lb-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}",
-    "#lb-row .b{height:42px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#c3cad9;font:bold 11px Arial;letter-spacing:1.6px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;}",
-    "#lb-row .b:hover{border-color:rgba(var(--wy-l-rgb),.45);color:#fff;}#lb-row .b svg{width:16px;height:16px;}",
-    "#lb-q{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}",
-    "#lb-q .t{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 6px 9px;border-radius:12px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.03);cursor:pointer;font:bold 9.5px Arial;letter-spacing:.8px;color:#aab2c5;text-align:center;line-height:1.2;}",
-    "#lb-q .t i{width:30px;height:16px;border-radius:9px;background:rgba(255,255,255,.12);position:relative;transition:background .15s;}#lb-q .t i:after{content:'';position:absolute;left:2px;top:2px;width:12px;height:12px;border-radius:50%;background:#fff;transition:left .15s;}",
-    "#lb-q .t.on{border-color:rgba(var(--wy-l-rgb),.4);color:#fff;background:rgba(var(--wy-p-rgb),.14);}#lb-q .t.on i{background:linear-gradient(90deg,var(--wy-p),var(--wy-b));}#lb-q .t.on i:after{left:16px;}",
-    "#lb-foot{display:flex;align-items:center;gap:10px;font:10.5px Arial;color:#6b7385;}#lb-foot span{flex:1;}#lb-foot kbd{font:10px Consolas,Menlo,monospace;color:var(--wy-l);padding:1px 6px;border-radius:5px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);}",
-    "@media (max-width:520px){#lb-box{padding:16px 14px 14px;border-radius:18px;}#lb-score{grid-template-columns:1fr 1fr;}#lb-score .c.main{grid-column:1/-1;}#lb-q{grid-template-columns:repeat(2,1fr);}#lb-row{grid-template-columns:1fr 1fr 1fr;}#lb-row .b{letter-spacing:1px;font-size:10px;}}"
+    "#lb-page{flex:1;display:flex;flex-direction:column;min-height:100%;zoom:var(--wy-scale,1);}",
+    "#lb-bar{display:flex;align-items:center;gap:14px;padding:18px 24px 0;flex:none;}",
+    "#lb-bar .brand{font:bold 10px Arial;letter-spacing:2.4px;color:#8b93a7;}#lb-bar .brand b{display:block;margin-top:3px;font-size:15px;letter-spacing:1px;background:linear-gradient(90deg,var(--wy-l),var(--wy-s));-webkit-background-clip:text;background-clip:text;color:transparent;}",
+    "#lb-who{margin-left:auto;margin-right:78px;text-align:right;font:11px Arial;color:#8b93a7;line-height:1.5;max-width:50%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}#lb-who b{color:#e6e9ef;font-size:13px;display:block;}",
+    "#lb-mid{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;padding:24px 16px;text-align:center;}",
+    "#lb-mid .k{font:bold 10px Arial;letter-spacing:2.6px;color:#8b93a7;}",
+    "#lb-last{font-size:clamp(64px,14vw,120px);font-weight:bold;line-height:1;letter-spacing:-1px;background:linear-gradient(90deg,#fff,var(--wy-l) 55%,var(--wy-s));-webkit-background-clip:text;background-clip:text;color:transparent;margin-top:6px;}",
+    "#lb-best{display:inline-flex;align-items:center;gap:12px;padding:10px 18px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);}",
+    "#lb-best .k{margin:0;}#lb-best .v{font-size:22px;font-weight:bold;color:#fff;}",
+    "#lb-best .nb{padding:2px 8px;border-radius:7px;font:bold 8.5px Arial;letter-spacing:1.2px;color:#9be7b5;border:1px solid rgba(155,231,181,.4);background:rgba(155,231,181,.12);}",
+    "#lb-btns{display:flex;flex-direction:column;align-items:center;gap:12px;width:min(420px,100%);margin-top:8px;}",
+    "#lb-play{position:relative;width:100%;height:62px;border-radius:18px;border:1px solid rgba(255,255,255,.28);background:linear-gradient(90deg,var(--wy-p),var(--wy-b));color:#fff;font:bold 18px Arial;letter-spacing:3.5px;cursor:pointer;box-shadow:0 16px 46px rgba(var(--wy-p-rgb),.42);display:flex;align-items:center;justify-content:center;gap:12px;}",
+    "#lb-play:active{transform:translateY(1px);}#lb-play svg{width:22px;height:22px;}",
+    "#lb-home{width:100%;height:46px;border-radius:14px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#c3cad9;font:bold 12px Arial;letter-spacing:2px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px;}",
+    "#lb-home:hover{border-color:rgba(var(--wy-l-rgb),.45);color:#fff;}#lb-home svg{width:17px;height:17px;}",
+    "#lb-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 24px 20px;flex:none;font:10.5px Arial;color:#6b7385;}",
+    "#lb-foot kbd{font:10px Consolas,Menlo,monospace;color:var(--wy-l);padding:1px 6px;border-radius:5px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);}",
+    "#lb-qs{height:40px;padding:0 16px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#c3cad9;font:bold 10.5px Arial;letter-spacing:1.8px;cursor:pointer;display:flex;align-items:center;gap:8px;}#lb-qs svg{width:15px;height:15px;}#lb-qs:hover{border-color:rgba(var(--wy-l-rgb),.45);color:#fff;}",
+    /* quick settings page (placeholder) */
+    "#lb-qpage{position:absolute;inset:0;display:none;flex-direction:column;background:linear-gradient(180deg,rgba(8,10,16,.94),rgba(8,10,16,.97));zoom:var(--wy-scale,1);}#wy-lb.qs #lb-qpage{display:flex;}#wy-lb.qs #lb-page{display:none;}",
+    "#lb-qpage .hd{display:flex;align-items:center;gap:14px;padding:18px 24px;flex:none;}#lb-qpage .hd .t{font-size:18px;font-weight:bold;letter-spacing:.6px;background:linear-gradient(90deg,var(--wy-l),var(--wy-s));-webkit-background-clip:text;background-clip:text;color:transparent;}",
+    "#lb-back{height:36px;padding:0 14px;border-radius:11px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#c3cad9;font:bold 10.5px Arial;letter-spacing:1.6px;cursor:pointer;display:flex;align-items:center;gap:7px;}#lb-back svg{width:15px;height:15px;}",
+    "#lb-qpage .empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#6b7385;font:12px Arial;text-align:center;padding:24px;}#lb-qpage .empty b{font-size:14px;color:#8b93a7;letter-spacing:1.5px;}",
+    "@media (max-width:520px){#lb-bar{padding:14px 16px 0;}#lb-who{margin-right:64px;max-width:48%;}#lb-foot{padding:0 16px 16px;}#lb-mid{gap:20px;}}"
   ].join("\n");
-  var ov = null, box = null, played = false, wasPlaying = false, pendingDeath = false, games = 0, best = 0, last = 0, allBest = 0, sessionShown = false;
+  var ov = null, played = false, wasPlaying = false, pendingDeath = false, last = 0, allBest = 0, newBest = false;
   try { allBest = +localStorage.getItem("wy_lb_best") || 0; } catch (e) {}
   function css() { if (document.getElementById("lb-css")) return; var st = document.createElement("style"); st.id = "lb-css"; st.textContent = CSS; (document.head || document.documentElement).appendChild(st); }
   var IC = {
     play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>',
     home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
-    server: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.5a7 7 0 0 1 14 0M8.5 15.5a3.5 3.5 0 0 1 7 0M12 19h.01"/></svg>',
-    set: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 1 2-.5 1 1.8 1.8 1-.5 2 1.4 1.6-1.4 1.6.5 2-1.8 1-1 1.8-2-.5L12 21l-1.8-1-2 .5-1-1.8-1.8-1 .5-2L4.5 12l1.4-1.6-.5-2 1.8-1 1-1.8 2 .5z"/><circle cx="12" cy="12" r="3"/></svg>'
+    set: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>',
+    back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>'
   };
   function lastScore() { var b = document.querySelector("#lastscore b"); var v = b ? parseInt(b.textContent.replace(/\D/g, ""), 10) : 0; return isNaN(v) ? 0 : v; }
   function nick() { var i = document.getElementById("nick"); return (i && i.value) || g("cu") || ""; }
   function server() { var s = document.getElementById("sv-btn-v"); if (!s || s.className === "none") return ""; var parts = []; for (var i = 0; i < s.childNodes.length; i++) { var t = (s.childNodes[i].textContent || "").trim(); if (t) parts.push(t); } return parts.join(" · "); }
-  function rowOf(id) { var R = typeof NTL_EE !== "undefined" ? NTL_EE.ROWS : []; for (var i = 0; i < R.length; i++) if (R[i].id === id) return R[i]; return null; }
   function build() {
     if (ov) return; css();
     ov = el("div"); ov.id = "wy-lb";
-    box = el("div"); box.id = "lb-box"; ov.appendChild(box);
     document.body.appendChild(ov);
   }
   function paint() {
-    var qs = QUICK.map(function (id) {
-      var r = rowOf(id); if (!r) return "";
-      var on = false; try { on = !!(r.get && r.get()); } catch (e) {}
-      if (id === "arrow") on = typeof NTL_AR !== "undefined" && !!NTL_AR.cfg.on;
-      return '<div class="t' + (on ? " on" : "") + '" data-lb="q:' + id + '"><i></i>' + esc(r.label) + "</div>";
-    }).join("");
-    var sv = server();
-    box.innerHTML =
-      '<div id="lb-top"><div><div class="k">NTL VANCED · LOBBY</div><div id="lb-title">Round over</div></div><div id="lb-who">' + (nick() ? "<b>" + esc(nick()) + "</b>" : "") + (sv ? esc(sv) : "no server picked") + "</div></div>" +
-      '<div id="lb-score"><div class="c main"><div class="k">FINAL LENGTH</div><div class="v">' + last.toLocaleString() + "</div>" + (last && last >= allBest && last > 0 && games > 1 ? '<div class="nb">NEW BEST</div>' : "") + "</div>" +
-      '<div class="c"><div class="k">SESSION BEST</div><div class="v">' + best.toLocaleString() + '</div></div>' +
-      '<div class="c"><div class="k">ALL-TIME BEST</div><div class="v">' + allBest.toLocaleString() + '<small>' + games + (games === 1 ? " GAME" : " GAMES") + "</small></div></div></div>" +
-      '<button id="lb-play" type="button" data-lb="play">' + IC.play + "PLAY AGAIN</button>" +
-      '<div id="lb-row"><div class="b" data-lb="home">' + IC.home + "HOME</div><div class=\"b\" data-lb=\"server\">" + IC.server + "SERVER</div><div class=\"b\" data-lb=\"vanced\">" + IC.set + "VANCED</div></div>" +
-      '<div class="k">QUICK TOGGLES</div><div id="lb-q">' + qs + "</div>" +
-      '<div id="lb-foot"><span><kbd>Enter</kbd> play · <kbd>Esc</kbd> home</span></div>';
+    var sv = server(), n = nick();
+    ov.innerHTML =
+      '<div id="lb-page">' +
+        '<div id="lb-bar"><div class="brand">NTL VANCED<b>Lobby</b></div><div id="lb-who">' + (n ? "<b>" + esc(n) + "</b>" : "") + (sv ? esc(sv) : "no server picked") + "</div></div>" +
+        '<div id="lb-mid"><div><div class="k">FINAL LENGTH</div><div id="lb-last">' + last.toLocaleString() + "</div></div>" +
+          '<div id="lb-best"><span class="k">YOUR BEST</span><span class="v">' + allBest.toLocaleString() + "</span>" + (newBest ? '<span class="nb">NEW BEST</span>' : "") + "</div>" +
+          '<div id="lb-btns"><button id="lb-play" type="button" data-lb="play">' + IC.play + "PLAY</button><button id=\"lb-home\" type=\"button\" data-lb=\"home\">" + IC.home + "HOME</button></div></div>" +
+        '<div id="lb-foot"><span><kbd>Enter</kbd> play · <kbd>Esc</kbd> home</span><button id="lb-qs" type="button" data-lb="qs">' + IC.set + "QUICK SETTINGS</button></div>" +
+      "</div>" +
+      '<div id="lb-qpage"><div class="hd"><button id="lb-back" type="button" data-lb="back">' + IC.back + 'BACK</button><div class="t">Quick settings</div></div><div class="empty"><b>COMING SOON</b>Nothing here yet.</div></div>';
   }
-  function open() { build(); paint(); ov.classList.add("open"); }
-  function close() { if (ov) ov.classList.remove("open"); }
+  function open() { build(); paint(); ov.classList.remove("qs"); ov.classList.add("open"); }
+  function close() { if (ov) { ov.classList.remove("open"); ov.classList.remove("qs"); } }
   function isOpen() { return !!(ov && ov.classList.contains("open")); }
   function play() { close(); try { if (typeof u9 === "function") u9(); else { var b = document.getElementById("connect-btn"); if (b) b.click(); } } catch (e) {} }
   function act(a) {
     if (a === "play") play();
     else if (a === "home") close();
-    else if (a === "server") { try { NTL_SV.open(); } catch (e) {} }
-    else if (a === "vanced") { try { NTL_VS.open(); } catch (e) {} }
-    else if (a.indexOf("q:") === 0) { var id = a.slice(2); try { NTL_EE.press(id); } catch (e) {} setTimeout(paint, 120); }
+    else if (a === "qs") ov.classList.add("qs");
+    else if (a === "back") ov.classList.remove("qs");
   }
   /* window-capture guard: NTL's document handlers must not see clicks inside the lobby */
   function inside(e) { var p = e.composedPath ? e.composedPath() : null; if (p && ov && p.indexOf(ov) >= 0) return true; var t = e.target; return !!(t && t.closest && t.closest("#wy-lb")); }
@@ -4555,27 +4546,27 @@ var NTL_LB = (function () {
   window.addEventListener("keydown", function (e) {
     if (!isOpen()) return;
     var el2 = document.activeElement, typing = el2 && (/^(INPUT|TEXTAREA)$/.test(el2.tagName) || el2.isContentEditable);
-    if (e.key === "Enter" && !typing) { e.preventDefault(); e.stopImmediatePropagation(); play(); }
-    else if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); close(); }
+    if (e.key === "Enter" && !typing && !ov.classList.contains("qs")) { e.preventDefault(); e.stopImmediatePropagation(); play(); }
+    else if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); if (ov.classList.contains("qs")) ov.classList.remove("qs"); else close(); }
   }, true);
   function homeVisible() { var b = document.getElementById("mybox"), l = document.getElementById("login"); return !!(b && l && getComputedStyle(l).display !== "none" && b.getClientRects().length); }
-  function popupOpen() { return !!(document.getElementById("vs-overlay") || document.getElementById("sv-overlay") || document.getElementById("wn-ov") || document.getElementById("up-ov")); }
-  /* death: playing went true → false. The lobby opens once NTL's home is back (and stays closed when auto-respawn is on). */
+  /* round end: playing went true → false. The lobby opens once NTL's home is back (never while auto-respawn is on). */
   function tick() {
     var p = !!g("playing");
     if (p && !wasPlaying) { played = true; if (isOpen()) close(); }
-    if (!p && wasPlaying) { pendingDeath = true; games++; }
+    if (!p && wasPlaying) pendingDeath = true;
     wasPlaying = p;
     if (pendingDeath && !p && homeVisible()) {
       pendingDeath = false;
-      last = lastScore(); if (last > best) best = last; if (last > allBest) { allBest = last; try { localStorage.setItem("wy_lb_best", allBest); } catch (e) {} }
+      last = lastScore(); newBest = last > 0 && last > allBest;
+      if (newBest) { allBest = last; try { localStorage.setItem("wy_lb_best", allBest); } catch (e) {} }
       if (!g("ii") && played) open();
     }
     if (isOpen() && (p || !homeVisible())) close();
   }
   function boot() { if (!document.body) { setTimeout(boot, 50); return; } css(); setInterval(tick, 250); }
   boot();
-  return { open: open, close: close, get open_() { return isOpen(); }, get stats() { return { last: last, best: best, allBest: allBest, games: games }; } };
+  return { open: open, close: close, get open_() { return isOpen(); }, get stats() { return { last: last, allBest: allBest }; } };
 })();
 /* ========================== END LOBBY ====================================== */
 /* ============================================================================
@@ -4590,7 +4581,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
-    { v: "5.63", d: "19 Sep 2026", t: "Lobby: after a round you land on a Vanced screen instead of the home page — final length, session and all-time best, PLAY AGAIN, HOME, SERVER, VANCED and quick toggles. Enter plays, Esc goes home. Skipped while NTL auto-respawn is on." },
+    { v: "5.63", d: "19 Sep 2026", t: "Lobby: after a round you land on a full Vanced page instead of the home screen — final length, your best, nick and server, PLAY, HOME and a Quick settings page (placeholder for now). Enter plays, Esc goes home. Skipped while NTL auto-respawn is on." },
     { v: "5.62", d: "19 Sep 2026", t: "Themes: the palette button top-right of the home screen (where slither's quality toggle was — that toggle now lives inside the panel) picks a wallpaper, and every menu, popup, chat and HUD panel takes its colours. Nine wallpapers plus Custom (any image, palette read from it)." },
     { v: "5.61", d: "19 Sep 2026", t: "Center eyes can now be seen by everyone: it drives the Eyes Back engine sideways (+90°/−90° alternating), so on every screen — yours too — the pupils settle in the middle. Switch in Vanced › Controls › Eyes (on by default; off = old client-only pinned centre)." },
     { v: "5.60", d: "19 Sep 2026", t: "Arrow control: NTL's assist line now follows the arrow on mobile (head → arrow, only while you steer). What's new shows the GitHub release notes of the running version with full markdown — images, video, tables, code, nested lists." },

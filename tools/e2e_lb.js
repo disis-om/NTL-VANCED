@@ -19,14 +19,14 @@ async function cdp(wsUrl) { const ws = new WebSocket(wsUrl); await new Promise((
   console.log("ver:", await c.evalp(`localStorage.getItem("wyrmversion")`));
   await c.evalp(`try{localStorage.setItem("wy_seen_ver",localStorage.getItem("wyrmversion"));NTL_WN.close();}catch(e){} document.getElementById("nick").value="Om"; document.querySelector("#lastscore").innerHTML='<span style="opacity:.45">Your final length was </span><b>1234</b>'; ii=false; playing=true; 1`);
   await sleep(600); await c.evalp(`playing=false; 1`); await sleep(900);
-  console.log("lobby open:", await c.evalp(`JSON.stringify({open:NTL_LB.open_,stats:NTL_LB.stats,title:(document.getElementById("lb-title")||{}).textContent,who:(document.getElementById("lb-who")||{}).textContent,main:(document.querySelector("#lb-score .c.main .v")||{}).textContent,toggles:document.querySelectorAll("#lb-q .t").length})`));
+  console.log("lobby open:", await c.evalp(`JSON.stringify({open:NTL_LB.open_,stats:NTL_LB.stats,title:(document.getElementById("lb-title")||{}).textContent,who:(document.getElementById("lb-who")||{}).textContent,main:(document.querySelector("#lb-score .c.main .v")||{}).textContent,qs:!!document.getElementById("lb-qs")})`));
   { const r = await c.send("Page.captureScreenshot", { format: "jpeg", quality: 70 }); fs.writeFileSync(process.env.TEMP + "/lb_shot.jpg", Buffer.from(r.result.data, "base64")); }
   /* quick toggle: spine (pure mod toggle) via real mouse */
   const rect = async sel => JSON.parse(await c.evalp(`JSON.stringify(document.querySelector('${sel}').getBoundingClientRect())`));
   async function click(sel) { const r = await rect(sel); const x = r.x + r.width / 2, y = r.y + r.height / 2; for (const type of ["mouseMoved", "mousePressed", "mouseReleased"]) await c.send("Input.dispatchMouseEvent", { type, x, y, button: "left", clickCount: 1 }); await sleep(300); }
-  await click('#lb-q .t[data-lb="q:spine"]');
-  console.log("spine after click:", await c.evalp(`JSON.stringify({sp:NTL_SP.on,cls:document.querySelector('#lb-q .t[data-lb="q:spine"]').className})`));
-  await click('#lb-row .b[data-lb="home"]');
+  await click('#lb-qs');
+  console.log("quick settings page:", await c.evalp(`document.getElementById("wy-lb").classList.contains("qs")`)); { const r = await c.send("Page.captureScreenshot", { format: "jpeg", quality: 70 }); fs.writeFileSync(process.env.TEMP + "/lb_shot2.jpg", Buffer.from(r.result.data, "base64")); } await click('#lb-back'); console.log("back:", await c.evalp(`!document.getElementById("wy-lb").classList.contains("qs")`));
+  await click('#lb-home');
   console.log("home closes:", await c.evalp(`!NTL_LB.open_`));
   await c.evalp(`NTL_LB.open(); window.__u9=0; var _u9=u9; u9=function(){window.__u9=1;}; 1`); await sleep(200);
   await click('#lb-play');
