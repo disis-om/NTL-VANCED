@@ -4780,7 +4780,7 @@ var NTL_AR = (function () {
   var line = null;
   function drawLine() {
     if (!line) return;
-    var on = cfg.on && playing() && !!g("xe") && g("snake") && !g("snake").I, W = window.innerWidth, H = window.innerHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
+    var on = cfg.on && down && cfg.show && !(typeof NTL_CU !== "undefined" && NTL_CU.on) && playing() && !!g("xe") && g("snake") && !g("snake").I, W = window.innerWidth, H = window.innerHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
     if (line.width !== Math.round(W * dpr) || line.height !== Math.round(H * dpr)) { line.width = Math.round(W * dpr); line.height = Math.round(H * dpr); }
     var K = line.getContext("2d"); K.setTransform(dpr, 0, 0, dpr, 0, 0); K.clearRect(0, 0, W, H);
     if (!on) return;
