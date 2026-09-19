@@ -4332,10 +4332,10 @@ var NTL_TH = (function () {
   var CSS = [
     ":root{--wy-p:#8058d0;--wy-b:#3a7bd5;--wy-l:#c9b6ff;--wy-s:#7fb3ff;--wy-p-rgb:128,88,208;--wy-b-rgb:58,123,213;--wy-l-rgb:201,182,255;--wy-s-rgb:127,179,255;--wy-bg1:#181b24;--wy-bg2:#0f1117;--wy-bg3:#0c0e13;}",
     "html.wy-th #grqh{display:none!important;}",
-    "#wy-thbtn{position:fixed;top:14px;right:22px;z-index:101;width:48px;height:48px;border-radius:15px;border:1px solid rgba(255,255,255,.14);background:linear-gradient(165deg,var(--wy-bg1) 0%,var(--wy-bg2) 60%,var(--wy-bg3) 100%);box-shadow:0 10px 30px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06);display:none;align-items:center;justify-content:center;cursor:pointer;zoom:var(--wy-scale,1);}",
+    "#wy-thbtn{position:fixed;top:14px;right:22px;z-index:2147483200;pointer-events:auto!important;touch-action:manipulation;width:48px;height:48px;border-radius:15px;border:1px solid rgba(255,255,255,.14);background:linear-gradient(165deg,var(--wy-bg1) 0%,var(--wy-bg2) 60%,var(--wy-bg3) 100%);box-shadow:0 10px 30px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06);display:none;align-items:center;justify-content:center;cursor:pointer;zoom:var(--wy-scale,1);}",
     "#wy-thbtn.show{display:flex;}#wy-thbtn:hover{border-color:rgba(var(--wy-l-rgb),.5);}#wy-thbtn svg{width:25px;height:25px;}",
     "#wy-thbtn i{position:absolute;right:-3px;top:-3px;width:12px;height:12px;border-radius:50%;background:linear-gradient(135deg,var(--wy-p),var(--wy-b));border:2px solid var(--wy-bg3);}",
-    "#wy-th{position:fixed;top:70px;right:14px;z-index:102;width:min(440px,calc(100vw - 28px));max-height:min(560px,calc(100vh - 80px));display:none;flex-direction:column;border-radius:18px;border:1px solid rgba(255,255,255,.09);background:linear-gradient(165deg,var(--wy-bg1) 0%,var(--wy-bg2) 60%,var(--wy-bg3) 100%);box-shadow:0 30px 90px rgba(0,0,0,.75),inset 0 1px 0 rgba(255,255,255,.06);overflow:hidden;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;color:#e6e9ef;text-shadow:none;animation:svPop .22s cubic-bezier(.2,.9,.3,1.15);zoom:var(--wy-scale,1);}",
+    "#wy-th{position:fixed;top:70px;right:14px;z-index:2147483201;pointer-events:auto!important;touch-action:manipulation;width:min(440px,calc(100vw - 28px));max-height:min(560px,calc(100vh - 80px));display:none;flex-direction:column;border-radius:18px;border:1px solid rgba(255,255,255,.09);background:linear-gradient(165deg,var(--wy-bg1) 0%,var(--wy-bg2) 60%,var(--wy-bg3) 100%);box-shadow:0 30px 90px rgba(0,0,0,.75),inset 0 1px 0 rgba(255,255,255,.06);overflow:hidden;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;color:#e6e9ef;text-shadow:none;animation:svPop .22s cubic-bezier(.2,.9,.3,1.15);zoom:var(--wy-scale,1);}",
     "#wy-th.open{display:flex;}",
     "#wy-th .hd{position:relative;padding:14px 50px 12px 18px;background:linear-gradient(90deg,rgba(var(--wy-p-rgb),.25),rgba(var(--wy-b-rgb),.14) 60%,transparent);border-bottom:1px solid rgba(255,255,255,.07);flex:none;}",
     "#wy-th .hd .k{font:bold 9.5px Arial;letter-spacing:2px;color:#8b93a7;margin-bottom:4px;}#wy-th .hd .t{font-size:17px;font-weight:bold;letter-spacing:.6px;background:linear-gradient(90deg,var(--wy-l),var(--wy-s));-webkit-background-clip:text;background-clip:text;color:transparent;}",
@@ -4371,13 +4371,37 @@ var NTL_TH = (function () {
     if (!grid) return; grid.innerHTML = "";
     grid.appendChild(tile(DEF, (g("Gs") || "") + "bdemo.webp"));
     var id = extId();
-    THEMES.forEach(function (t) { var d = tile(t, [id ? "chrome-extension://" + id + "/themes/" + t.file : null, cdnUrl(t)]); d.onclick = function () { apply(t); }; grid.appendChild(d); });
+    THEMES.forEach(function (t) { grid.appendChild(tile(t, [id ? "chrome-extension://" + id + "/themes/" + t.file : null, cdnUrl(t)])); });
     var custom = cur.id === "custom" ? cur : { id: "custom", name: "Custom image", p: "#8b93a7", b: "#6b7385", l: "#c3cad9", s: "#aab2c5" };
     var ct = tile(custom, null, '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>');
-    var fi = el("input"); fi.type = "file"; fi.accept = "image/*"; fi.style.display = "none"; fi.onchange = function () { fromFile(fi.files && fi.files[0]); fi.value = ""; };
-    ct.appendChild(fi); ct.onclick = function () { fi.click(); }; grid.appendChild(ct);
-    grid.firstChild.onclick = function () { apply(DEF); };
+    grid.appendChild(ct);
   }
+  var fi = null;
+  function pickFile() {
+    if (!fi) { fi = el("input"); fi.type = "file"; fi.accept = "image/*"; fi.style.cssText = "position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;"; fi.onchange = function () { fromFile(fi.files && fi.files[0]); fi.value = ""; }; document.body.appendChild(fi); }
+    try { fi.click(); } catch (e) {}
+  }
+  function byId(id) { for (var i = 0; i < THEMES.length; i++) if (THEMES[i].id === id) return THEMES[i]; return null; }
+  /* every pointer event inside the button / panel is handled here, from a window-capture listener that runs before NTL's */
+  function handle(e) {
+    var t = e.target; if (!t || !t.closest) return;
+    if (e.type === "pointerdown" || e.type === "mousedown" || e.type === "touchstart") { if (!t.closest("#wy-th .bd")) { if (e.cancelable) e.preventDefault(); } return; }
+    if (e.type !== "pointerup" && e.type !== "click") return;
+    if (e.type === "click") return;                                   // pointerup already did it; the click is only swallowed
+    if (e.button === 2) return;
+    if (t.closest("#wy-thbtn")) { toggle(); return; }
+    if (t.closest("#wy-th .x")) { toggle(false); return; }
+    if (t.closest("#wy-thq")) { qClick(); return; }
+    var tl = t.closest("#wy-th .tile"); if (!tl) return;
+    var id = tl.getAttribute("data-id");
+    if (id === "default") apply(DEF); else if (id === "custom") pickFile(); else { var th = byId(id); if (th) apply(th); }
+  }
+  function inside(e) { var p = e.composedPath ? e.composedPath() : null; if (p && box && (p.indexOf(box) >= 0 || p.indexOf(btn) >= 0)) return true; var t = e.target; return !!(t && t.closest && (t.closest("#wy-th") || t.closest("#wy-thbtn"))); }
+  ["mousedown", "mouseup", "click", "dblclick", "auxclick", "pointerdown", "pointermove", "pointerup", "pointercancel", "touchstart", "touchmove", "touchend", "touchcancel", "contextmenu"].forEach(function (t) {
+    window.addEventListener(t, function (e) { if (btn && inside(e)) { handle(e); e.stopImmediatePropagation(); } }, { capture: true, passive: false });
+  });
+  window.addEventListener("wheel", function (e) { if (!box || !inside(e)) return; e.stopImmediatePropagation(); e.preventDefault(); var sc = grid; if (sc) sc.scrollTop += e.deltaY; }, { capture: true, passive: false });
+  var qClick = function () {};
   function toggle(open) {
     build(); var o = open == null ? !box.classList.contains("open") : !!open;
     box.classList.toggle("open", o); if (o) { paint(); try { box.__qp(); } catch (e) {} }
@@ -4386,17 +4410,15 @@ var NTL_TH = (function () {
     if (box) return; css();
     btn = el("button"); btn.id = "wy-thbtn"; btn.type = "button"; btn.title = "Themes";
     btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="var(--wy-l)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 0 0 0 18c1.4 0 2-.9 2-1.8 0-.6-.3-1-.6-1.4-.3-.4-.6-.8-.6-1.4 0-1 .8-1.8 1.8-1.8H16a5 5 0 0 0 5-5c0-3.6-4-6.6-9-6.6z"/><circle cx="7.5" cy="10.5" r="1.2" fill="var(--wy-p)" stroke="none"/><circle cx="12" cy="7.5" r="1.2" fill="var(--wy-b)" stroke="none"/><circle cx="16.5" cy="10.5" r="1.2" fill="var(--wy-s)" stroke="none"/></svg><i></i>';
-    btn.onclick = function (e) { e.stopPropagation(); toggle(); };
     box = el("div"); box.id = "wy-th";
     box.innerHTML = '<div class="hd"><div class="k">NTL VANCED</div><div class="t">Themes</div><button class="x" type="button">×</button></div><div class="bd"></div><div class="q"><span>GRAPHICS QUALITY</span><b id="wy-thq">HIGH</b></div><div class="ft">Pick a wallpaper and the whole mod takes its colours — menus, chat, HUD, popups. Custom: any image, the palette is read from it.</div>';
-    grid = box.querySelector(".bd"); box.querySelector(".x").onclick = function () { toggle(false); };
+    grid = box.querySelector(".bd");
     /* NTL's graphics button (#grq, hidden with its holder): a 3-step cycle High → Normal → Skinless, state in localStorage.graphics */
     var q = box.querySelector("#wy-thq");
     function qPaint() { var de = 0; try { de = +localStorage.getItem("graphics") || 0; } catch (e) {} q.textContent = ["HIGH", "NORMAL", "SKINLESS"][de] || "HIGH"; q.classList.toggle("hi", de === 0); }
-    q.onclick = function () { var el2 = document.getElementById("grq"); try { if (el2 && el2.onclick) el2.onclick(); else if (el2) el2.click(); } catch (e) {} qPaint(); }; qPaint(); box.__qp = qPaint;
+    qClick = function () { var el2 = document.getElementById("grq"); try { if (el2 && el2.onclick) el2.onclick(); else if (el2) el2.click(); } catch (e) {} qPaint(); }; qPaint(); box.__qp = qPaint;
     document.documentElement.classList.add("wy-th");
-    ["mousedown", "pointerdown", "touchstart", "keydown", "wheel"].forEach(function (t) { box.addEventListener(t, function (e) { e.stopPropagation(); }, { passive: t === "wheel" || t === "touchstart" }); });
-    document.addEventListener("pointerdown", function (e) { if (box.classList.contains("open") && !(e.target.closest && (e.target.closest("#wy-th") || e.target.closest("#wy-thbtn")))) toggle(false); }, true);
+    window.addEventListener("pointerdown", function (e) { if (box.classList.contains("open") && !inside(e)) toggle(false); }, true);
     document.body.appendChild(btn); document.body.appendChild(box);
   }
   function homeVisible() { var b = document.getElementById("mybox"), l = document.getElementById("login"); return !!(b && l && getComputedStyle(l).display !== "none" && b.getClientRects().length); }
