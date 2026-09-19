@@ -87,11 +87,12 @@
             "s/*.webp",
             "sc/*.webp",
             "pr/*.webp",
+            "themes/*.webp",
             "*.mp3",
             "social.html",
             "help.html"
          ]
       }
    ],
-   "version_name": "5.61"
+   "version_name": "5.62"
 }

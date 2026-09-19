@@ -1,0 +1,35 @@
+/* Themes e2e: real page + extension. Checks the button replaces #grqh, applying a theme rewrites the variables, the
+   var()-tokenized styles (incl. SVG attributes) resolve, quality toggle works, custom palette extraction runs. */
+const cp = require("child_process"), fs = require("fs"), os = require("os"), path = require("path"), http = require("http");
+const CHROME = (fs.existsSync(path.resolve(__dirname, "cft/chrome/win64-153.0.8010.52/chrome-win64/chrome.exe")) ? path.resolve(__dirname, "cft/chrome/win64-153.0.8010.52/chrome-win64/chrome.exe") : path.resolve(__dirname, "../../tools/cft/chrome/win64-153.0.8010.52/chrome-win64/chrome.exe")), EXT = path.resolve(__dirname, "..");
+const PROFILE = fs.mkdtempSync(path.join(os.tmpdir(), "ntlv-e2e-")), PORT = 9338;
+const chrome = cp.spawn(CHROME, ["--headless=new", "--disable-gpu", "--no-first-run", "--window-size=1280,800", "--remote-debugging-port=" + PORT, "--user-data-dir=" + PROFILE, "--load-extension=" + EXT, "--disable-features=HttpsFirstBalancedModeAutoEnable,HttpsUpgrades,HttpsFirstModeV2ForEngagedSites", "about:blank"], { stdio: "ignore" });
+const getJSON = url => new Promise((res, rej) => http.get(url, r => { let d = ""; r.on("data", c => d += c); r.on("end", () => res(JSON.parse(d))); }).on("error", rej));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function cdp(wsUrl) { const ws = new WebSocket(wsUrl); await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; }); let id = 0; const pending = {}, events = [];
+  ws.onmessage = ev => { const m = JSON.parse(ev.data); if (m.id && pending[m.id]) { pending[m.id](m); delete pending[m.id]; } else if (m.method) events.push(m); };
+  const send = (method, params) => new Promise(r => { const i = ++id; pending[i] = r; ws.send(JSON.stringify({ id: i, method, params: params || {} })); });
+  const evalp = async expr => { const r = await send("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true }); if (r.result && r.result.exceptionDetails) return "EXC " + (r.result.exceptionDetails.exception && r.result.exceptionDetails.exception.description || r.result.exceptionDetails.text); return r.result && r.result.result ? r.result.result.value : undefined; };
+  return { send, evalp, events, close: () => ws.close() }; }
+(async () => { try {
+  await sleep(2500);
+  let page = (await getJSON("http://127.0.0.1:" + PORT + "/json")).find(t => t.type === "page");
+  const c = await cdp(page.webSocketDebuggerUrl); await c.send("Page.enable"); await c.send("Runtime.enable");
+  await c.send("Page.navigate", { url: "http://slither.io/" }); await sleep(9000);
+  console.log("ver:", await c.evalp(`localStorage.getItem("wyrmversion")`));
+  console.log("button/grqh:", await c.evalp(`(function(){var b=document.getElementById("wy-thbtn"),g=document.getElementById("grqh");var r=b&&b.getBoundingClientRect();document.documentElement.classList.remove("wy-th");var gr=g&&g.getBoundingClientRect();document.documentElement.classList.add("wy-th");return JSON.stringify({btnShown:!!(b&&b.classList.contains("show")),btn:r&&[r.left|0,r.top|0,r.width|0,r.height|0],grqhVisible:!!(g&&getComputedStyle(g).display!=="none"),grqhWas:gr&&[gr.left|0,gr.top|0,gr.width|0,gr.height|0]})})()`));
+  console.log("vars default:", await c.evalp(`getComputedStyle(document.documentElement).getPropertyValue("--wy-p").trim()+" "+getComputedStyle(document.documentElement).getPropertyValue("--wy-bg1").trim()`));
+  console.log("svg stroke via var:", await c.evalp(`(function(){var p=document.querySelector("#wy-thbtn svg path");return p&&getComputedStyle(p).stroke})()`));
+  await c.evalp(`NTL_TH.toggle(true); 1`); await sleep(300);
+  console.log("tiles:", await c.evalp(`Array.from(document.querySelectorAll("#wy-th .tile .nm span")).map(function(e){return e.textContent}).join(", ")`));
+  await c.evalp(`document.querySelector('#wy-th .tile[data-id="spidey"]').click(); 1`); await sleep(2500);
+  console.log("after spidey:", await c.evalp(`JSON.stringify({p:getComputedStyle(document.documentElement).getPropertyValue("--wy-p").trim(),bg:document.body.style.backgroundImage.slice(0,90),saved:(localStorage.getItem("wy_theme")||"").slice(0,60),dot:getComputedStyle(document.querySelector("#wy-thbtn i")).backgroundImage.slice(0,80),svg:getComputedStyle(document.querySelector("#wy-thbtn svg path")).stroke,tileOn:(document.querySelector("#wy-th .tile.on")||{}).getAttribute&&document.querySelector("#wy-th .tile.on").getAttribute("data-id")})`));
+  console.log("vs popup colours:", await c.evalp(`(function(){NTL_VS.open();var b=document.getElementById("vs-box");var r=b&&getComputedStyle(b).backgroundImage;NTL_VS.close&&NTL_VS.close();return r&&r.slice(0,120)})()`));
+  console.log("quality:", await c.evalp(`(function(){var q=document.getElementById("wy-thq");var a=q.textContent+"/"+localStorage.getItem("graphics");q.click();var b=q.textContent+"/"+localStorage.getItem("graphics");q.click();var c2=q.textContent+"/"+localStorage.getItem("graphics");q.click();return a+" → "+b+" → "+c2+" → "+q.textContent+"/"+localStorage.getItem("graphics")})()`));
+  console.log("extract:", await c.evalp(`(function(){var cv=document.createElement("canvas");cv.width=64;cv.height=64;var k=cv.getContext("2d");k.fillStyle="#1e90ff";k.fillRect(0,0,64,64);k.fillStyle="#ffb000";k.fillRect(0,0,64,24);var im=new Image();return new Promise(function(r){im.onload=function(){r(JSON.stringify(NTL_TH.extract(im)))};im.src=cv.toDataURL()})})()`));
+  await c.evalp(`document.querySelector('#wy-th .tile[data-id="default"]').click(); 1`); await sleep(500);
+  console.log("back to default:", await c.evalp(`getComputedStyle(document.documentElement).getPropertyValue("--wy-p").trim()+" | "+document.body.style.backgroundImage.slice(0,80)`));
+  const ex = c.events.filter(e => e.method === "Runtime.exceptionThrown").map(e => (e.params.exceptionDetails.exception && e.params.exceptionDetails.exception.description || e.params.exceptionDetails.text).slice(0, 160));
+  console.log("exceptions:", JSON.stringify(ex.slice(0, 5)));
+  c.close();
+} catch (e) { console.error("ERR", e); } finally { chrome.kill(); setTimeout(() => { try { fs.rmSync(PROFILE, { recursive: true, force: true }); } catch (e) {} process.exit(0); }, 500); } })();
