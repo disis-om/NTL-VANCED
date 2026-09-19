@@ -1,12 +1,12 @@
 {
-  "version": "5.60",
+  "version": "5.61",
   "channel": "stable",
   "date": "2026-09-19",
-  "size": 7935959,
-  "sha256": "f5197a65a335d0cea3bed286739f54f0ad6147d294d214fec35a42db5311214b",
+  "size": 7945296,
+  "sha256": "7fbd4d2499adb8edfd144eee0d47d26a10f729745957d2507d37831f1a6807aa",
   "minLoader": 3,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.60/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.60/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.60/NTL-VANCED-v5.60.zip",
-  "notes": "# Assist line for arrow mode\nNTL's assist line used to point at the mouse — useless on a phone. It now follows the arrow.\n\n## Arrow control\n- Turn on NTL assist while steering with the arrow: a dashed line is drawn from your snake's head to the arrow, in the arrow's colour\n- It appears only while your finger is down and disappears together with the arrow\n\n## Fine tuning\n- Release notes are now the GitHub release notes of the version you are running — the same text you see on GitHub, with images, video, tables and code\n- Small fixes and clean-ups\n"
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.61/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.61/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.61/NTL-VANCED-v5.61.zip",
+  "notes": "# Center eyes, seen by everyone\nCenter eyes used to be a trick only you could see. Now it goes out to the arena.\n\n## Center eyes\n- Press **I** and the pupils settle in the middle on every screen — yours included\n- Same engine as Eyes Back, pointed sideways: the snake still steers exactly where your mouse or arrow points, with the same tiny wobble\n- **Vanced › Controls › Eyes** — switch \"Center eyes visible to others\" off to go back to the old client-only look (nothing is sent, pupils pinned dead centre for you alone)\n- Eyes Back (**U**) and Center eyes (**I**) take over from each other; one is active at a time\n\n## Fine tuning\n- Small fixes and clean-ups\n"
 }

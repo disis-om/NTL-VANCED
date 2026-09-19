@@ -4126,7 +4126,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
-    { v: "5.61-beta", d: "19 Sep 2026", t: "Center eyes can now be seen by everyone: it drives the Eyes Back engine sideways (+90°/−90° alternating), so on other screens the pupils average to the middle. Switch in Vanced › Controls › Eyes (on by default)." },
+    { v: "5.61", d: "19 Sep 2026", t: "Center eyes can now be seen by everyone: it drives the Eyes Back engine sideways (+90°/−90° alternating), so on every screen — yours too — the pupils settle in the middle. Switch in Vanced › Controls › Eyes (on by default; off = old client-only pinned centre)." },
     { v: "5.60", d: "19 Sep 2026", t: "Arrow control: NTL's assist line now follows the arrow on mobile (head → arrow, only while you steer). What's new shows the GitHub release notes of the running version with full markdown — images, video, tables, code, nested lists." },
     { v: "5.59", d: "18 Sep 2026", t: "Server picker search finally filters NTL’s list: the hide rule lost to the row layout rule (two ids beat id + class); verified in a real Chrome run." },
     { v: "5.58", d: "18 Sep 2026", t: "Server picker search works on touch and matches id, IP, country code and country name. Includes the 5.57 beta fixes: arrow-control touch layer, roster solo-dot on hover/tap, content transparency slider." },
