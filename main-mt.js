@@ -684,8 +684,6 @@ var NTL_EB = (function () {
     reset(); showHud();
     try { if (typeof R === "function" && typeof J !== "undefined") R(J, "Eyes Back " + (on ? "ON" : "OFF")); } catch (e) {}
   }
-  /* send period (ms) for NTL's angle throttle: slither's 33, or 16 while Center eyes drives with "fast" on */
-  function period() { try { return on && mode === "side" && typeof NTL_EC !== "undefined" && NTL_EC.cfg.fast ? 16 : 33; } catch (e) { return 33; } }
   /* Center eyes engages / releases the engine in side mode */
   function drive(v) {
     if (v) { on = true; mode = "side"; } else if (mode === "side") { on = false; mode = "back"; }
@@ -710,7 +708,7 @@ var NTL_EB = (function () {
     var k = curKey(); if (k && (e.key || "").toLowerCase() === k) toggle();
   }, true);
 
-  return { cfg: cfg, tick: tick, toggle: toggle, drive: drive, period: period, refreshHud: showHud, get active() { return on; }, get mode() { return mode; },
+  return { cfg: cfg, tick: tick, toggle: toggle, drive: drive, refreshHud: showHud, get active() { return on; }, get mode() { return mode; },
     get on() { return on && mode === "back"; }, set on(v) { on = !!v; mode = "back"; reset(); showHud(); } };
 })();
 /* ========================== END EYES BACK MOD ============================== */
@@ -724,7 +722,7 @@ var NTL_EB = (function () {
    (default I, remappable in Revamp Keys; hold/toggle via Key Modes).
    ============================================================================ */
 var NTL_EC = (function () {
-  var on = false, cfg = { bc: true, fast: true };   // bc: also send it (Eyes Back engine, side mode) so every player sees centred pupils; fast: 16 ms sends while driving
+  var on = false, cfg = { bc: true };   // bc: also send it (Eyes Back engine, side mode) so every player sees centred pupils
   try { var j = JSON.parse(localStorage.getItem("wy_ec") || "null"); if (j) for (var k in cfg) if (k in j) cfg[k] = j[k]; } catch (e) {}
   function save() { try { localStorage.setItem("wy_ec", JSON.stringify(cfg)); } catch (e) {} }
   function apply() { try { if (typeof NTL_EB !== "undefined") { if (on && cfg.bc) NTL_EB.drive(true); else NTL_EB.drive(false); } } catch (e) {} }
@@ -4448,7 +4446,6 @@ var NTL_VS = (function () {
     if (typeof NTL_EC !== "undefined" && typeof NTL_EB !== "undefined") {
       var ce = card("Eyes");
       ce.appendChild(vsRow("Center eyes visible to others", "sends the Eyes Back steering pointed sideways (+90° / \u221290° every tick) \u2014 on every screen the pupils settle in the middle, with the same tiny wobble Eyes Back has. Off: only you see them centred.", vsSwitch(NTL_EC.cfg.bc, function (v) { NTL_EC.set("bc", v); })));
-      ce.appendChild(vsRow("Fast sends while centred", "angle packets every 16 ms instead of 33 while Center eyes is on \u2014 smaller side-to-side jitter on other screens if the server relays each one. Experimental: twice the packets.", vsSwitch(NTL_EC.cfg.fast, function (v) { NTL_EC.set("fast", v); })));
       ce.appendChild(el("div", "vs-hint", "Keys: Eyes Back and Center eyes are in Revamp Keys (defaults U and I). Turning one on takes over from the other."));
       S.appendChild(ce);
     }
@@ -5489,7 +5486,7 @@ bb?Array.isArray(ab)?ab:"string"==typeof ab&&a(ab)?JSON.parse(ab):[]:"cstagver"=
 (Bz||i1||(pu=!0)),pu?(hu*=.85,.2>hu&&(hu=.2)):1>hu&&(hu+=.05,1<=hu&&(hu=1)));120<m&&(m=120);m*=hu;bu=Qu;Qu+=m;Du=(Qu|0)-(bu|0);Cu=Ou;Ou+=2*m;Hu=(Ou|0)-(Cu|0);xu+=mu;Zu&&(Wu+=Du);Ku&&(Fu+=Du);Bz&&!Dz&&-1==Tu&&(Bz=!1,Fa());zt(ab);mQ&&4E3<ab-xQ&&(bso&&(bso.tainted=!0,Va++),Fa());if(Ce)if(Av||(ka(),Av=!0),s5){for(bb=ef.length-1;0<=bb;bb--){var db=ef[bb];if(!(db!==snake&&0<=db.skb_i))for(eb=db.B.length-1;0<=eb;eb--)db.B[eb].yy=af/2+15*Math.cos(eb/4+Qu/19)*(1-eb/db.B.length)}view_xx-=m;mn()}else{for(bb=
 ef.length-1;0<=bb;bb--)for(db=ef[bb],eb=db.B.length-1;0<=eb;eb--)db.B[eb].yy=af/2+15*Math.cos(eb/4+Qu/19)*(1-eb/db.B.length);view_xx-=m}playing&&(ku?(1>Uu&&(Uu+=.0075*m,1<Uu&&(Uu=1)),1<yu&&(yu-=4E-5*m,1>yu&&(yu=1))):(0<Uu&&(Uu-=.0075*m,0>Uu&&(Uu=0)),Ce?1<yu&&(yu-=4E-5*m,1>yu&&(yu=1)):yu<ju&&(yu+=4E-5*m,yu>ju&&(yu=ju))));ct(ab);jP(ab);Ru&&((0<Wu||0<Fu)&&50<ab-_u&&(_u=ab,0<Fu&&Wu>Fu&&(Wu-=Fu,Fu=0),0<Wu&&Fu>Wu&&(Fu-=Wu,Wu=0),0<Wu?(cb=Wu,127<cb&&(cb=127),Wu-=cb,snake.J-=tw*cb*snake.T*snake.L,gb[0]=252,
 gb[1]=cb,ws.send(gb)):0<Fu&&(cb=Fu,127<cb&&(cb=127),Fu-=cb,snake.J+=tw*cb*snake.T*snake.L,cb+=128,gb[0]=252,gb[1]=cb,ws.send(gb))),!Iu&&250<ab-Mu&&(Mu=ab,Iu=!0,ib[0]=251,ws.send(ib),dv=ab,Eu=ab));if(0<Du)if(Xl=0,0<Ml)for(db=Du,db>Ml&&(db=Ml),Ml-=db,bb=1;bb<=db;bb++)bb==db&&(Cl=pl[hl],Cl>Hl?Xl=1:Cl<Hl&&(Xl=-1),Hl=Cl),pl[hl]=Ol,hl++,hl>=El&&(hl=0);else 0==Ml&&(Ml=-1);playing&&null!=snake&&2147483647!=af&&1E3<ab-PQ&&(PQ=ab,mc.style.left=Math.round(52*j+40*j*(snake.xx-af)/(ps&&Xf?Ol:af)-7)+"px",mc.style.top=
-Math.round(52*j+40*j*(snake.yy-af)/(ps&&Xf?Ol:af)-7)+"px");1E3<ab-aQ&&(br=Ql,0<cl.length&&E2(),tQ=vQ=nQ=Ql=fQ=AQ=$l=_l=0,aQ=ab);playing&&null!=snake&&!Ce&&(ru>Ms&&(Us=-1),ru<Ms&&(Us=1),Ms=ru,75<ab-rQ&&(rQ=ab,db=Math.atan2(snake.yy-Is,snake.xx-hs),bb=Math.atan2(snake.yy-af,snake.xx-af),0>db&&(db+=He),0>bb&&(bb+=He),iu=db-bb,Is=snake.yy,hs=snake.xx,0>iu&&(iu*=-1),iu>P4&&(iu=He-iu),iu>Gd&&(iu=P4-iu)));null!=snake&&!snake.I&&playing&&!Ce&&(I8(),NTL_EB.period()<ab-qc||Wf)&&(bb=$4,IA&&2==ia&&(bb=(ps?Ol:.98*af)-500),
+Math.round(52*j+40*j*(snake.yy-af)/(ps&&Xf?Ol:af)-7)+"px");1E3<ab-aQ&&(br=Ql,0<cl.length&&E2(),tQ=vQ=nQ=Ql=fQ=AQ=$l=_l=0,aQ=ab);playing&&null!=snake&&!Ce&&(ru>Ms&&(Us=-1),ru<Ms&&(Us=1),Ms=ru,75<ab-rQ&&(rQ=ab,db=Math.atan2(snake.yy-Is,snake.xx-hs),bb=Math.atan2(snake.yy-af,snake.xx-af),0>db&&(db+=He),0>bb&&(bb+=He),iu=db-bb,Is=snake.yy,hs=snake.xx,0>iu&&(iu*=-1),iu>P4&&(iu=He-iu),iu>Gd&&(iu=P4-iu)));null!=snake&&!snake.I&&playing&&!Ce&&(I8(),33<ab-qc||Wf)&&(bb=$4,IA&&2==ia&&(bb=(ps?Ol:.98*af)-500),
 db=1,tf.gA?db=0:su>$4&&xe&&Df?(db=0,Rt()):IA&&su>bb&&(db=qt()),ks&&(ks=0,db=IA&&su>bb?qt():1),0!=oa&&(db=0,bb=14.5*snake.N,cb=Math.cos(snake.ang),eb=Math.sin(snake.ang),gb=snake.yy+snake.fy-eb*bb,Ys.x=snake.xx+snake.fx-cb*bb+oa*-eb*bb,Ys.y=gb+oa*cb*bb,dA.oA(dA.dA(Ys))),db&&(du=g4,zu=o4),qc=ab,Yd=du*du+zu*zu,1<Yd?(Jd=Math.atan2(zu,du),snake.J=Jd):Jd=snake.R,Jd%=He,0>Jd&&(Jd+=He),Ld=251*Jd/He|0,NTL_EB.active&&(Ld=NTL_EB.tick(1<Yd?Jd:null,snake,ab),snake.J=Ld*He/251),NTL_PB.on&&NTL_PB.active&&(Ld=NTL_PB.angByte(),snake.J=Ld*He/251),(Wf||Ld!=_c)&&(Wf=0,_c=Ld,ib[0]=Ld&255,Eu=ab,ws.send(ib.buffer)));Ce||(bs(),D(),null!=snake&&(ab=snake.sct+
 snake.rsc,rv=~~(15*(fpsls[ab]+snake.fam/fmlts[ab]-1)-5)),Be.length&&e8());Du=m=0;_a();null==O&&(cA=Xd(Mf))},pf=function(){var bb=0;Av=!1;if(playing&&Ce&&!m1&&!M1){if(!qn)return setTimeout(function(){playing&&Ce&&!m1&&!M1&&pf()},120),!1;var ab,cb,eb,gb=eb=0;X1=[];nu=tu;var ib="";try{localStorage.setItem("want_custom_skin","1"),ib=localStorage.getItem("custom_skin")}catch(mb){}if(ib&&0<ib.length){ib=(""+ib).split(",");var db=0;gb=-1;var hb=!0;for(ab=8;ab<ib.length;ab++){if(hb)db=Number(ib[ab]);else for(gb=
 Number(ib[ab]),cb=0;cb<db;cb++)X1.push(gb);hb=!hb}}m1=!0;x1=!1;z7(snake,0,If(!0));snake.fA=-1;db=[];hb=[];for(ab=0;4>ab;ab++){ib=0;gb=~~(au.length*(ab+1)/4);for(cb=eb;cb<gb;cb++)ib++;hb.push(ib);eb=gb}hb[0]--;hb[1]--;hb[2]++;hb[3]++;gb=[];for(ab=eb=0;4>ab;ab++)for(gb=[],db.push(gb),cb=0;cb<hb[ab];cb++)gb.push(au[eb]),eb++;for(ib=0;ib<db.length;ib++)for(gb=db[ib],ab=0;ab<gb.length;ab++)if(cb=gb[ab],0<=cb&&cb<$w.length){eb={};hb=document.createElement("canvas");eb.ii=hb;hb.width=48;hb.height=48;var kb=
