@@ -566,7 +566,7 @@ var NTL_EB = (function () {
                      // Bigger = smoother/slower, smaller = snappier/jittery.
     turnRate: 0.033  // server turn rate, rad per 8ms at scang=spang=1 (NTL "tw")
   };
-  var TWO_PI = 2 * Math.PI, on = false, err = 0, lastT = 0, hud = null;
+  var TWO_PI = 2 * Math.PI, on = false, err = 0, lastT = 0, hud = null, mode = "back";   // "back" = Eyes Back, "side" = Center eyes broadcast
   var anchor = null;   // {t: client time the server heading refers to, a: heading}
   var log = [];        // commands sent: {te: time it takes effect on server, w: target angle sent (rad), r: rad/ms}
   var hooked = null, hookedVal = 0, hookedR = 0, lastSeen = null, resMax = 0, pending = null, hold = null;
@@ -642,8 +642,13 @@ var NTL_EB = (function () {
     err += (1 + k) / 2;                                  // sigma-delta: share of ticks turning in +direction
     var plus = err >= 1; if (plus) err -= 1;
     var eps = cfg.eps + Math.abs(k) * cfg.turnMargin + Math.min(cfg.epsMax, 1.3 * resMax * 251 / TWO_PI); // adaptive: widen with measured prediction error
-    var base = 251 * (((est + Math.PI) % TWO_PI + TWO_PI) % TWO_PI) / TWO_PI;
-    var b = Math.round(plus ? base - eps : base + eps);  // 180°-eps → server turns +dir, 180°+eps → server turns -dir
+    var b;
+    if (mode === "side") {                               // +90° → server turns +dir, −90° → −dir; the viewer's pupil averages to the middle
+      b = Math.round(251 * (((est + (plus ? Math.PI / 2 : -Math.PI / 2)) % TWO_PI + TWO_PI) % TWO_PI) / TWO_PI);
+    } else {
+      var base = 251 * (((est + Math.PI) % TWO_PI + TWO_PI) % TWO_PI) / TWO_PI;
+      b = Math.round(plus ? base - eps : base + eps);    // 180°-eps → server turns +dir, 180°+eps → server turns -dir
+    }
     b = ((b % 251) + 251) % 251;
     log.push({ te: te, w: b * TWO_PI / 251, r: r });    // remember exactly what the server will receive
     while (log.length > 1 && log[1].te < now - 2000) log.shift();
@@ -667,15 +672,22 @@ var NTL_EB = (function () {
       hud.style.cssText = "position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:99999;padding:4px 12px;border-radius:6px;background:rgba(0,0,0,.55);color:#0f0;font:bold 14px Arial,sans-serif;letter-spacing:1px;pointer-events:none;";
       document.body.appendChild(hud);
     }
-    hud.textContent = "◀ EYES BACK [" + keyLabel(curKey()) + "]";
+    hud.textContent = mode === "side" ? "◉ CENTER EYES [" + keyLabel(typeof NTL_EC !== "undefined" ? NTL_EC.key() : "i") + "]" : "◀ EYES BACK [" + keyLabel(curKey()) + "]";
     hud.style.display = on ? "block" : "none";
   }
 
   function reset() { err = 0; lastT = 0; log.length = 0; anchor = null; hooked = null; lastSeen = null; resMax = 0; pending = null; hold = null; }
 
   function toggle() {
-    on = !on; reset(); showHud();
+    if (on && mode === "side") { mode = "back"; try { NTL_EC.on = false; } catch (e) {} }   // Center eyes was driving → take over (mode first: EC's release only acts in side mode)
+    else on = !on;
+    reset(); showHud();
     try { if (typeof R === "function" && typeof J !== "undefined") R(J, "Eyes Back " + (on ? "ON" : "OFF")); } catch (e) {}
+  }
+  /* Center eyes engages / releases the engine in side mode */
+  function drive(v) {
+    if (v) { on = true; mode = "side"; } else if (mode === "side") { on = false; mode = "back"; }
+    reset(); showHud();
   }
 
   function typing() {
@@ -696,7 +708,8 @@ var NTL_EB = (function () {
     var k = curKey(); if (k && (e.key || "").toLowerCase() === k) toggle();
   }, true);
 
-  return { cfg: cfg, tick: tick, toggle: toggle, refreshHud: showHud, get on() { return on; }, set on(v) { on = !!v; reset(); showHud(); } };
+  return { cfg: cfg, tick: tick, toggle: toggle, drive: drive, refreshHud: showHud, get active() { return on; }, get mode() { return mode; },
+    get on() { return on && mode === "back"; }, set on(v) { on = !!v; mode = "back"; reset(); showHud(); } };
 })();
 /* ========================== END EYES BACK MOD ============================== */
 /* ============================================================================
@@ -709,14 +722,18 @@ var NTL_EB = (function () {
    (default I, remappable in Revamp Keys; hold/toggle via Key Modes).
    ============================================================================ */
 var NTL_EC = (function () {
-  var on = false;
+  var on = false, cfg = { bc: true };   // bc: also send it (Eyes Back engine, side mode) so every player sees centred pupils
+  try { var j = JSON.parse(localStorage.getItem("wy_ec") || "null"); if (j) for (var k in cfg) if (k in j) cfg[k] = j[k]; } catch (e) {}
+  function save() { try { localStorage.setItem("wy_ec", JSON.stringify(cfg)); } catch (e) {} }
+  function apply() { try { if (typeof NTL_EB !== "undefined") { if (on && cfg.bc) NTL_EB.drive(true); else NTL_EB.drive(false); } } catch (e) {} }
+  function set(key, val) { cfg[key] = val; save(); apply(); }
   function curKey() {
     if (typeof a9 !== "undefined") { if (a9 === null && typeof ms === "function") { try { ms(); } catch (e) {} } if (a9 && "eyecenter" in a9) return a9.eyecenter || ""; }
     return "i";
   }
   function holdMode() { return typeof NTL_KM !== "undefined" && NTL_KM.modeOf("eyecenter") === "hold"; }
   function typing() { var el = document.activeElement; if (!el) return false; var t = (el.tagName || "").toUpperCase(); return t === "INPUT" || t === "TEXTAREA" || el.isContentEditable; }
-  function toggle() { on = !on; try { if (typeof R === "function" && typeof J !== "undefined") R(J, "Center eyes " + (on ? "ON" : "OFF")); } catch (e) {} try { if (typeof w9 === "function") w9(); } catch (e) {} }
+  function toggle() { on = !on; apply(); try { if (typeof R === "function" && typeof J !== "undefined") R(J, "Center eyes " + (on ? "ON" : "OFF") + (on && cfg.bc ? " (visible to others)" : "")); } catch (e) {} try { if (typeof w9 === "function") w9(); } catch (e) {} }
   window.addEventListener("keydown", function (e) {
     if (e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
     var k = curKey(); if (!k || (e.key || "").toLowerCase() !== k) return;
@@ -728,7 +745,7 @@ var NTL_EC = (function () {
     if (!holdMode() || !on) return;
     var k = curKey(); if (k && (e.key || "").toLowerCase() === k) toggle();
   }, true);
-  return { toggle: toggle, get on() { return on; }, set on(v) { on = !!v; } };
+  return { toggle: toggle, cfg: cfg, set: set, key: curKey, get on() { return on; }, set on(v) { on = !!v; apply(); } };
 })();
 /* ========================== END CENTER EYES ================================ */
 /* ========================== SPINE MODE ===================================== */
@@ -4108,6 +4125,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
+    { v: "5.61-beta", d: "19 Sep 2026", t: "Center eyes can now be seen by everyone: it drives the Eyes Back engine sideways (+90°/−90° alternating), so on other screens the pupils average to the middle. Switch in Vanced › Controls › Eyes (on by default)." },
     { v: "5.60", d: "19 Sep 2026", t: "Arrow control: NTL's assist line now follows the arrow on mobile (head → arrow, only while you steer). What's new shows the GitHub release notes of the running version with full markdown — images, video, tables, code, nested lists." },
     { v: "5.59", d: "18 Sep 2026", t: "Server picker search finally filters NTL’s list: the hide rule lost to the row layout rule (two ids beat id + class); verified in a real Chrome run." },
     { v: "5.58", d: "18 Sep 2026", t: "Server picker search works on touch and matches id, IP, country code and country name. Includes the 5.57 beta fixes: arrow-control touch layer, roster solo-dot on hover/tap, content transparency slider." },
@@ -4425,6 +4443,12 @@ var NTL_VS = (function () {
     S = section("controls", "Controls");
     h(S, "Controls", "Arrow control is the SlitherControl+ mechanism: drag anywhere and a virtual cursor moves with your finger; the aim is always centre \u2192 cursor. The aim cursor shows that point at all times, with any skin.");
     var CU = typeof NTL_CU !== "undefined" ? NTL_CU : null;
+    if (typeof NTL_EC !== "undefined" && typeof NTL_EB !== "undefined") {
+      var ce = card("Eyes");
+      ce.appendChild(vsRow("Center eyes visible to others", "sends the Eyes Back steering pointed sideways (+90° / \u221290° every tick) \u2014 on every screen the pupils settle in the middle, with the same tiny wobble Eyes Back has. Off: only you see them centred.", vsSwitch(NTL_EC.cfg.bc, function (v) { NTL_EC.set("bc", v); })));
+      ce.appendChild(el("div", "vs-hint", "Keys: Eyes Back and Center eyes are in Revamp Keys (defaults U and I). Turning one on takes over from the other."));
+      S.appendChild(ce);
+    }
     function skinCols() { return [AR && AR.cfg.c1 || "#8058d0", AR && AR.cfg.c2 || "#7fb3ff"]; }
     function paintSkin(host, id, size) {
       if (!CU) return null;
@@ -5463,7 +5487,7 @@ bb?Array.isArray(ab)?ab:"string"==typeof ab&&a(ab)?JSON.parse(ab):[]:"cstagver"=
 ef.length-1;0<=bb;bb--)for(db=ef[bb],eb=db.B.length-1;0<=eb;eb--)db.B[eb].yy=af/2+15*Math.cos(eb/4+Qu/19)*(1-eb/db.B.length);view_xx-=m}playing&&(ku?(1>Uu&&(Uu+=.0075*m,1<Uu&&(Uu=1)),1<yu&&(yu-=4E-5*m,1>yu&&(yu=1))):(0<Uu&&(Uu-=.0075*m,0>Uu&&(Uu=0)),Ce?1<yu&&(yu-=4E-5*m,1>yu&&(yu=1)):yu<ju&&(yu+=4E-5*m,yu>ju&&(yu=ju))));ct(ab);jP(ab);Ru&&((0<Wu||0<Fu)&&50<ab-_u&&(_u=ab,0<Fu&&Wu>Fu&&(Wu-=Fu,Fu=0),0<Wu&&Fu>Wu&&(Fu-=Wu,Wu=0),0<Wu?(cb=Wu,127<cb&&(cb=127),Wu-=cb,snake.J-=tw*cb*snake.T*snake.L,gb[0]=252,
 gb[1]=cb,ws.send(gb)):0<Fu&&(cb=Fu,127<cb&&(cb=127),Fu-=cb,snake.J+=tw*cb*snake.T*snake.L,cb+=128,gb[0]=252,gb[1]=cb,ws.send(gb))),!Iu&&250<ab-Mu&&(Mu=ab,Iu=!0,ib[0]=251,ws.send(ib),dv=ab,Eu=ab));if(0<Du)if(Xl=0,0<Ml)for(db=Du,db>Ml&&(db=Ml),Ml-=db,bb=1;bb<=db;bb++)bb==db&&(Cl=pl[hl],Cl>Hl?Xl=1:Cl<Hl&&(Xl=-1),Hl=Cl),pl[hl]=Ol,hl++,hl>=El&&(hl=0);else 0==Ml&&(Ml=-1);playing&&null!=snake&&2147483647!=af&&1E3<ab-PQ&&(PQ=ab,mc.style.left=Math.round(52*j+40*j*(snake.xx-af)/(ps&&Xf?Ol:af)-7)+"px",mc.style.top=
 Math.round(52*j+40*j*(snake.yy-af)/(ps&&Xf?Ol:af)-7)+"px");1E3<ab-aQ&&(br=Ql,0<cl.length&&E2(),tQ=vQ=nQ=Ql=fQ=AQ=$l=_l=0,aQ=ab);playing&&null!=snake&&!Ce&&(ru>Ms&&(Us=-1),ru<Ms&&(Us=1),Ms=ru,75<ab-rQ&&(rQ=ab,db=Math.atan2(snake.yy-Is,snake.xx-hs),bb=Math.atan2(snake.yy-af,snake.xx-af),0>db&&(db+=He),0>bb&&(bb+=He),iu=db-bb,Is=snake.yy,hs=snake.xx,0>iu&&(iu*=-1),iu>P4&&(iu=He-iu),iu>Gd&&(iu=P4-iu)));null!=snake&&!snake.I&&playing&&!Ce&&(I8(),33<ab-qc||Wf)&&(bb=$4,IA&&2==ia&&(bb=(ps?Ol:.98*af)-500),
-db=1,tf.gA?db=0:su>$4&&xe&&Df?(db=0,Rt()):IA&&su>bb&&(db=qt()),ks&&(ks=0,db=IA&&su>bb?qt():1),0!=oa&&(db=0,bb=14.5*snake.N,cb=Math.cos(snake.ang),eb=Math.sin(snake.ang),gb=snake.yy+snake.fy-eb*bb,Ys.x=snake.xx+snake.fx-cb*bb+oa*-eb*bb,Ys.y=gb+oa*cb*bb,dA.oA(dA.dA(Ys))),db&&(du=g4,zu=o4),qc=ab,Yd=du*du+zu*zu,1<Yd?(Jd=Math.atan2(zu,du),snake.J=Jd):Jd=snake.R,Jd%=He,0>Jd&&(Jd+=He),Ld=251*Jd/He|0,NTL_EB.on&&(Ld=NTL_EB.tick(1<Yd?Jd:null,snake,ab),snake.J=Ld*He/251),NTL_PB.on&&NTL_PB.active&&(Ld=NTL_PB.angByte(),snake.J=Ld*He/251),(Wf||Ld!=_c)&&(Wf=0,_c=Ld,ib[0]=Ld&255,Eu=ab,ws.send(ib.buffer)));Ce||(bs(),D(),null!=snake&&(ab=snake.sct+
+db=1,tf.gA?db=0:su>$4&&xe&&Df?(db=0,Rt()):IA&&su>bb&&(db=qt()),ks&&(ks=0,db=IA&&su>bb?qt():1),0!=oa&&(db=0,bb=14.5*snake.N,cb=Math.cos(snake.ang),eb=Math.sin(snake.ang),gb=snake.yy+snake.fy-eb*bb,Ys.x=snake.xx+snake.fx-cb*bb+oa*-eb*bb,Ys.y=gb+oa*cb*bb,dA.oA(dA.dA(Ys))),db&&(du=g4,zu=o4),qc=ab,Yd=du*du+zu*zu,1<Yd?(Jd=Math.atan2(zu,du),snake.J=Jd):Jd=snake.R,Jd%=He,0>Jd&&(Jd+=He),Ld=251*Jd/He|0,NTL_EB.active&&(Ld=NTL_EB.tick(1<Yd?Jd:null,snake,ab),snake.J=Ld*He/251),NTL_PB.on&&NTL_PB.active&&(Ld=NTL_PB.angByte(),snake.J=Ld*He/251),(Wf||Ld!=_c)&&(Wf=0,_c=Ld,ib[0]=Ld&255,Eu=ab,ws.send(ib.buffer)));Ce||(bs(),D(),null!=snake&&(ab=snake.sct+
 snake.rsc,rv=~~(15*(fpsls[ab]+snake.fam/fmlts[ab]-1)-5)),Be.length&&e8());Du=m=0;_a();null==O&&(cA=Xd(Mf))},pf=function(){var bb=0;Av=!1;if(playing&&Ce&&!m1&&!M1){if(!qn)return setTimeout(function(){playing&&Ce&&!m1&&!M1&&pf()},120),!1;var ab,cb,eb,gb=eb=0;X1=[];nu=tu;var ib="";try{localStorage.setItem("want_custom_skin","1"),ib=localStorage.getItem("custom_skin")}catch(mb){}if(ib&&0<ib.length){ib=(""+ib).split(",");var db=0;gb=-1;var hb=!0;for(ab=8;ab<ib.length;ab++){if(hb)db=Number(ib[ab]);else for(gb=
 Number(ib[ab]),cb=0;cb<db;cb++)X1.push(gb);hb=!hb}}m1=!0;x1=!1;z7(snake,0,If(!0));snake.fA=-1;db=[];hb=[];for(ab=0;4>ab;ab++){ib=0;gb=~~(au.length*(ab+1)/4);for(cb=eb;cb<gb;cb++)ib++;hb.push(ib);eb=gb}hb[0]--;hb[1]--;hb[2]++;hb[3]++;gb=[];for(ab=eb=0;4>ab;ab++)for(gb=[],db.push(gb),cb=0;cb<hb[ab];cb++)gb.push(au[eb]),eb++;for(ib=0;ib<db.length;ib++)for(gb=db[ib],ab=0;ab<gb.length;ab++)if(cb=gb[ab],0<=cb&&cb<$w.length){eb={};hb=document.createElement("canvas");eb.ii=hb;hb.width=48;hb.height=48;var kb=
 hb.getContext("2d");kb.rotate(Math.PI);kb.drawImage(F0,336*cb,0,48,48,-48,-48,48,48);bb=37==cb?36:39==cb?37:cb;kb.rotate(-Math.PI);kb.font="15px Arial, Helvetica Neue, Helvetica, sans-serif";kb.fillStyle="#ffffff";kb.textBaseline="middle";kb.textAlign="center";kb.shadowColor="black";kb.shadowBlur=2;kb.lineWidth=2;kb.strokeText(_n[bb],42,40);kb.fillText(_n[bb],42,40);kb.stroke();hb.style.opacity=0;hb.style.position="absolute";hb.style.left="0px";hb.style.top="0px";hb.draggable=!1;eb.xx=~~(55*gb.length*
