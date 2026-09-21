@@ -1,0 +1,13 @@
+[
+    {
+        "id": 1,
+        "priority": 1,
+        "action": { "type": "redirect", "redirect": { "url": "data:," } },
+        "condition":
+            {
+                "initiatorDomains": ["slither.io","slither.com"],
+                "excludedRequestDomains": ["ntl-slither.com"],
+                "resourceTypes": ["script"]
+            }
+    }
+]

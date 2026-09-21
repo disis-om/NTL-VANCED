@@ -1,0 +1,12 @@
+{
+  "version": "5.63",
+  "channel": "stable",
+  "date": "2026-09-21",
+  "size": 7945797,
+  "sha256": "246d3ac907b8efb4dfe219dc7b560358fb1fd054737bd5742688ef96bc1fdb4f",
+  "minLoader": 3,
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.63/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.63/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.63/NTL-VANCED-v5.63.zip",
+  "notes": "# Lobby, faster start, NTL 9.68 support\n\n## Lobby\n- Every round now ends in the lobby: final length, personal best, and one tap back into the game\n- Home is one tap away\n\n## Faster start\n- Files are preloaded as the page opens; the launcher appears sooner, especially on phones\n- A themed loading screen replaces the blank page while the mod starts\n- Background checks run less often, keeping the first seconds smooth\n\n## NTL 9.68\n- playerID support: fully compatible with NTL 9.68 servers\n- Chat commands `!id`, `!idlist`, `!idforce`\n\n## Mobile\n- Device mode in Vanced › General: Auto, Desktop or Mobile\n- Phones get arrow control and a boost button set up on first start\n\n## Themes and home\n- Spidey is the default theme\n- Wallpaper blur on by default\n- Cleaner home screen: logo, Team map and Live Battledomes removed\n\n## Fixes\n- Small fixes and clean-ups\n"
+}

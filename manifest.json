@@ -1,0 +1,109 @@
+{
+   "action": {
+      "default_icon": "icon.png",
+      "default_popup": "popup.html",
+      "default_title": "NTL VANCED"
+   },
+   "author": "Om Rajput (omrajput.in) · based on NTL MOD by [NTL] Nothing To Lose",
+   "background": {
+      "service_worker": "background.js"
+   },
+   "content_scripts": [
+      {
+         "all_frames": false,
+         "js": [
+            "preload.js"
+         ],
+         "matches": [
+            "*://slither.io/*",
+            "*://slither.com/*"
+         ],
+         "run_at": "document_start"
+      },
+      {
+         "all_frames": false,
+         "js": [
+            "tinyscr.js"
+         ],
+         "matches": [
+            "*://slither.io/*",
+            "*://slither.com/*"
+         ],
+         "run_at": "document_end"
+      }
+   ],
+   "content_security_policy": {
+      "object-src": "'self'",
+      "script-src": "'self'"
+   },
+   "declarative_net_request": {
+      "rule_resources": [
+         {
+            "enabled": true,
+            "id": "1",
+            "path": "game.json"
+         }
+      ]
+   },
+   "description": "NTL MOD, vanced: more tactics (Eyes Back, Center Eyes), remappable keys, hold/toggle modes, modern UI, smarter servers & settings.",
+   "externally_connectable": {
+      "matches": [
+         "*://slither.io/*",
+         "*://slither.com/*",
+         "https://ntl-slither.com/*"
+      ]
+   },
+   "homepage_url": "https://ntl-slither.com",
+   "host_permissions": [
+      "*://slither.io/*",
+      "*://slither.com/*"
+   ],
+   "icons": {
+      "16": "icon16.png",
+      "19": "icon19.png",
+      "32": "icon32.png",
+      "38": "icon38.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+   },
+   "manifest_version": 3,
+   "name": "NTL VANCED",
+   "permissions": [
+      "declarativeNetRequest",
+      "activeTab",
+      "downloads",
+      "unlimitedStorage",
+      "storage",
+      "downloads.shelf"
+   ],
+   "short_name": "NTL VANCED",
+   "version": "9.67",
+   "web_accessible_resources": [
+      {
+         "matches": [
+            "*://slither.io/*",
+            "*://slither.com/*"
+         ],
+         "resources": [
+            "ota-boot.js",
+            "*.json",
+            "*.js",
+            "*.txt",
+            "*.css",
+            "*.ttf",
+            "fonts/*.ttf",
+            "*.png",
+            "*.jpg",
+            "*.webp",
+            "s/*.webp",
+            "sc/*.webp",
+            "pr/*.webp",
+            "themes/*.webp",
+            "*.mp3",
+            "social.html",
+            "help.html"
+         ]
+      }
+   ],
+   "version_name": "5.63"
+}
