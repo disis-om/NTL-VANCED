@@ -1,12 +1,12 @@
 {
-  "version": "5.63",
+  "version": "5.64",
   "channel": "stable",
-  "date": "2026-09-21",
-  "size": 7945797,
-  "sha256": "246d3ac907b8efb4dfe219dc7b560358fb1fd054737bd5742688ef96bc1fdb4f",
+  "date": "2026-09-22",
+  "size": 7950071,
+  "sha256": "502ee711f678c49f4f8498d890906c61b6dac16aa95030905a3a323ad068e0bd",
   "minLoader": 3,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.63/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.63/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.63/NTL-VANCED-v5.63.zip",
-  "notes": "# Lobby, faster start, NTL 9.68 support\n\n## Lobby\n- Every round now ends in the lobby: final length, personal best, and one tap back into the game\n- Home is one tap away\n\n## Faster start\n- Files are preloaded as the page opens; the launcher appears sooner, especially on phones\n- A themed loading screen replaces the blank page while the mod starts\n- Background checks run less often, keeping the first seconds smooth\n\n## NTL 9.68\n- playerID support: fully compatible with NTL 9.68 servers\n- Chat commands `!id`, `!idlist`, `!idforce`\n\n## Mobile\n- Device mode in Vanced › General: Auto, Desktop or Mobile\n- Phones get arrow control and a boost button set up on first start\n\n## Themes and home\n- Spidey is the default theme\n- Wallpaper blur on by default\n- Cleaner home screen: logo, Team map and Live Battledomes removed\n\n## Fixes\n- Small fixes and clean-ups\n"
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.64/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.64/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.64/NTL-VANCED-v5.64.zip",
+  "notes": "# Backups, lobby control, cleaner updates\n\n## Backups\n- One **.ntlvanced** file holds everything: NTL and Vanced settings, keys, on-screen layouts, theme, custom arenas and skins\n- **BACKUP** and **RESTORE** in Vanced › Updates & About; older `.ntlmod` files still restore\n\n## Lobby\n- Can be switched off in **Vanced › General**\n- Appears only after a real round — coming back from the skin editor or settings goes straight to the home screen\n\n## Updates\n- **UPDATE** appears only when a new version is waiting\n- Checks no longer hang: every request times out and the first mirror that answers wins\n- **STABLE** and **PACKAGED** are explained in the card and shown only when they apply\n\n## Fixes\n- Custom tag authorisation no longer throws when a saved tag is gone\n- Loading screen removed; the start-up work that made the launcher appear sooner stays\n"
 }
