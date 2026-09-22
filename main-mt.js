@@ -3332,13 +3332,34 @@ var NTL_UP = (function () {
   /* ---------- check ---------- */
   var manifest = null, checking = false, recheck = false, listeners = [];
   function emit() { for (var i = 0; i < listeners.length; i++) try { listeners[i](); } catch (e) {} }
-  function fetchOne(url) { return fetch(url + "?t=" + Date.now(), { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }); }
-  function fetchJSON(name) {   // both mirrors, newest version wins; one failing is fine, both failing throws
-    return Promise.all([fetchOne(RAW + name).catch(function (e) { return { __err: e }; }), fetchOne(CDN + name).catch(function (e) { return { __err: e }; })]).then(function (r) {
-      var a = r[0].__err ? null : r[0], b = r[1].__err ? null : r[1];
-      if (!a && !b) throw (r[0].__err || r[1].__err);
-      if (a && b) return num(b.version) > num(a.version) ? b : a;
-      return a || b;
+  function fetchOne(url, ms) {
+    var ctl = null; try { ctl = new AbortController(); } catch (e) {}
+    var t = setTimeout(function () { try { ctl && ctl.abort(); } catch (e) {} }, ms || 8000);
+    return fetch(url + "?t=" + Date.now(), { cache: "no-store", signal: ctl ? ctl.signal : undefined })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) { clearTimeout(t); return j; }, function (e) { clearTimeout(t); throw new Error(e && e.name === "AbortError" ? "timeout" : (e && e.message) || "failed"); });
+  }
+  function fetchJSON(name) {
+    /* both mirrors in parallel, each with its own timeout; the newest answer wins, but a slow mirror can never hold the
+       check up: once one has answered we wait at most 1.5 s more for the other, and 9 s caps the whole thing */
+    return new Promise(function (res, rej) {
+      var got = [], fails = 0, done = false, grace = 0, lastErr = null;
+      function finish() {
+        if (done) return; done = true; clearTimeout(grace); clearTimeout(hard);
+        if (got.length) res(got.reduce(function (a, b) { return num(b.version) > num(a.version) ? b : a; }));
+        else rej(lastErr || new Error("offline"));
+      }
+      var hard = setTimeout(finish, 9000);
+      [RAW + name, CDN + name].forEach(function (u) {
+        fetchOne(u).then(function (j) {
+          if (j && j.version) got.push(j);
+          if (got.length + fails === 2) finish();
+          else if (got.length === 1) grace = setTimeout(finish, 1500);
+        }, function (e) {
+          lastErr = e; fails++;
+          if (got.length + fails === 2) finish();
+        });
+      });
     });
   }
   function check(force) {
@@ -3352,12 +3373,12 @@ var NTL_UP = (function () {
       checking = false; cfg.last = Date.now();
       manifest = m && m.version ? m : null;
       cfg.avail = manifest && num(manifest.version) > num(ver()) ? { version: manifest.version, channel: manifest.channel || "stable" } : null;
-      save(); emit();
-      status = cfg.avail ? "v" + cfg.avail.version + " available" : "";
+      status = cfg.avail ? "v" + cfg.avail.version + " available" : "";   // "" = the card shows "Up to date · checked …"
+      save(); emit();                                                     // emit AFTER the status is final, or the card stays on "Checking…"
       if (cfg.avail && force !== "silent") offer();
       if (recheck) { recheck = false; setTimeout(function () { check(force); }, 300); }
       return manifest;
-    }, function (e) { checking = false; cfg.last = Date.now(); save(); status = "Could not reach GitHub (" + (e && e.message || "offline") + ")"; emit(); if (recheck) { recheck = false; setTimeout(function () { check(force); }, 300); } return null; });
+    }, function (e) { checking = false; cfg.last = Date.now(); status = "Could not reach GitHub (" + (e && e.message || "offline") + ")"; save(); emit(); if (recheck) { recheck = false; setTimeout(function () { check(force); }, 300); } return null; });
   }
   var status = "";
   /* ---------- install ---------- */
@@ -4102,6 +4123,10 @@ var NTL_LB = (function () {
     "@media (max-width:520px){#lb-bar{padding:14px 16px 0;}#lb-who{margin-right:64px;max-width:48%;}#lb-foot{padding:0 16px 16px;}#lb-mid{gap:20px;}}"
   ].join("\n");
   var ov = null, played = false, wasPlaying = false, pendingDeath = false, last = 0, allBest = 0, newBest = false;
+  /* a real round = NTL is playing AND not in its cosmetic preview (the skin editor runs the game loop with Ce = true,
+     so "playing" alone also goes true/false when you visit Skin or Settings) */
+  function inRound() { return !!g("playing") && !g("Ce"); }
+  function enabled() { try { return localStorage.getItem("wy_lobby") !== "0"; } catch (e) { return true; } }
   try { allBest = +localStorage.getItem("wy_lb_best") || 0; } catch (e) {}
   function css() { if (document.getElementById("lb-css")) return; var st = document.createElement("style"); st.id = "lb-css"; st.textContent = CSS; (document.head || document.documentElement).appendChild(st); }
   var IC = {
@@ -4178,7 +4203,8 @@ var NTL_LB = (function () {
   var readyFlag = false;
   function tick() {
     if (!readyFlag && document.querySelector("#mybox .wy-tile")) { readyFlag = true; document.documentElement.setAttribute("data-wy-ready", "1"); }   // boot skeleton (preload.js) fades on this
-    var p = !!g("playing"), ls = document.getElementById("lastscore"), h = ls ? ls.innerHTML : "";
+    var p = inRound(), ls = document.getElementById("lastscore"), h = ls ? ls.innerHTML : "";
+    if (!enabled()) { if (isOpen()) close(); cancelPend(); wasPlaying = p; lsSeen = h; return; }
     if (lsSeen === null) lsSeen = h;
     if (p && !wasPlaying) { played = true; cancelPend(); if (isOpen()) close(); }
     var died = p && h !== lsSeen;                       // final length written while still "playing" = the death packet
@@ -4207,6 +4233,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
+    { v: "5.64", d: "22 Sep 2026", t: "Lobby can be switched off in Vanced \u203a General and no longer appears when you come back from the skin editor or settings \u2014 only after a real round. Updates card shows UPDATE only when there is one." },
     { v: "5.64", d: "21 Sep 2026", t: "Backups: one .ntlvanced file holds every NTL and Vanced setting (keys, layouts, theme, arenas, skins); BACKUP / RESTORE in Vanced › Updates & About; old .ntlmod files still restore." },
     { v: "5.63", d: "21 Sep 2026", t: "Lobby: after a round you land on a full Vanced page instead of the home screen — final length, your best, nick and server, PLAY, HOME and a Quick settings page (placeholder for now). Enter plays, Esc goes home. Skipped while NTL auto-respawn is on. NTL 9.68’s playerID ported: a persistent 16-char id sent on connect to the servers NTL lists (Battledome included), same packet and storage keys; chat !id / !idlist / !idforce; shown in Vanced › Updates & About. Team map and Live Battledomes removed." },
     { v: "5.62", d: "19 Sep 2026", t: "Themes: the palette button top-right of the home screen (where slither's quality toggle was — that toggle now lives inside the panel) picks a wallpaper, and every menu, popup, chat and HUD panel takes its colours. Nine wallpapers plus Custom (any image, palette read from it)." },
@@ -4506,6 +4533,10 @@ var NTL_VS = (function () {
       });
       dvRow.appendChild(seg); c1.appendChild(dvRow);
     }
+    if (typeof NTL_LB !== "undefined") {
+      var lbOn = true; try { lbOn = localStorage.getItem("wy_lobby") !== "0"; } catch (e) {}
+      c1.appendChild(vsRow("Lobby after a round", "a fast-restart screen instead of the home page when a round ends \u2014 final length, your best and PLAY. Quick settings will live there too. Off: you land on the home screen as before.", vsSwitch(lbOn, function (v) { try { localStorage.setItem("wy_lobby", v ? "1" : "0"); } catch (e) {} if (!v && typeof NTL_LB !== "undefined") NTL_LB.close(); })));
+    }
     c1.appendChild(vsStepper("UI size", "scale the whole interface — the mod’s panels, popups and NTL’s own; tap the value to reset", 0.7, 1.6, 0.05, sc0, function (v) { return Math.round(v * 100) + "%"; }, function (v) { applyScale(v); }));
     S.appendChild(c1);
     var PF = typeof NTL_PF !== "undefined" ? NTL_PF : null;
@@ -4525,8 +4556,6 @@ var NTL_VS = (function () {
       var GF = NTL_GF, gfGrp = el("div", "vs-sub" + (GF.cfg.on ? "" : " dim"));
       var c2g = card(); c2g.appendChild(vsRow("Chat picker: emoji, GIFs, stickers & memes", "the GIF button in the team chat opens one picker (Emoji / GIF / Stickers / Memes, categories, Recent, search); emoji go into the message; sent as a link that renders as the image for NTL VANCED players", vsSwitch(GF.cfg.on, function (v) { GF.set("on", v); gfGrp.classList.toggle("dim", !v); })));
       gfGrp.appendChild(vsSlider("GIF size", "max height of a GIF in the chat", 100, 320, 10, GF.cfg.size, function (v) { return v + " px"; }, function (v) { GF.set("size", v); }));
-      var gkIn = vsInput("KLIPY API key (empty = built-in key)", GF.cfg.key || "", "w"), gkB = el("button", "vs-btn", "SAVE"); gkB.onclick = function () { GF.set("key", gkIn.value.trim()); };
-      var gkW = el("div", "vs-cols"); gkW.appendChild(gkIn); gkW.appendChild(gkB); gfGrp.appendChild(vsRow("KLIPY key", "the built-in key is shared and rate-limited (100 searches/hour); get your own free key at klipy.com/developers", gkW));
       c2g.appendChild(gfGrp); S.appendChild(c2g);
     }
     var akb = el("button", "vs-btn pri", "OPEN EDITOR"); akb.onclick = function () { close(); if (typeof NTL_TC !== "undefined") NTL_TC.edit(); };
@@ -4748,14 +4777,20 @@ var NTL_VS = (function () {
     h(S, "Updates", "over-the-air updates from github.com/disis-om/NTL-VANCED \u2014 no reinstall, the extension updates itself");
     try { if (typeof NTL_UP !== "undefined") {
       var UP = NTL_UP, cU = card();
-      var upSt = el("div", "vs-note"), upRow = el("div", "vs-cols");
+      var upSt = el("div", "vs-note"); upSt.id = "up-note"; var upRow = el("div", "vs-cols");
       var upChk = el("button", "vs-btn", "CHECK NOW"), upGo = el("button", "vs-btn pri", "UPDATE"), upFb = el("button", "vs-btn", "STABLE"), upPk = el("button", "vs-btn", "PACKAGED");
       upChk.onclick = function () { UP.check(""); }; upGo.onclick = function () { UP.install(); }; upFb.onclick = function () { UP.fallbackStable(); }; upPk.onclick = function () { UP.usePackaged(); };
+      upGo.title = "install the new version"; upFb.title = "leave this build and go back to the latest stable release"; upPk.title = "forget the downloaded build and run the version that came with the extension zip";
       upRow.appendChild(upChk); upRow.appendChild(upGo); upRow.appendChild(upFb); upRow.appendChild(upPk);
       cU.appendChild(vsRow("Updates", "running v" + UP.version + " (" + (UP.source === "ota" ? "over-the-air" : "packaged in the extension, v" + UP.packaged) + ") \u00b7 updates come from github.com/" + UP.REPO, upRow));
       cU.appendChild(vsRow("Beta updates", "get experimental builds before everyone else; STABLE puts you back on the latest stable release", vsSwitch(UP.cfg.beta, function (v) { UP.setBeta(v); })));
       cU.appendChild(upSt);
-      var upRef = function () { var a = UP.avail; upSt.textContent = (UP.status || (a ? "v" + a.version + " available" + (a.channel === "beta" ? " (beta)" : "") : (UP.cfg.last ? "Up to date \u00b7 checked " + new Date(UP.cfg.last).toLocaleTimeString() : "Not checked yet"))) + (UP.busy ? " \u00b7 " + Math.round(UP.progress * 100) + "%" : ""); upGo.style.display = a || UP.manifest ? "" : "none"; upGo.disabled = UP.busy; upFb.disabled = UP.busy; upPk.style.display = UP.source === "ota" ? "" : "none"; };
+      var upRef = function () { var a = UP.avail, ota = UP.source === "ota";
+        upGo.style.display = a ? "" : "none";                       // only when there is something to install
+        upFb.style.display = ota && (UP.cfg.beta || a || UP.version !== UP.packaged) ? "" : "none";
+        upPk.style.display = ota ? "" : "none";
+        upChk.disabled = !!UP.busy; upSt.textContent = (UP.status || (a ? "v" + a.version + " available" + (a.channel === "beta" ? " (beta)" : "") : (UP.cfg.last ? "Up to date \u00b7 checked " + new Date(UP.cfg.last).toLocaleTimeString() : "Not checked yet"))) + (UP.busy ? " \u00b7 " + Math.round(UP.progress * 100) + "%" : ""); upGo.disabled = UP.busy; upFb.disabled = UP.busy; };
+      cU.appendChild(el("div", "vs-hint", "<b>CHECK NOW</b> asks GitHub for the newest build \u2014 <b>UPDATE</b> appears only when one is waiting. <b>STABLE</b> leaves a beta or a downloaded build and puts you back on the latest stable release. <b>PACKAGED</b> drops the downloaded build and runs the version that came inside the extension zip."));
       UP.onChange(upRef); upRef();
       S.appendChild(cU);
     } } catch (eUP) { try { console.warn("NTL VANCED updates card", eUP); } catch (e2) {} }
