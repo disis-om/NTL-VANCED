@@ -3705,7 +3705,7 @@ var NTL_WN = (function () {
     var head = el("div"); head.id = "wn-head"; head.innerHTML = '<div class="k">NTL VANCED</div><div class="t">What’s new in v' + esc(V) + "</div>";
     var x = el("button", null, "×"); x.id = "wn-x"; x.title = "Close (shows again next time)"; x.onclick = close;   // close WITHOUT acknowledging
     head.appendChild(x); box.appendChild(head);
-    var body = el("div", "wy-md"); body.id = "wn-body"; body.innerHTML = typeof NTL_TH !== "undefined" && NTL_TH.skLines ? NTL_TH.skLines() : '<div class="wn-load"><i></i>Loading release notes…</div>'; box.appendChild(body);
+    var body = el("div", "wy-md"); body.id = "wn-body"; body.innerHTML = '<div class="wn-load"><i></i>Loading release notes…</div>'; box.appendChild(body);
     var foot = el("div"); foot.id = "wn-foot";
     foot.appendChild(el("small", null, '<a href="https://github.com/' + REPO + '/releases/tag/v' + esc(V) + '" target="_blank" rel="noopener">View on GitHub ↗</a>'));
     loadNotes(V).then(function (t) { if (body.isConnected) body.innerHTML = md(t || PLACEHOLDER); });
@@ -4151,7 +4151,7 @@ var NTL_LB = (function () {
     ov.innerHTML =
       '<div id="lb-page">' +
         '<div id="lb-bar"><div class="brand">NTL VANCED<b>Lobby</b></div><div id="lb-who">' + (n ? "<b>" + esc(n) + "</b>" : "") + (sv ? esc(sv) : "no server picked") + "</div></div>" +
-        '<div id="lb-mid"><div><div class="k">FINAL LENGTH</div><div id="lb-last">' + (last ? last.toLocaleString() : '<span class="wy-sk" style="display:inline-block;width:3.2em;height:.8em;vertical-align:middle;border-radius:14px"></span>') + "</div></div>" +
+        '<div id="lb-mid"><div><div class="k">FINAL LENGTH</div><div id="lb-last">' + (last ? last.toLocaleString() : "\u2026") + "</div></div>" +
           '<div id="lb-best"><span class="k">YOUR BEST</span><span class="v">' + bestNow().toLocaleString() + "</span>" + (newBest ? '<span class="nb">NEW BEST</span>' : "") + "</div>" +
           '<div id="lb-btns"><button id="lb-play" type="button" data-lb="play">' + IC.play + "PLAY</button><button id=\"lb-home\" type=\"button\" data-lb=\"home\">" + IC.home + "HOME</button></div></div>" +
         '<div id="lb-foot"><span><kbd>Enter</kbd> play · <kbd>Esc</kbd> home</span><button id="lb-qs" type="button" data-lb="qs">' + IC.set + "QUICK SETTINGS</button></div>" +
@@ -4201,41 +4201,8 @@ var NTL_LB = (function () {
   function cancelPend() { if (pend) { clearTimeout(pend); pend = 0; if (!isOpen()) document.documentElement.classList.remove("wy-lobby"); } }
   function takeScore() { last = lastScore(); newBest = last > 0 && last > bestNow(); if (newBest) { allBest = last; try { localStorage.setItem("wy_lb_best", allBest); } catch (e) {} } }
   var readyFlag = false;
-  /* ---- layout snapshot for the boot ghosts (preload.js reads localStorage.wy_skel next start) ----
-     Panels the player can move / hide, plus the launcher's own tiles, are stored as plain rectangles with the anchor
-     they hug (right / bottom), so the ghosts land in the same place at any window size. */
-  var SKEL_IDS = ["bchat", "divtl", "divpl", "eemenu", "ttbox", "mgraph-box", "wy-hud", "time-hud", "timebot-hud", "wy-log", "wy-gc", "clq", "mmap", "wy-thbtn"];
-  var skelAt = 0;
-  function skelVisible(el) { if (!el) return null; var r = el.getBoundingClientRect(); if (r.width < 8 || r.height < 8 || r.bottom < 0 || r.top > innerHeight) return null; var cs = getComputedStyle(el); if (cs.display === "none" || cs.visibility === "hidden" || +cs.opacity < 0.05) return null; return r; }
-  function skelBox(id, r, kind, lines) {
-    var cs = null; try { cs = getComputedStyle(document.getElementById(id) || document.body); } catch (e) {}
-    return { id: id || null, l: Math.round(r.left), t: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height),
-      r: Math.min(26, parseInt(cs && cs.borderRadius, 10) || 12), kind: kind || null, lines: lines || 0,
-      ar: r.left + r.width > innerWidth * 0.55, ab: r.top + r.height > innerHeight * 0.6 };
-  }
-  function snapLayout() {
-    if (Date.now() - skelAt < 2000) return; skelAt = Date.now();
-    try {
-      var boxes = [], r;
-      SKEL_IDS.forEach(function (id) {
-        var el2 = document.getElementById(id); r = skelVisible(el2); if (!r) return;
-        var lines = /divtl|divpl|wy-log|wy-gc|bchat|eemenu/.test(id) ? Math.max(2, Math.min(7, Math.round((r.height - 20) / 26))) : 0;
-        boxes.push(skelBox(id, r, id === "wy-thbtn" ? "round" : null, lines));
-      });
-      var box = document.getElementById("mybox");
-      if (box) {
-        var nick = document.getElementById("nick_holder") || document.getElementById("nick");
-        r = skelVisible(nick); if (r) boxes.push(skelBox(null, r, null, 0));
-        Array.prototype.forEach.call(box.querySelectorAll(".wy-tile, #rk-open-btn, #wy-vanced-btn"), function (t) { var q = skelVisible(t); if (q) boxes.push(skelBox(null, q, "tile", 0)); });
-        var play = box.querySelector(".wy-a-play") || document.getElementById("connect-btn");
-        r = skelVisible(play); if (r) boxes.push(skelBox(null, r, "play", 0));
-      }
-      if (boxes.length) localStorage.setItem("wy_skel", JSON.stringify({ v: 1, vw: innerWidth, vh: innerHeight, at: Date.now(), boxes: boxes.slice(0, 40) }));
-    } catch (e) {}
-  }
   function tick() {
     if (!readyFlag && document.querySelector("#mybox .wy-tile")) { readyFlag = true; document.documentElement.setAttribute("data-wy-ready", "1"); }   // boot ghosts (preload.js) fade on this
-    if (readyFlag && !g("playing") && homeVisible()) snapLayout();
     var p = inRound(), ls = document.getElementById("lastscore"), h = ls ? ls.innerHTML : "";
     if (!enabled()) { if (isOpen()) close(); cancelPend(); wasPlaying = p; lsSeen = h; return; }
     if (lsSeen === null) lsSeen = h;
