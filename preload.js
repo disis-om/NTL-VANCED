@@ -45,12 +45,8 @@
         return { id: b.id, l: l, t: t, w: w, h: h, r: b.r, kind: b.kind, lines: b.lines };
       });
     }
-    /* first ever start: a ghost of the default launcher, nothing else */
-    var w = Math.min(380, W - 40), l = (W - w) / 2, t = Math.max(60, H * 0.28), o = [];
-    o.push({ id: "mybox", l: l, t: t, w: w, h: 46, r: 16 });
-    for (var k = 0; k < 6; k++) o.push({ id: null, l: l + (k % 2) * (w / 2 + 5), t: t + 58 + Math.floor(k / 2) * 66, w: w / 2 - 5, h: 58, r: 14, kind: "tile" });
-    o.push({ id: null, l: l, t: t + 262, w: w, h: 54, r: 16, kind: "play" });
-    return o;
+    return [];   /* nothing recorded yet (first ever start): no invented layout — just the dark ground until the real
+                    home screen paints; from the next load on, the ghosts are this player's own panels */
   }
   var root = null, kills = [];
   function paint() {
