@@ -762,16 +762,20 @@ var NTL_EC = (function () {
    the gap is sent instead — so pressing into a body makes the snake slide
    along it with a hairline gap (squeeze someone without dying), and between
    two snakes it hugs whichever side the player leans to.
-   Geometry: death = the head's collision point (one head radius, 14.6 × N, ahead
-   of the head centre) touching another snake's bone (the line through its body
-   points B[i].xx/yy) — skins overlap freely, exactly what Spine mode shows.
-   Speed O / 32 per ms, turn rate from the Eyes Back model (0.033 rad/8 ms × T × L).
+   Geometry (slither client, verified against slither.txt): body diameter 29 × sc,
+   sc = min(6, 1 + (sct − 2) / 106) (NTL's N), body points ≤ 42 apart, speed
+   sp / 32 per ms (csp = sp·vfr/4 per 8 ms frame), turn 0.033 × scang × spang
+   rad per frame (NTL's T, L). The server's hit rule is not in the client, so the
+   kept distance is: head centre ↔ their bone ≥ head radius + (1 − DEPTH) × their
+   body radius + GAP. DEPTH 100 % lets your head circle reach their bone; lower
+   keeps you further out. Both are settings; the head path is checked swept, so a
+   fast head cannot jump over a bone between two samples.
    Only the angle byte NTL already sends is changed. Off while the bot drives.
    Key: keymap id "squeeze" (default ;), toggle or hold via Key Modes.
-   Settings: localStorage.wy_sqz = { gap }.
+   Settings: localStorage.wy_sqz = { gap, depth }.
    ============================================================================ */
 var NTL_SQ = (function () {
-  var cfg = { gap: 3 };
+  var cfg = { gap: 3, depth: 0.7 };
   try { var j = JSON.parse(localStorage.getItem("wy_sqz") || "null"); if (j) for (var k in cfg) if (k in j) cfg[k] = j[k]; } catch (e) {}
   function save() { try { localStorage.setItem("wy_sqz", JSON.stringify(cfg)); } catch (e) {} }
   function set(key, val) { cfg[key] = val; save(); }
@@ -786,79 +790,111 @@ var NTL_SQ = (function () {
   /* Collision model (the one Spine mode draws): what kills is YOUR COLLISION POINT — the tip of the head, one head
      radius ahead of the head centre along the heading — touching THEIR BONE, the centre line through their body
      points. Skins may overlap freely. So the obstacles are line segments (bone pieces), not fat circles. */
-  var SX = new Float32Array(8192), SY = new Float32Array(8192), EX = new Float32Array(8192), EY = new Float32Array(8192), MX = new Float32Array(8192), MY = new Float32Array(8192), HL = new Float32Array(8192), ns = 0, heads = [];
-  function addSeg(x1, y1, x2, y2) { if (ns >= SX.length) return; SX[ns] = x1; SY[ns] = y1; EX[ns] = x2; EY[ns] = y2; MX[ns] = (x1 + x2) / 2; MY[ns] = (y1 + y2) / 2; HL[ns] = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)) / 2; ns++; }
+  var SX = new Float32Array(8192), SY = new Float32Array(8192), EX = new Float32Array(8192), EY = new Float32Array(8192), MX = new Float32Array(8192), MY = new Float32Array(8192), HL = new Float32Array(8192), RO = new Float32Array(8192), ns = 0, heads = [];
+  function addSeg(x1, y1, x2, y2, ro) { if (ns >= SX.length) return; RO[ns] = ro; SX[ns] = x1; SY[ns] = y1; EX[ns] = x2; EY[ns] = y2; MX[ns] = (x1 + x2) / 2; MY[ns] = (y1 + y2) / 2; HL[ns] = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)) / 2; ns++; }
   function gather(me, hx, hy, reach) {
     ns = 0; heads.length = 0;
     var list = g("ef") || [], r2 = reach * reach;
     for (var i = 0; i < list.length; i++) {
       var o = list[i]; if (!o || o === me || o.I || !o.B) continue;
-      var B = o.B, prev = null, prevIn = false;
+      var B = o.B, prev = null, prevIn = false, ro = width(o) / 2;
       for (var b = 0; b < B.length; b++) {
         var p = B[b]; if (!p || p.dying) { prev = null; continue; }
         var dx = p.xx - hx, dy = p.yy - hy, inR = dx * dx + dy * dy <= r2;
-        if (prev && (inR || prevIn)) addSeg(prev.xx, prev.yy, p.xx, p.yy);
+        if (prev && (inR || prevIn)) addSeg(prev.xx, prev.yy, p.xx, p.yy, ro);
         prev = p; prevIn = inR;
       }
       var ox = o.xx + (o.fx || 0), oy = o.yy + (o.fy || 0), dxh = ox - hx, dyh = oy - hy;
-      if (prev && (prevIn || dxh * dxh + dyh * dyh <= r2)) addSeg(prev.xx, prev.yy, ox, oy);   // last body point → head
-      if (dxh * dxh + dyh * dyh < 4 * r2) heads.push({ x: ox, y: oy, c: Math.cos(o.ang || 0), s: Math.sin(o.ang || 0), v: speed(o) });
+      if (prev && (prevIn || dxh * dxh + dyh * dyh <= r2)) addSeg(prev.xx, prev.yy, ox, oy, ro);   // last body point → head
+      if (dxh * dxh + dyh * dyh < 4 * r2) heads.push({ x: ox, y: oy, c: Math.cos(o.ang || 0), s: Math.sin(o.ang || 0), v: speed(o), r: ro });
     }
   }
   function segDist(px, py, x1, y1, x2, y2) {
     var vx = x2 - x1, vy = y2 - y1, wx = px - x1, wy = py - y1, L = vx * vx + vy * vy, t = L > 0 ? (wx * vx + wy * vy) / L : 0;
     t = t < 0 ? 0 : t > 1 ? 1 : t; var dx = wx - vx * t, dy = wy - vy * t; return Math.sqrt(dx * dx + dy * dy);
   }
-  /* fly the head: first `lat` ms toward the angle already sent, then toward `cand`; return how close the collision point
-     comes to any bone (their heads keep moving: the bone grows from the head along their heading), stopping early
-     once it is under `need` */
-  var DT = 12;
-  function fly(hx, hy, a0, sent, cand, lat, horizon, v, rate, rMe, need) {
-    var x = hx, y = hy, a = a0, t = 0, minC = Infinity, end = lat + horizon, mx = rate * DT;
+  /* swept distance: the collision point's move this step (a→b) against a bone piece (c→d); 0 when they cross, so a fast
+     head can never jump over a bone between two samples */
+  function side(ax, ay, bx, by, px, py) { return (bx - ax) * (py - ay) - (by - ay) * (px - ax); }
+  function segSeg(ax, ay, bx, by, cx, cy, dx, dy) {
+    var d1 = side(ax, ay, bx, by, cx, cy), d2 = side(ax, ay, bx, by, dx, dy), d3 = side(cx, cy, dx, dy, ax, ay), d4 = side(cx, cy, dx, dy, bx, by);
+    if (((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0))) return 0;
+    return Math.min(segDist(ax, ay, cx, cy, dx, dy), segDist(bx, by, cx, cy, dx, dy), segDist(cx, cy, ax, ay, bx, by), segDist(dx, dy, ax, ay, bx, by));
+  }
+  /* fly the head: for the first `lat` ms the server is still working through the angles sent during the last round trip
+     (replayed in order from the send history), then `cand` takes over. Returns the worst MARGIN met on the
+     way: distance from the head centre's swept path to a bone minus what must be kept from that bone (head radius +
+     (1 − depth) × that snake's radius + gap). Negative = contact. Stops early once it goes negative. */
+  var DT = 16;
+  var QT = [], QA = [];                                   // commands still in flight: effective time (ms from now) / angle
+  function fly(hx, hy, a0, sent, cand, lat, horizon, v, rate, rMe, depth, gap) {
+    var x = hx, y = hy, a = a0, t = 0, worst = Infinity, end = lat + horizon, mx = rate * DT, keepMe = rMe + gap, off = 1 - depth, q = 0, cur = sent;
     while (t < end) {
-      var w = t < lat ? sent : cand, d = norm(w - a);
+      while (q < QT.length && QT[q] <= t) cur = QA[q++];
+      var w = t < lat ? cur : cand, d = norm(w - a);
       a += d > mx ? mx : d < -mx ? -mx : d;
+      var px = x, py = y;
       x += Math.cos(a) * v * DT; y += Math.sin(a) * v * DT; t += DT;
-      var tx = x + Math.cos(a) * rMe, ty = y + Math.sin(a) * rMe;          // the collision point
+      var cx = (px + x) / 2, cy = (py + y) / 2, half = v * DT / 2;
       for (var i = 0; i < ns; i++) {
-        var mdx = tx - MX[i], mdy = ty - MY[i], lim = minC + HL[i];                 // cheap reject: farther than the best so far
+        var keep = keepMe + off * RO[i];
+        var mdx = cx - MX[i], mdy = cy - MY[i], lim = worst + keep + HL[i] + half;    // cheap reject
         if (mdx * mdx + mdy * mdy > lim * lim) continue;
-        var c = segDist(tx, ty, SX[i], SY[i], EX[i], EY[i]);
-        if (c < minC) { minC = c; if (minC < need) return minC; }
+        var m = segSeg(px, py, x, y, SX[i], SY[i], EX[i], EY[i]) - keep;
+        if (m < worst) { worst = m; if (worst < 0) return worst; }
       }
       for (var h = 0; h < heads.length; h++) {
-        var H = heads[h], c2 = segDist(tx, ty, H.x, H.y, H.x + H.c * H.v * t, H.y + H.s * H.v * t);
-        if (c2 < minC) { minC = c2; if (minC < need) return minC; }
+        var H = heads[h], m2 = segSeg(px, py, x, y, H.x, H.y, H.x + H.c * H.v * t, H.y + H.s * H.v * t) - (keepMe + off * H.r);
+        if (m2 < worst) { worst = m2; if (worst < 0) return worst; }
       }
     }
-    return minC;
+    return worst;
   }
   var STEPS = [];
   for (var d = 1; d <= 150; d += d < 8 ? 1 : d < 30 ? 3 : 8) STEPS.push(d * Math.PI / 180);   // fine near the wanted angle = tight hug
   /* called from NTL's send code with the player's angle (rad, or null = mouse on the head); returns the 0-250 byte */
-  function tick(target, s) {
+  var hist = [];                                          // what we sent: { t: client ms, a: angle }
+  function tick(target, s, now) {
+    now = typeof now === "number" ? now : (typeof performance !== "undefined" ? performance.now() : Date.now());
     var hx = s.xx + (s.fx || 0), hy = s.yy + (s.fy || 0), a0 = s.ang || 0;
     var want = target == null ? a0 : target;
     var v = speed(s), rate = turnRate(s), rMe = width(s) / 2;
-    var lat = rtt() / 2 + 8, horizon = Math.max(180, Math.min(600, (2.5 * rMe + 40) / v));
+    /* latency: what we see is ~ping/2 old and our command lands ~ping/2 later → a full round trip before it acts.
+       horizon: a half turn at this speed and size (boost and big snakes turn wide) plus two head lengths — a path that is
+       clear that long can still be turned away from afterwards, so head-on rams at full boost are caught in time */
+    var lat = rtt() + 16, horizon = Math.max(300, Math.min(2000, Math.PI / rate * 1.1 + 2 * rMe / v));
     var sentB = g("_c"), sent = typeof sentB === "number" && sentB >= 0 ? sentB * TWO_PI / 251 : a0;
-    gather(s, hx, hy, v * (lat + horizon) + rMe + 8);
-    var need = Math.max(1, +cfg.gap || 5), best = want;
+    /* the command the server is executing at the start of the replay = the last one sent a round trip ago; the ones
+       sent since then take effect one by one (sent at ts → acts at ts + lat, i.e. ts − now + lat from now) */
+    QT.length = 0; QA.length = 0;
+    var t0 = now - lat, start = null;
+    for (var hq = 0; hq < hist.length; hq++) {
+      if (hist[hq].t > now || hist[hq].t < t0 - 200) continue;              // clock jumped / too old to still be acting
+      if (hist[hq].t <= t0) start = hist[hq].a;
+      else { QT.push(hist[hq].t - t0); QA.push(hist[hq].a); }
+    }
+    if (start !== null) sent = start; else if (QA.length) sent = a0;   // history starts inside the window: before it, the old heading
+    var depth = Math.max(0, Math.min(1, +cfg.depth)), gap = Math.max(0, +cfg.gap || 0);
+    gather(s, hx, hy, v * (lat + horizon) + rMe + 60);
+    var best = want;
     if (ns || heads.length) {
-      if (fly(hx, hy, a0, sent, want, lat, horizon, v, rate, rMe, need) < need) {
-        var found = null, bestC = -Infinity, bestA = want;
+      if (fly(hx, hy, a0, sent, want, lat, horizon, v, rate, rMe, depth, gap) < 0) {
+        var found = null, bestM = -Infinity, bestA = want;
         for (var i = 0; i < STEPS.length && found === null; i++) {
           for (var sg = -1; sg <= 1; sg += 2) {
-            var cand = want + sg * STEPS[i], c = fly(hx, hy, a0, sent, cand, lat, horizon, v, rate, rMe, need);
-            if (c >= need) { if (found === null) found = cand; }
-            if (c > bestC) { bestC = c; bestA = cand; }
+            var cand = want + sg * STEPS[i], m = fly(hx, hy, a0, sent, cand, lat, horizon, v, rate, rMe, depth, gap);
+            if (m >= 0 && found === null) found = cand;
+            if (m > bestM) { bestM = m; bestA = cand; }
           }
         }
-        best = found !== null ? found : bestA;           // nothing keeps the gap: take the most room there is
+        best = found !== null ? found : bestA;           // nothing keeps the distance: take the most room there is
       }
     }
     best = ((best % TWO_PI) + TWO_PI) % TWO_PI;
-    return (251 * best / TWO_PI | 0) % 251;
+    var byte = (251 * best / TWO_PI | 0) % 251;
+    hist.push({ t: now, a: byte * TWO_PI / 251 });
+    while (hist.length && hist[0].t < now - 2000) hist.shift();
+    return byte;
   }
   function active() { return on && !(g("tf") && g("tf").gA); }
   /* key: keymap id "squeeze" (Revamp Keys), default ";" — toggle, or hold via Key Modes */
@@ -869,7 +905,8 @@ var NTL_SQ = (function () {
   }
   function holdMode() { return typeof NTL_KM !== "undefined" && NTL_KM.modeOf && NTL_KM.modeOf("squeeze") === "hold"; }
   function typing() { var el = document.activeElement; if (!el) return false; var t = (el.tagName || "").toUpperCase(); return t === "INPUT" || t === "TEXTAREA" || el.isContentEditable; }
-  function toggle() { on = !on; try { if (typeof R === "function" && typeof J !== "undefined") R(J, "Squeeze mode " + (on ? "ON" : "OFF")); } catch (e) {} try { if (typeof w9 === "function") w9(); } catch (e) {} }
+  function reset() { hist.length = 0; }
+  function toggle() { on = !on; reset(); try { if (typeof R === "function" && typeof J !== "undefined") R(J, "Squeeze mode " + (on ? "ON" : "OFF")); } catch (e) {} try { if (typeof w9 === "function") w9(); } catch (e) {} }
   window.addEventListener("keydown", function (e) {
     if (e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
     var k = curKey(); if (!k || (e.key || "").toLowerCase() !== k) return;
@@ -880,7 +917,7 @@ var NTL_SQ = (function () {
     if (!holdMode() || !on) return;
     var k = curKey(); if (k && (e.key || "").toLowerCase() === k) toggle();
   }, true);
-  return { tick: tick, toggle: toggle, cfg: cfg, set: set, key: curKey, get active() { return active(); }, get on() { return on; }, set on(v) { on = !!v; } };
+  return { tick: tick, toggle: toggle, reset: reset, cfg: cfg, set: set, key: curKey, get active() { return active(); }, get on() { return on; }, set on(v) { on = !!v; reset(); } };
 })();
 /* ========================== END SQUEEZE MODE =============================== */
 /* ========================== SPINE MODE ===================================== */
@@ -4368,7 +4405,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
-    { v: "5.65-dev", d: "24 Sep 2026", t: "Squeeze mode (key ;): steer as tight as you like \u2014 the head never touches another snake's body, it slides along it with a hairline gap. Gap in Vanced \u203a Controls." },
+    { v: "5.65-dev", d: "24 Sep 2026", t: "Squeeze mode (key ;): steer as tight as you like \u2014 your head may sink into another snake\u2019s skin but is kept off their bone, at any speed including boost and head-on rams. Depth and Gap in Vanced \u203a Controls." },
     { v: "5.64", d: "22 Sep 2026", t: "Lobby can be switched off in Vanced \u203a General and no longer appears when you come back from the skin editor or settings \u2014 only after a real round. Updates card shows UPDATE only when there is one." },
     { v: "5.64", d: "21 Sep 2026", t: "Backups: one .ntlvanced file holds every NTL and Vanced setting (keys, layouts, theme, arenas, skins); BACKUP / RESTORE in Vanced › Updates & About; old .ntlmod files still restore." },
     { v: "5.63", d: "21 Sep 2026", t: "Lobby: after a round you land on a full Vanced page instead of the home screen — final length, your best, nick and server, PLAY, HOME and a Quick settings page (placeholder for now). Enter plays, Esc goes home. Skipped while NTL auto-respawn is on. NTL 9.68’s playerID ported: a persistent 16-char id sent on connect to the servers NTL lists (Battledome included), same packet and storage keys; chat !id / !idlist / !idforce; shown in Vanced › Updates & About. Team map and Live Battledomes removed." },
@@ -4706,8 +4743,9 @@ var NTL_VS = (function () {
     if (typeof NTL_SQ !== "undefined") {
       var cq = card("Squeeze mode");
       var sqKey = (function () { var k2 = NTL_SQ.key(); return k2 ? (typeof Ad === "function" ? Ad(k2) : k2.toUpperCase()) : "none"; })();
-      cq.appendChild(vsRow("Squeeze mode", "key <b>" + sqKey + "</b> (Revamp Keys, toggle or hold) \u2014 steer as tight as you like: you may sink into another snake\u2019s skin, only your head\u2019s collision point is kept off their bone (the centre line) by a hairline gap. Squeeze someone without dying. Separate from the bot; off while the bot drives.", vsSwitch(NTL_SQ.on, function (v) { NTL_SQ.on = v; })));
-      cq.appendChild(vsSlider("Gap", "how close your collision point may come to their bone (units) \u2014 smaller is tighter", 1, 12, 1, NTL_SQ.cfg.gap, function (v) { return v + " u"; }, function (v) { NTL_SQ.set("gap", v); }));
+      cq.appendChild(vsRow("Squeeze mode", "key <b>" + sqKey + "</b> (Revamp Keys, toggle or hold) \u2014 steer as tight as you like: you may sink into another snake\u2019s skin; your head is only kept off their bone (the centre line) \u2014 at any speed, boost included. Squeeze someone without dying. Separate from the bot; off while the bot drives.", vsSwitch(NTL_SQ.on, function (v) { NTL_SQ.on = v; })));
+      cq.appendChild(vsSlider("Depth", "how far your head may sink into their skin \u2014 100% lets your head reach their bone, lower keeps you further out (raise it for tighter squeezes, lower it if you ever die)", 0, 100, 5, Math.round(NTL_SQ.cfg.depth * 100), function (v) { return v + "%"; }, function (v) { NTL_SQ.set("depth", v / 100); }));
+      cq.appendChild(vsSlider("Gap", "extra safety distance on top of the depth (units)", 0, 12, 1, NTL_SQ.cfg.gap, function (v) { return v + " u"; }, function (v) { NTL_SQ.set("gap", v); }));
       S.appendChild(cq);
     }
     if (typeof NTL_EC !== "undefined" && typeof NTL_EB !== "undefined") {
@@ -5787,7 +5825,7 @@ bb?Array.isArray(ab)?ab:"string"==typeof ab&&a(ab)?JSON.parse(ab):[]:"cstagver"=
 ef.length-1;0<=bb;bb--)for(db=ef[bb],eb=db.B.length-1;0<=eb;eb--)db.B[eb].yy=af/2+15*Math.cos(eb/4+Qu/19)*(1-eb/db.B.length);view_xx-=m}playing&&(ku?(1>Uu&&(Uu+=.0075*m,1<Uu&&(Uu=1)),1<yu&&(yu-=4E-5*m,1>yu&&(yu=1))):(0<Uu&&(Uu-=.0075*m,0>Uu&&(Uu=0)),Ce?1<yu&&(yu-=4E-5*m,1>yu&&(yu=1)):yu<ju&&(yu+=4E-5*m,yu>ju&&(yu=ju))));ct(ab);jP(ab);Ru&&((0<Wu||0<Fu)&&50<ab-_u&&(_u=ab,0<Fu&&Wu>Fu&&(Wu-=Fu,Fu=0),0<Wu&&Fu>Wu&&(Fu-=Wu,Wu=0),0<Wu?(cb=Wu,127<cb&&(cb=127),Wu-=cb,snake.J-=tw*cb*snake.T*snake.L,gb[0]=252,
 gb[1]=cb,ws.send(gb)):0<Fu&&(cb=Fu,127<cb&&(cb=127),Fu-=cb,snake.J+=tw*cb*snake.T*snake.L,cb+=128,gb[0]=252,gb[1]=cb,ws.send(gb))),!Iu&&250<ab-Mu&&(Mu=ab,Iu=!0,ib[0]=251,ws.send(ib),dv=ab,Eu=ab));if(0<Du)if(Xl=0,0<Ml)for(db=Du,db>Ml&&(db=Ml),Ml-=db,bb=1;bb<=db;bb++)bb==db&&(Cl=pl[hl],Cl>Hl?Xl=1:Cl<Hl&&(Xl=-1),Hl=Cl),pl[hl]=Ol,hl++,hl>=El&&(hl=0);else 0==Ml&&(Ml=-1);playing&&null!=snake&&2147483647!=af&&1E3<ab-PQ&&(PQ=ab,mc.style.left=Math.round(52*j+40*j*(snake.xx-af)/(ps&&Xf?Ol:af)-7)+"px",mc.style.top=
 Math.round(52*j+40*j*(snake.yy-af)/(ps&&Xf?Ol:af)-7)+"px");1E3<ab-aQ&&(br=Ql,0<cl.length&&E2(),tQ=vQ=nQ=Ql=fQ=AQ=$l=_l=0,aQ=ab);playing&&null!=snake&&!Ce&&(ru>Ms&&(Us=-1),ru<Ms&&(Us=1),Ms=ru,75<ab-rQ&&(rQ=ab,db=Math.atan2(snake.yy-Is,snake.xx-hs),bb=Math.atan2(snake.yy-af,snake.xx-af),0>db&&(db+=He),0>bb&&(bb+=He),iu=db-bb,Is=snake.yy,hs=snake.xx,0>iu&&(iu*=-1),iu>P4&&(iu=He-iu),iu>Gd&&(iu=P4-iu)));null!=snake&&!snake.I&&playing&&!Ce&&(I8(),33<ab-qc||Wf)&&(bb=$4,IA&&2==ia&&(bb=(ps?Ol:.98*af)-500),
-db=1,tf.gA?db=0:su>$4&&xe&&Df?(db=0,Rt()):IA&&su>bb&&(db=qt()),ks&&(ks=0,db=IA&&su>bb?qt():1),0!=oa&&(db=0,bb=14.5*snake.N,cb=Math.cos(snake.ang),eb=Math.sin(snake.ang),gb=snake.yy+snake.fy-eb*bb,Ys.x=snake.xx+snake.fx-cb*bb+oa*-eb*bb,Ys.y=gb+oa*cb*bb,dA.oA(dA.dA(Ys))),db&&(du=g4,zu=o4),qc=ab,Yd=du*du+zu*zu,1<Yd?(Jd=Math.atan2(zu,du),snake.J=Jd):Jd=snake.R,Jd%=He,0>Jd&&(Jd+=He),Ld=251*Jd/He|0,(NTL_SQ.active?(Ld=NTL_SQ.tick(1<Yd?Jd:null,snake),snake.J=Ld*He/251):NTL_EB.active&&(Ld=NTL_EB.tick(1<Yd?Jd:null,snake,ab),snake.J=Ld*He/251)),NTL_PB.on&&NTL_PB.active&&(Ld=NTL_PB.angByte(),snake.J=Ld*He/251),(Wf||Ld!=_c)&&(Wf=0,_c=Ld,ib[0]=Ld&255,Eu=ab,ws.send(ib.buffer)));Ce||(bs(),D(),null!=snake&&(ab=snake.sct+
+db=1,tf.gA?db=0:su>$4&&xe&&Df?(db=0,Rt()):IA&&su>bb&&(db=qt()),ks&&(ks=0,db=IA&&su>bb?qt():1),0!=oa&&(db=0,bb=14.5*snake.N,cb=Math.cos(snake.ang),eb=Math.sin(snake.ang),gb=snake.yy+snake.fy-eb*bb,Ys.x=snake.xx+snake.fx-cb*bb+oa*-eb*bb,Ys.y=gb+oa*cb*bb,dA.oA(dA.dA(Ys))),db&&(du=g4,zu=o4),qc=ab,Yd=du*du+zu*zu,1<Yd?(Jd=Math.atan2(zu,du),snake.J=Jd):Jd=snake.R,Jd%=He,0>Jd&&(Jd+=He),Ld=251*Jd/He|0,(NTL_SQ.active?(Ld=NTL_SQ.tick(1<Yd?Jd:null,snake,ab),snake.J=Ld*He/251):NTL_EB.active&&(Ld=NTL_EB.tick(1<Yd?Jd:null,snake,ab),snake.J=Ld*He/251)),NTL_PB.on&&NTL_PB.active&&(Ld=NTL_PB.angByte(),snake.J=Ld*He/251),(Wf||Ld!=_c)&&(Wf=0,_c=Ld,ib[0]=Ld&255,Eu=ab,ws.send(ib.buffer)));Ce||(bs(),D(),null!=snake&&(ab=snake.sct+
 snake.rsc,rv=~~(15*(fpsls[ab]+snake.fam/fmlts[ab]-1)-5)),Be.length&&e8());Du=m=0;_a();null==O&&(cA=Xd(Mf))},pf=function(){var bb=0;Av=!1;if(playing&&Ce&&!m1&&!M1){if(!qn)return setTimeout(function(){playing&&Ce&&!m1&&!M1&&pf()},120),!1;var ab,cb,eb,gb=eb=0;X1=[];nu=tu;var ib="";try{localStorage.setItem("want_custom_skin","1"),ib=localStorage.getItem("custom_skin")}catch(mb){}if(ib&&0<ib.length){ib=(""+ib).split(",");var db=0;gb=-1;var hb=!0;for(ab=8;ab<ib.length;ab++){if(hb)db=Number(ib[ab]);else for(gb=
 Number(ib[ab]),cb=0;cb<db;cb++)X1.push(gb);hb=!hb}}m1=!0;x1=!1;z7(snake,0,If(!0));snake.fA=-1;db=[];hb=[];for(ab=0;4>ab;ab++){ib=0;gb=~~(au.length*(ab+1)/4);for(cb=eb;cb<gb;cb++)ib++;hb.push(ib);eb=gb}hb[0]--;hb[1]--;hb[2]++;hb[3]++;gb=[];for(ab=eb=0;4>ab;ab++)for(gb=[],db.push(gb),cb=0;cb<hb[ab];cb++)gb.push(au[eb]),eb++;for(ib=0;ib<db.length;ib++)for(gb=db[ib],ab=0;ab<gb.length;ab++)if(cb=gb[ab],0<=cb&&cb<$w.length){eb={};hb=document.createElement("canvas");eb.ii=hb;hb.width=48;hb.height=48;var kb=
 hb.getContext("2d");kb.rotate(Math.PI);kb.drawImage(F0,336*cb,0,48,48,-48,-48,48,48);bb=37==cb?36:39==cb?37:cb;kb.rotate(-Math.PI);kb.font="15px Arial, Helvetica Neue, Helvetica, sans-serif";kb.fillStyle="#ffffff";kb.textBaseline="middle";kb.textAlign="center";kb.shadowColor="black";kb.shadowBlur=2;kb.lineWidth=2;kb.strokeText(_n[bb],42,40);kb.fillText(_n[bb],42,40);kb.stroke();hb.style.opacity=0;hb.style.position="absolute";hb.style.left="0px";hb.style.top="0px";hb.draggable=!1;eb.xx=~~(55*gb.length*
