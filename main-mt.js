@@ -757,13 +757,15 @@ var NTL_EC = (function () {
    would take with the player's angle is simulated ~0.2–0.6 s ahead (the ping
    delay first, flying the angle already sent, then the new one), with the
    server's max turn rate and the current speed. If that path stays at least
-   GAP units clear of every other snake's body and predicted head, the player's
+   GAP units between your collision point and every other snake's bone, the player's
    angle goes out untouched. If not, the smallest deviation from it that keeps
    the gap is sent instead — so pressing into a body makes the snake slide
    along it with a hairline gap (squeeze someone without dying), and between
    two snakes it hugs whichever side the player leans to.
-   Geometry: body points B[i].xx/yy, width 29.2 × N (NTL's own yA), speed
-   O / 32 per ms, turn rate from the Eyes Back model (0.033 rad / 8 ms × T × L).
+   Geometry: death = the head's collision point (one head radius, 14.6 × N, ahead
+   of the head centre) touching another snake's bone (the line through its body
+   points B[i].xx/yy) — skins overlap freely, exactly what Spine mode shows.
+   Speed O / 32 per ms, turn rate from the Eyes Back model (0.033 rad/8 ms × T × L).
    Only the angle byte NTL already sends is changed. Off while the bot drives.
    Key: keymap id "squeeze" (default ;), toggle or hold via Key Modes.
    Settings: localStorage.wy_sqz = { gap }.
@@ -781,39 +783,51 @@ var NTL_SQ = (function () {
   function turnRate(s) { var tr = (typeof NTL_EB !== "undefined" && NTL_EB.cfg && NTL_EB.cfg.turnRate) || 0.033; return Math.max(1e-6, tr * (s.T || 1) * (s.L || 1) / 8); }   // rad / ms
   function speed(s) { return Math.max(0.05, (s.O || 5.78) / 32); }                                                                      // units / ms
 
-  /* obstacles near the head for this tick: flat arrays, one pass over NTL's snakes */
-  var PX = new Float32Array(8192), PY = new Float32Array(8192), PR = new Float32Array(8192), np = 0, heads = [];
+  /* Collision model (the one Spine mode draws): what kills is YOUR COLLISION POINT — the tip of the head, one head
+     radius ahead of the head centre along the heading — touching THEIR BONE, the centre line through their body
+     points. Skins may overlap freely. So the obstacles are line segments (bone pieces), not fat circles. */
+  var SX = new Float32Array(8192), SY = new Float32Array(8192), EX = new Float32Array(8192), EY = new Float32Array(8192), MX = new Float32Array(8192), MY = new Float32Array(8192), HL = new Float32Array(8192), ns = 0, heads = [];
+  function addSeg(x1, y1, x2, y2) { if (ns >= SX.length) return; SX[ns] = x1; SY[ns] = y1; EX[ns] = x2; EY[ns] = y2; MX[ns] = (x1 + x2) / 2; MY[ns] = (y1 + y2) / 2; HL[ns] = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)) / 2; ns++; }
   function gather(me, hx, hy, reach) {
-    np = 0; heads.length = 0;
-    var list = g("ef") || [], r2;
+    ns = 0; heads.length = 0;
+    var list = g("ef") || [], r2 = reach * reach;
     for (var i = 0; i < list.length; i++) {
       var o = list[i]; if (!o || o === me || o.I || !o.B) continue;
-      var ro = width(o) / 2, B = o.B, lim = reach + ro; r2 = lim * lim;
+      var B = o.B, prev = null, prevIn = false;
       for (var b = 0; b < B.length; b++) {
-        var p = B[b]; if (!p || p.dying) continue;
-        var dx = p.xx - hx, dy = p.yy - hy; if (dx * dx + dy * dy > r2) continue;
-        if (np >= PX.length) break;
-        PX[np] = p.xx; PY[np] = p.yy; PR[np] = ro; np++;
+        var p = B[b]; if (!p || p.dying) { prev = null; continue; }
+        var dx = p.xx - hx, dy = p.yy - hy, inR = dx * dx + dy * dy <= r2;
+        if (prev && (inR || prevIn)) addSeg(prev.xx, prev.yy, p.xx, p.yy);
+        prev = p; prevIn = inR;
       }
       var ox = o.xx + (o.fx || 0), oy = o.yy + (o.fy || 0), dxh = ox - hx, dyh = oy - hy;
-      if (dxh * dxh + dyh * dyh < (reach * 2 + ro) * (reach * 2 + ro)) heads.push({ x: ox, y: oy, c: Math.cos(o.ang || 0), s: Math.sin(o.ang || 0), v: speed(o), r: ro });
+      if (prev && (prevIn || dxh * dxh + dyh * dyh <= r2)) addSeg(prev.xx, prev.yy, ox, oy);   // last body point → head
+      if (dxh * dxh + dyh * dyh < 4 * r2) heads.push({ x: ox, y: oy, c: Math.cos(o.ang || 0), s: Math.sin(o.ang || 0), v: speed(o) });
     }
   }
-  /* fly the head: first `lat` ms toward the angle already sent, then toward `cand`; return the smallest clearance
-     (distance minus both radii) met on the way, stopping early once it drops under `need` */
-  var DT = 16;
+  function segDist(px, py, x1, y1, x2, y2) {
+    var vx = x2 - x1, vy = y2 - y1, wx = px - x1, wy = py - y1, L = vx * vx + vy * vy, t = L > 0 ? (wx * vx + wy * vy) / L : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t; var dx = wx - vx * t, dy = wy - vy * t; return Math.sqrt(dx * dx + dy * dy);
+  }
+  /* fly the head: first `lat` ms toward the angle already sent, then toward `cand`; return how close the collision point
+     comes to any bone (their heads keep moving: the bone grows from the head along their heading), stopping early
+     once it is under `need` */
+  var DT = 12;
   function fly(hx, hy, a0, sent, cand, lat, horizon, v, rate, rMe, need) {
     var x = hx, y = hy, a = a0, t = 0, minC = Infinity, end = lat + horizon, mx = rate * DT;
     while (t < end) {
       var w = t < lat ? sent : cand, d = norm(w - a);
       a += d > mx ? mx : d < -mx ? -mx : d;
       x += Math.cos(a) * v * DT; y += Math.sin(a) * v * DT; t += DT;
-      for (var i = 0; i < np; i++) {
-        var dx = PX[i] - x, dy = PY[i] - y, rr = rMe + PR[i], c = Math.sqrt(dx * dx + dy * dy) - rr;
+      var tx = x + Math.cos(a) * rMe, ty = y + Math.sin(a) * rMe;          // the collision point
+      for (var i = 0; i < ns; i++) {
+        var mdx = tx - MX[i], mdy = ty - MY[i], lim = minC + HL[i];                 // cheap reject: farther than the best so far
+        if (mdx * mdx + mdy * mdy > lim * lim) continue;
+        var c = segDist(tx, ty, SX[i], SY[i], EX[i], EY[i]);
         if (c < minC) { minC = c; if (minC < need) return minC; }
       }
       for (var h = 0; h < heads.length; h++) {
-        var H = heads[h], hx2 = H.x + H.c * H.v * t, hy2 = H.y + H.s * H.v * t, c2 = Math.sqrt((hx2 - x) * (hx2 - x) + (hy2 - y) * (hy2 - y)) - (rMe + H.r);
+        var H = heads[h], c2 = segDist(tx, ty, H.x, H.y, H.x + H.c * H.v * t, H.y + H.s * H.v * t);
         if (c2 < minC) { minC = c2; if (minC < need) return minC; }
       }
     }
@@ -830,7 +844,7 @@ var NTL_SQ = (function () {
     var sentB = g("_c"), sent = typeof sentB === "number" && sentB >= 0 ? sentB * TWO_PI / 251 : a0;
     gather(s, hx, hy, v * (lat + horizon) + rMe + 8);
     var need = Math.max(1, +cfg.gap || 5), best = want;
-    if (np || heads.length) {
+    if (ns || heads.length) {
       if (fly(hx, hy, a0, sent, want, lat, horizon, v, rate, rMe, need) < need) {
         var found = null, bestC = -Infinity, bestA = want;
         for (var i = 0; i < STEPS.length && found === null; i++) {
@@ -4692,8 +4706,8 @@ var NTL_VS = (function () {
     if (typeof NTL_SQ !== "undefined") {
       var cq = card("Squeeze mode");
       var sqKey = (function () { var k2 = NTL_SQ.key(); return k2 ? (typeof Ad === "function" ? Ad(k2) : k2.toUpperCase()) : "none"; })();
-      cq.appendChild(vsRow("Squeeze mode", "key <b>" + sqKey + "</b> (Revamp Keys, toggle or hold) \u2014 steer as tight as you like against any snake: the head never touches a body, it slides along it with a hairline gap. Squeeze someone without dying. Separate from the bot; off while the bot drives.", vsSwitch(NTL_SQ.on, function (v) { NTL_SQ.on = v; })));
-      cq.appendChild(vsSlider("Gap", "how close to a body the head may go (units) \u2014 smaller is tighter", 1, 12, 1, NTL_SQ.cfg.gap, function (v) { return v + " u"; }, function (v) { NTL_SQ.set("gap", v); }));
+      cq.appendChild(vsRow("Squeeze mode", "key <b>" + sqKey + "</b> (Revamp Keys, toggle or hold) \u2014 steer as tight as you like: you may sink into another snake\u2019s skin, only your head\u2019s collision point is kept off their bone (the centre line) by a hairline gap. Squeeze someone without dying. Separate from the bot; off while the bot drives.", vsSwitch(NTL_SQ.on, function (v) { NTL_SQ.on = v; })));
+      cq.appendChild(vsSlider("Gap", "how close your collision point may come to their bone (units) \u2014 smaller is tighter", 1, 12, 1, NTL_SQ.cfg.gap, function (v) { return v + " u"; }, function (v) { NTL_SQ.set("gap", v); }));
       S.appendChild(cq);
     }
     if (typeof NTL_EC !== "undefined" && typeof NTL_EB !== "undefined") {
