@@ -749,6 +749,126 @@ var NTL_EC = (function () {
   return { toggle: toggle, cfg: cfg, set: set, key: curKey, get on() { return on; }, set on(v) { on = !!v; apply(); }, get fix() { return on && !cfg.bc; } };
 })();
 /* ========================== END CENTER EYES ================================ */
+/* ============================================================================
+   SQUEEZE MODE  (never touch another snake's body — steer as tight as you like)
+   ----------------------------------------------------------------------------
+   Not an avoider and not a centring aid: the snake goes wherever the player
+   steers. The only rule is "no contact": every send tick the path the head
+   would take with the player's angle is simulated ~0.2–0.6 s ahead (the ping
+   delay first, flying the angle already sent, then the new one), with the
+   server's max turn rate and the current speed. If that path stays at least
+   GAP units clear of every other snake's body and predicted head, the player's
+   angle goes out untouched. If not, the smallest deviation from it that keeps
+   the gap is sent instead — so pressing into a body makes the snake slide
+   along it with a hairline gap (squeeze someone without dying), and between
+   two snakes it hugs whichever side the player leans to.
+   Geometry: body points B[i].xx/yy, width 29.2 × N (NTL's own yA), speed
+   O / 32 per ms, turn rate from the Eyes Back model (0.033 rad / 8 ms × T × L).
+   Only the angle byte NTL already sends is changed. Off while the bot drives.
+   Key: keymap id "squeeze" (default ;), toggle or hold via Key Modes.
+   Settings: localStorage.wy_sqz = { gap }.
+   ============================================================================ */
+var NTL_SQ = (function () {
+  var cfg = { gap: 3 };
+  try { var j = JSON.parse(localStorage.getItem("wy_sqz") || "null"); if (j) for (var k in cfg) if (k in j) cfg[k] = j[k]; } catch (e) {}
+  function save() { try { localStorage.setItem("wy_sqz", JSON.stringify(cfg)); } catch (e) {} }
+  function set(key, val) { cfg[key] = val; save(); }
+  var on = false, TWO_PI = Math.PI * 2;
+  function g(n) { try { return window[n]; } catch (e) { return undefined; } }
+  function norm(a) { a %= TWO_PI; if (a > Math.PI) a -= TWO_PI; else if (a < -Math.PI) a += TWO_PI; return a; }
+  function rtt() { var v = g("mr"); if (!(v > 0)) v = g("cv"); if (!(v > 0)) v = 100; return Math.min(v, 600); }
+  function width(s) { return 29.2 * (s && s.N > 0 ? s.N : 1); }
+  function turnRate(s) { var tr = (typeof NTL_EB !== "undefined" && NTL_EB.cfg && NTL_EB.cfg.turnRate) || 0.033; return Math.max(1e-6, tr * (s.T || 1) * (s.L || 1) / 8); }   // rad / ms
+  function speed(s) { return Math.max(0.05, (s.O || 5.78) / 32); }                                                                      // units / ms
+
+  /* obstacles near the head for this tick: flat arrays, one pass over NTL's snakes */
+  var PX = new Float32Array(8192), PY = new Float32Array(8192), PR = new Float32Array(8192), np = 0, heads = [];
+  function gather(me, hx, hy, reach) {
+    np = 0; heads.length = 0;
+    var list = g("ef") || [], r2;
+    for (var i = 0; i < list.length; i++) {
+      var o = list[i]; if (!o || o === me || o.I || !o.B) continue;
+      var ro = width(o) / 2, B = o.B, lim = reach + ro; r2 = lim * lim;
+      for (var b = 0; b < B.length; b++) {
+        var p = B[b]; if (!p || p.dying) continue;
+        var dx = p.xx - hx, dy = p.yy - hy; if (dx * dx + dy * dy > r2) continue;
+        if (np >= PX.length) break;
+        PX[np] = p.xx; PY[np] = p.yy; PR[np] = ro; np++;
+      }
+      var ox = o.xx + (o.fx || 0), oy = o.yy + (o.fy || 0), dxh = ox - hx, dyh = oy - hy;
+      if (dxh * dxh + dyh * dyh < (reach * 2 + ro) * (reach * 2 + ro)) heads.push({ x: ox, y: oy, c: Math.cos(o.ang || 0), s: Math.sin(o.ang || 0), v: speed(o), r: ro });
+    }
+  }
+  /* fly the head: first `lat` ms toward the angle already sent, then toward `cand`; return the smallest clearance
+     (distance minus both radii) met on the way, stopping early once it drops under `need` */
+  var DT = 16;
+  function fly(hx, hy, a0, sent, cand, lat, horizon, v, rate, rMe, need) {
+    var x = hx, y = hy, a = a0, t = 0, minC = Infinity, end = lat + horizon, mx = rate * DT;
+    while (t < end) {
+      var w = t < lat ? sent : cand, d = norm(w - a);
+      a += d > mx ? mx : d < -mx ? -mx : d;
+      x += Math.cos(a) * v * DT; y += Math.sin(a) * v * DT; t += DT;
+      for (var i = 0; i < np; i++) {
+        var dx = PX[i] - x, dy = PY[i] - y, rr = rMe + PR[i], c = Math.sqrt(dx * dx + dy * dy) - rr;
+        if (c < minC) { minC = c; if (minC < need) return minC; }
+      }
+      for (var h = 0; h < heads.length; h++) {
+        var H = heads[h], hx2 = H.x + H.c * H.v * t, hy2 = H.y + H.s * H.v * t, c2 = Math.sqrt((hx2 - x) * (hx2 - x) + (hy2 - y) * (hy2 - y)) - (rMe + H.r);
+        if (c2 < minC) { minC = c2; if (minC < need) return minC; }
+      }
+    }
+    return minC;
+  }
+  var STEPS = [];
+  for (var d = 1; d <= 150; d += d < 8 ? 1 : d < 30 ? 3 : 8) STEPS.push(d * Math.PI / 180);   // fine near the wanted angle = tight hug
+  /* called from NTL's send code with the player's angle (rad, or null = mouse on the head); returns the 0-250 byte */
+  function tick(target, s) {
+    var hx = s.xx + (s.fx || 0), hy = s.yy + (s.fy || 0), a0 = s.ang || 0;
+    var want = target == null ? a0 : target;
+    var v = speed(s), rate = turnRate(s), rMe = width(s) / 2;
+    var lat = rtt() / 2 + 8, horizon = Math.max(180, Math.min(600, (2.5 * rMe + 40) / v));
+    var sentB = g("_c"), sent = typeof sentB === "number" && sentB >= 0 ? sentB * TWO_PI / 251 : a0;
+    gather(s, hx, hy, v * (lat + horizon) + rMe + 8);
+    var need = Math.max(1, +cfg.gap || 5), best = want;
+    if (np || heads.length) {
+      if (fly(hx, hy, a0, sent, want, lat, horizon, v, rate, rMe, need) < need) {
+        var found = null, bestC = -Infinity, bestA = want;
+        for (var i = 0; i < STEPS.length && found === null; i++) {
+          for (var sg = -1; sg <= 1; sg += 2) {
+            var cand = want + sg * STEPS[i], c = fly(hx, hy, a0, sent, cand, lat, horizon, v, rate, rMe, need);
+            if (c >= need) { if (found === null) found = cand; }
+            if (c > bestC) { bestC = c; bestA = cand; }
+          }
+        }
+        best = found !== null ? found : bestA;           // nothing keeps the gap: take the most room there is
+      }
+    }
+    best = ((best % TWO_PI) + TWO_PI) % TWO_PI;
+    return (251 * best / TWO_PI | 0) % 251;
+  }
+  function active() { return on && !(g("tf") && g("tf").gA); }
+  /* key: keymap id "squeeze" (Revamp Keys), default ";" — toggle, or hold via Key Modes */
+  function curKey() {
+    var a9 = g("a9"); if (a9 === null && typeof ms === "function") { try { ms(); a9 = g("a9"); } catch (e) {} }
+    if (a9 && "squeeze" in a9) return a9.squeeze || "";
+    return ";";
+  }
+  function holdMode() { return typeof NTL_KM !== "undefined" && NTL_KM.modeOf && NTL_KM.modeOf("squeeze") === "hold"; }
+  function typing() { var el = document.activeElement; if (!el) return false; var t = (el.tagName || "").toUpperCase(); return t === "INPUT" || t === "TEXTAREA" || el.isContentEditable; }
+  function toggle() { on = !on; try { if (typeof R === "function" && typeof J !== "undefined") R(J, "Squeeze mode " + (on ? "ON" : "OFF")); } catch (e) {} try { if (typeof w9 === "function") w9(); } catch (e) {} }
+  window.addEventListener("keydown", function (e) {
+    if (e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
+    var k = curKey(); if (!k || (e.key || "").toLowerCase() !== k) return;
+    if (typing()) return;
+    if (holdMode()) { if (!on) toggle(); } else toggle();
+  }, true);
+  window.addEventListener("keyup", function (e) {
+    if (!holdMode() || !on) return;
+    var k = curKey(); if (k && (e.key || "").toLowerCase() === k) toggle();
+  }, true);
+  return { tick: tick, toggle: toggle, cfg: cfg, set: set, key: curKey, get active() { return active(); }, get on() { return on; }, set on(v) { on = !!v; } };
+})();
+/* ========================== END SQUEEZE MODE =============================== */
 /* ========================== SPINE MODE ===================================== */
 /* Client-side only. While on, YOUR snake's body sprites are not drawn; in
    their place the spine is drawn — the smoothed centre-line NTL already
@@ -2719,6 +2839,7 @@ var NTL_EE = (function () {
     { id: "bot", label: "Bot", get: function () { return !!(g("tf") && tf.gA); } },
     { id: "smartbot", label: "Smart bot", get: function () { return !!g("si"); } },    { id: "eyesback", label: "Eyes back", get: function () { return typeof NTL_EB !== "undefined" && NTL_EB.on; }, press: function () { NTL_EB.toggle(); } },
     { id: "eyecenter", label: "Center eyes", get: function () { return typeof NTL_EC !== "undefined" && NTL_EC.on; }, press: function () { NTL_EC.toggle(); } },
+    { id: "squeeze", label: "Squeeze mode", get: function () { return typeof NTL_SQ !== "undefined" && NTL_SQ.on; }, press: function () { NTL_SQ.toggle(); } },
     { id: "spine", label: "Spine mode", get: function () { return typeof NTL_SP !== "undefined" && NTL_SP.on; }, press: function () { NTL_SP.toggle(); } },
     { id: "perf", label: "Performance mode", get: function () { return typeof NTL_PF !== "undefined" && NTL_PF.on; }, press: function () { NTL_PF.toggle(); } },
     { id: "sos", label: "SOS", get: function () { return !!g("Pi"); } },
@@ -4233,6 +4354,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
+    { v: "5.65-dev", d: "24 Sep 2026", t: "Squeeze mode (key ;): steer as tight as you like \u2014 the head never touches another snake's body, it slides along it with a hairline gap. Gap in Vanced \u203a Controls." },
     { v: "5.64", d: "22 Sep 2026", t: "Lobby can be switched off in Vanced \u203a General and no longer appears when you come back from the skin editor or settings \u2014 only after a real round. Updates card shows UPDATE only when there is one." },
     { v: "5.64", d: "21 Sep 2026", t: "Backups: one .ntlvanced file holds every NTL and Vanced setting (keys, layouts, theme, arenas, skins); BACKUP / RESTORE in Vanced › Updates & About; old .ntlmod files still restore." },
     { v: "5.63", d: "21 Sep 2026", t: "Lobby: after a round you land on a full Vanced page instead of the home screen — final length, your best, nick and server, PLAY, HOME and a Quick settings page (placeholder for now). Enter plays, Esc goes home. Skipped while NTL auto-respawn is on. NTL 9.68’s playerID ported: a persistent 16-char id sent on connect to the servers NTL lists (Battledome included), same packet and storage keys; chat !id / !idlist / !idforce; shown in Vanced › Updates & About. Team map and Live Battledomes removed." },
@@ -4567,6 +4689,13 @@ var NTL_VS = (function () {
     S = section("controls", "Controls");
     h(S, "Controls", "Arrow control is the SlitherControl+ mechanism: drag anywhere and a virtual cursor moves with your finger; the aim is always centre \u2192 cursor. The aim cursor shows that point at all times, with any skin.");
     var CU = typeof NTL_CU !== "undefined" ? NTL_CU : null;
+    if (typeof NTL_SQ !== "undefined") {
+      var cq = card("Squeeze mode");
+      var sqKey = (function () { var k2 = NTL_SQ.key(); return k2 ? (typeof Ad === "function" ? Ad(k2) : k2.toUpperCase()) : "none"; })();
+      cq.appendChild(vsRow("Squeeze mode", "key <b>" + sqKey + "</b> (Revamp Keys, toggle or hold) \u2014 steer as tight as you like against any snake: the head never touches a body, it slides along it with a hairline gap. Squeeze someone without dying. Separate from the bot; off while the bot drives.", vsSwitch(NTL_SQ.on, function (v) { NTL_SQ.on = v; })));
+      cq.appendChild(vsSlider("Gap", "how close to a body the head may go (units) \u2014 smaller is tighter", 1, 12, 1, NTL_SQ.cfg.gap, function (v) { return v + " u"; }, function (v) { NTL_SQ.set("gap", v); }));
+      S.appendChild(cq);
+    }
     if (typeof NTL_EC !== "undefined" && typeof NTL_EB !== "undefined") {
       var ce = card("Eyes");
       ce.appendChild(vsRow("Center eyes visible to others", "sends the Eyes Back steering pointed sideways (+90° / \u221290° every tick) \u2014 on every screen, yours included, the pupils settle in the middle with a tiny wobble. Off: nothing is sent and only you see them pinned dead centre.", vsSwitch(NTL_EC.cfg.bc, function (v) { NTL_EC.set("bc", v); })));
@@ -5366,6 +5495,7 @@ var NTL_TC = (function () {
         case "eyecenter": return typeof NTL_EC !== "undefined" && !!NTL_EC.on;
         case "spine": return typeof NTL_SP !== "undefined" && !!NTL_SP.on;
         case "perf": return typeof NTL_PF !== "undefined" && !!NTL_PF.on;
+        case "squeeze": return typeof NTL_SQ !== "undefined" && !!NTL_SQ.on;
         case "vancedset": return !!document.getElementById("vs-overlay");
         case "openrtl": return !!g("d4");
         default: return null;
@@ -5380,6 +5510,7 @@ var NTL_TC = (function () {
     if (id === "eyecenter" && typeof NTL_EC !== "undefined") return NTL_EC.toggle();
     if (id === "spine" && typeof NTL_SP !== "undefined") return NTL_SP.toggle();
     if (id === "perf" && typeof NTL_PF !== "undefined") return NTL_PF.toggle();
+    if (id === "squeeze" && typeof NTL_SQ !== "undefined") return NTL_SQ.toggle();
     if (id === "vancedset" && typeof NTL_VS !== "undefined") return NTL_VS.toggle();
     if (id === "opensettings") {
       try { if (g("iA")) { if (typeof G3 === "function") G3(); } else if (typeof sA === "function") sA(true); } catch (e) {}
@@ -5642,7 +5773,7 @@ bb?Array.isArray(ab)?ab:"string"==typeof ab&&a(ab)?JSON.parse(ab):[]:"cstagver"=
 ef.length-1;0<=bb;bb--)for(db=ef[bb],eb=db.B.length-1;0<=eb;eb--)db.B[eb].yy=af/2+15*Math.cos(eb/4+Qu/19)*(1-eb/db.B.length);view_xx-=m}playing&&(ku?(1>Uu&&(Uu+=.0075*m,1<Uu&&(Uu=1)),1<yu&&(yu-=4E-5*m,1>yu&&(yu=1))):(0<Uu&&(Uu-=.0075*m,0>Uu&&(Uu=0)),Ce?1<yu&&(yu-=4E-5*m,1>yu&&(yu=1)):yu<ju&&(yu+=4E-5*m,yu>ju&&(yu=ju))));ct(ab);jP(ab);Ru&&((0<Wu||0<Fu)&&50<ab-_u&&(_u=ab,0<Fu&&Wu>Fu&&(Wu-=Fu,Fu=0),0<Wu&&Fu>Wu&&(Fu-=Wu,Wu=0),0<Wu?(cb=Wu,127<cb&&(cb=127),Wu-=cb,snake.J-=tw*cb*snake.T*snake.L,gb[0]=252,
 gb[1]=cb,ws.send(gb)):0<Fu&&(cb=Fu,127<cb&&(cb=127),Fu-=cb,snake.J+=tw*cb*snake.T*snake.L,cb+=128,gb[0]=252,gb[1]=cb,ws.send(gb))),!Iu&&250<ab-Mu&&(Mu=ab,Iu=!0,ib[0]=251,ws.send(ib),dv=ab,Eu=ab));if(0<Du)if(Xl=0,0<Ml)for(db=Du,db>Ml&&(db=Ml),Ml-=db,bb=1;bb<=db;bb++)bb==db&&(Cl=pl[hl],Cl>Hl?Xl=1:Cl<Hl&&(Xl=-1),Hl=Cl),pl[hl]=Ol,hl++,hl>=El&&(hl=0);else 0==Ml&&(Ml=-1);playing&&null!=snake&&2147483647!=af&&1E3<ab-PQ&&(PQ=ab,mc.style.left=Math.round(52*j+40*j*(snake.xx-af)/(ps&&Xf?Ol:af)-7)+"px",mc.style.top=
 Math.round(52*j+40*j*(snake.yy-af)/(ps&&Xf?Ol:af)-7)+"px");1E3<ab-aQ&&(br=Ql,0<cl.length&&E2(),tQ=vQ=nQ=Ql=fQ=AQ=$l=_l=0,aQ=ab);playing&&null!=snake&&!Ce&&(ru>Ms&&(Us=-1),ru<Ms&&(Us=1),Ms=ru,75<ab-rQ&&(rQ=ab,db=Math.atan2(snake.yy-Is,snake.xx-hs),bb=Math.atan2(snake.yy-af,snake.xx-af),0>db&&(db+=He),0>bb&&(bb+=He),iu=db-bb,Is=snake.yy,hs=snake.xx,0>iu&&(iu*=-1),iu>P4&&(iu=He-iu),iu>Gd&&(iu=P4-iu)));null!=snake&&!snake.I&&playing&&!Ce&&(I8(),33<ab-qc||Wf)&&(bb=$4,IA&&2==ia&&(bb=(ps?Ol:.98*af)-500),
-db=1,tf.gA?db=0:su>$4&&xe&&Df?(db=0,Rt()):IA&&su>bb&&(db=qt()),ks&&(ks=0,db=IA&&su>bb?qt():1),0!=oa&&(db=0,bb=14.5*snake.N,cb=Math.cos(snake.ang),eb=Math.sin(snake.ang),gb=snake.yy+snake.fy-eb*bb,Ys.x=snake.xx+snake.fx-cb*bb+oa*-eb*bb,Ys.y=gb+oa*cb*bb,dA.oA(dA.dA(Ys))),db&&(du=g4,zu=o4),qc=ab,Yd=du*du+zu*zu,1<Yd?(Jd=Math.atan2(zu,du),snake.J=Jd):Jd=snake.R,Jd%=He,0>Jd&&(Jd+=He),Ld=251*Jd/He|0,NTL_EB.active&&(Ld=NTL_EB.tick(1<Yd?Jd:null,snake,ab),snake.J=Ld*He/251),NTL_PB.on&&NTL_PB.active&&(Ld=NTL_PB.angByte(),snake.J=Ld*He/251),(Wf||Ld!=_c)&&(Wf=0,_c=Ld,ib[0]=Ld&255,Eu=ab,ws.send(ib.buffer)));Ce||(bs(),D(),null!=snake&&(ab=snake.sct+
+db=1,tf.gA?db=0:su>$4&&xe&&Df?(db=0,Rt()):IA&&su>bb&&(db=qt()),ks&&(ks=0,db=IA&&su>bb?qt():1),0!=oa&&(db=0,bb=14.5*snake.N,cb=Math.cos(snake.ang),eb=Math.sin(snake.ang),gb=snake.yy+snake.fy-eb*bb,Ys.x=snake.xx+snake.fx-cb*bb+oa*-eb*bb,Ys.y=gb+oa*cb*bb,dA.oA(dA.dA(Ys))),db&&(du=g4,zu=o4),qc=ab,Yd=du*du+zu*zu,1<Yd?(Jd=Math.atan2(zu,du),snake.J=Jd):Jd=snake.R,Jd%=He,0>Jd&&(Jd+=He),Ld=251*Jd/He|0,(NTL_SQ.active?(Ld=NTL_SQ.tick(1<Yd?Jd:null,snake),snake.J=Ld*He/251):NTL_EB.active&&(Ld=NTL_EB.tick(1<Yd?Jd:null,snake,ab),snake.J=Ld*He/251)),NTL_PB.on&&NTL_PB.active&&(Ld=NTL_PB.angByte(),snake.J=Ld*He/251),(Wf||Ld!=_c)&&(Wf=0,_c=Ld,ib[0]=Ld&255,Eu=ab,ws.send(ib.buffer)));Ce||(bs(),D(),null!=snake&&(ab=snake.sct+
 snake.rsc,rv=~~(15*(fpsls[ab]+snake.fam/fmlts[ab]-1)-5)),Be.length&&e8());Du=m=0;_a();null==O&&(cA=Xd(Mf))},pf=function(){var bb=0;Av=!1;if(playing&&Ce&&!m1&&!M1){if(!qn)return setTimeout(function(){playing&&Ce&&!m1&&!M1&&pf()},120),!1;var ab,cb,eb,gb=eb=0;X1=[];nu=tu;var ib="";try{localStorage.setItem("want_custom_skin","1"),ib=localStorage.getItem("custom_skin")}catch(mb){}if(ib&&0<ib.length){ib=(""+ib).split(",");var db=0;gb=-1;var hb=!0;for(ab=8;ab<ib.length;ab++){if(hb)db=Number(ib[ab]);else for(gb=
 Number(ib[ab]),cb=0;cb<db;cb++)X1.push(gb);hb=!hb}}m1=!0;x1=!1;z7(snake,0,If(!0));snake.fA=-1;db=[];hb=[];for(ab=0;4>ab;ab++){ib=0;gb=~~(au.length*(ab+1)/4);for(cb=eb;cb<gb;cb++)ib++;hb.push(ib);eb=gb}hb[0]--;hb[1]--;hb[2]++;hb[3]++;gb=[];for(ab=eb=0;4>ab;ab++)for(gb=[],db.push(gb),cb=0;cb<hb[ab];cb++)gb.push(au[eb]),eb++;for(ib=0;ib<db.length;ib++)for(gb=db[ib],ab=0;ab<gb.length;ab++)if(cb=gb[ab],0<=cb&&cb<$w.length){eb={};hb=document.createElement("canvas");eb.ii=hb;hb.width=48;hb.height=48;var kb=
 hb.getContext("2d");kb.rotate(Math.PI);kb.drawImage(F0,336*cb,0,48,48,-48,-48,48,48);bb=37==cb?36:39==cb?37:cb;kb.rotate(-Math.PI);kb.font="15px Arial, Helvetica Neue, Helvetica, sans-serif";kb.fillStyle="#ffffff";kb.textBaseline="middle";kb.textAlign="center";kb.shadowColor="black";kb.shadowBlur=2;kb.lineWidth=2;kb.strokeText(_n[bb],42,40);kb.fillText(_n[bb],42,40);kb.stroke();hb.style.opacity=0;hb.style.position="absolute";hb.style.left="0px";hb.style.top="0px";hb.draggable=!1;eb.xx=~~(55*gb.length*
@@ -5666,7 +5797,7 @@ a9[hb]="";NTL_SK();db(hb)});jQuery("#my_remapbox [data-km-def]").on("click",func
 key:"a",label:"Toggle team detail list (double)"},{id:"hidevv",key:"v",label:"Toggle all infoboxes (double)"},{id:"clearchat2",key:"-",label:"Clear chat alt key (double)"},{id:"quickchat",key:"q",label:"Show QQ lines (double)"},{id:"nicksplus",key:"1",label:"Snake Nicks+ (double)"},{id:"autonoprey",key:"2",label:"Auto no prey (double)"},{id:"smallfood",key:"3",label:"Food texture cycle (double)"},{id:"minimap",key:"4",label:"Toggle minimap (double)"},{id:"smalltags",key:"j",label:"Small tags (double)"},
 {id:"graphicslevel",key:"7",label:"Toggle graphics (double)"},{id:"opensettings",key:".",label:"Open settings (double)"},{id:"asy",key:"r",label:"Assist (hold)"},{id:"asytoggle",key:"k",label:"Toggle assist lock (double)"},{id:"tabls",key:"tab",label:"Front laser + spine (hold)"},{id:"openrtl",key:",",label:"Open realtime LB (double)"},{id:"gameover0",key:"0",label:"Quick respawn (double)"},{id:"gameover9",key:"9",label:"Quit (double)"},{id:"autorespawn",key:"8",label:"Auto respawn (double)"},{id:"zoomout",
 key:"[",label:"Viewport Zoom scale -0.05 (double)"},{id:"zoomin",key:"]",label:"Viewport Zoom scale +0.05 (double)"},{id:"rvneg",key:"f1",label:"Coil Left"},{id:"rvpos",key:"f2",label:"Coil Right"},{id:"tms",key:"backspace",label:"Target Marking System (double)"},{id:"chat",key:"enter",label:"Focus chat input"},{id:"clearchat",key:"delete",label:"Clear chat"},{id:"screenshot",key:"z",label:"Take screenshot"},{id:"zoommode",key:"x",label:"Reset zoom"},{id:"nextskin_zin",key:"m",label:"Zoom in"},{id:"prevskin_zout",
-key:"n",label:"Zoom out"},{id:"peek",key:"w",label:"Skin peek (hold)"},{id:"enableselect",key:"`",label:"Enable chat select"},{id:"eyesback",key:"u",label:"Eyes Back (toggle)"},{id:"eyecenter",key:"i",label:"Center Eyes (toggle)"},{id:"vancedset",key:"o",label:"Vanced settings"},{id:"spine",key:"p",label:"Spine mode (toggle)"},{id:"perf",key:"=",label:"Performance mode (toggle)"}],Lf=!1,Sf=!1,Gf=!1,Nf="",Tf="",Vf=null,Wf=1,Ff=null,Zf=null,Kf=null,qf=null,_f=null,$f=function(){for(var bb=Array(256),ab=0;256>ab;ab++)bb[ab]=String.fromCharCode(ab);return bb}(),Ae=2,fe=0,ee=0,ne="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAABFUlEQVQoz52SzW3CQBCFv7FNJCIipCUSlOES3IHdgX1KakgpdEEJpgJTxnIwsnKIkGLycrGJY8yFkVa7O3rz9+aZJMZmR/45tcbGmGgqQJvVDLh07tB8rZsEkpAEXurf984QY5KwIxpmOxwO8/1+f26axtI0tTiOL8OutMZuMqVpGgkXCtffVhRFOK4KXtputyaJqqpMOIQL8BJeEu5FOKuq6kkSwhleCnoCAHa7nQGYr/9a8/UnoLIs2yE2AHh7/+hxATBj2voiP8OPALIsewVabVbPV9Y3qwVgSZLMO9fsuo4ROaFw11mFC/I8D8bk3FvHsizLtmmac5ZlyziOT5PreFgAE5JbAF/d7JH5+nssOXtU5L+Xdgqqz6IcfAAAAABJRU5ErkJggg==",
+key:"n",label:"Zoom out"},{id:"peek",key:"w",label:"Skin peek (hold)"},{id:"enableselect",key:"`",label:"Enable chat select"},{id:"eyesback",key:"u",label:"Eyes Back (toggle)"},{id:"eyecenter",key:"i",label:"Center Eyes (toggle)"},{id:"vancedset",key:"o",label:"Vanced settings"},{id:"spine",key:"p",label:"Spine mode (toggle)"},{id:"perf",key:"=",label:"Performance mode (toggle)"},{id:"squeeze",key:";",label:"Squeeze mode (toggle)"}],Lf=!1,Sf=!1,Gf=!1,Nf="",Tf="",Vf=null,Wf=1,Ff=null,Zf=null,Kf=null,qf=null,_f=null,$f=function(){for(var bb=Array(256),ab=0;256>ab;ab++)bb[ab]=String.fromCharCode(ab);return bb}(),Ae=2,fe=0,ee=0,ne="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAABFUlEQVQoz52SzW3CQBCFv7FNJCIipCUSlOES3IHdgX1KakgpdEEJpgJTxnIwsnKIkGLycrGJY8yFkVa7O3rz9+aZJMZmR/45tcbGmGgqQJvVDLh07tB8rZsEkpAEXurf984QY5KwIxpmOxwO8/1+f26axtI0tTiOL8OutMZuMqVpGgkXCtffVhRFOK4KXtputyaJqqpMOIQL8BJeEu5FOKuq6kkSwhleCnoCAHa7nQGYr/9a8/UnoLIs2yE2AHh7/+hxATBj2voiP8OPALIsewVabVbPV9Y3qwVgSZLMO9fsuo4ROaFw11mFC/I8D8bk3FvHsizLtmmac5ZlyziOT5PreFgAE5JbAF/d7JH5+nssOXtU5L+Xdgqqz6IcfAAAAABJRU5ErkJggg==",
 ve=!1,te="dpt",ae="0.0.0.0:0",re=!1,Pe=!1,se=!1,ie=!1,xe=!1,ge=!1,oe=!1,he=!1,de=localStorage&&"graphics"in localStorage?Number(localStorage.getItem("graphics")):1,ze=null,ce=null,we=null,ue=null,le=null,Qe=null,be=null,Be=[],ef=[],nf=0,De=[],me=[],Ie=[],ke=function(bb){var ab="",cb=0;bb=bb.toUpperCase().charCodeAt(0);47<bb&&58>bb?bb-=48:64<bb&&91>bb?bb-=55:bb=-1;if(0<=bb&&bb<gi.length&&(ab=gi[bb],bb=ab.split("_")[1],0<di))for(;cb<ef.length;cb++)ef[cb].id==bb&&(ef[cb].tar=ab,ef[cb].tarr=di,ef[cb].tarred=
 !1);return ab},Ue=function(){if(null!=uc)for(var bb=uc.getElementsByTagName("img"),ab=0;ab<bb.length;ab++)""!=bb[ab].id&&(uc.removeChild(bb[ab]),ab--)},Ye="color: #FFF; font-family: Consolas, Verdana; line-height: 100%; font-size: 13px; position: fixed; opacity: 0.35; z-index: 7;",ye="color: #FFF; font-family: Consolas, Verdana; line-height: 100%; font-size: 13px; position: fixed; z-index: 7;",je="",Re=0,Je=0,Le=localStorage&&"favsrv"in localStorage?localStorage.getItem("favsrv"):"",Se=function(){if(playing&&
 Ce&&!m1&&!M1){if(!Kn)return setTimeout(function(){playing&&Ce&&!m1&&!M1&&Se()},120),!1;Ya();M1=!0;p1=!1;Yz.style.display="none";$Q.style.display="none";VQ.style.display="none";v1.style.display="none";FQ.style.display="none";qQ.style.display="none";for(var bb,ab=0,cb=1,eb=0;32>eb;eb++)D1.length>eb&&1==D1[eb]&&cb++;8!=cb&&(cb=8);for(eb=0;32>=eb;eb++)if(32==eb||D1.length>eb){bb={};bb.v=32==eb?-1:eb;var gb=document.createElement("img");gb.onload=function(){for(var db,hb=U1.length-1;0<=hb;hb--)if(db=U1[hb],
