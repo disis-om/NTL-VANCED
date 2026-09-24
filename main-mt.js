@@ -750,152 +750,359 @@ var NTL_EC = (function () {
 })();
 /* ========================== END CENTER EYES ================================ */
 /* ============================================================================
-   SQUEEZE MODE  (never touch another snake's body — steer as tight as you like)
+   SQUEEZE MODE  (a no-death steering layer — steer as tight as you like)
    ----------------------------------------------------------------------------
-   Not an avoider and not a centring aid: the snake goes wherever the player
-   steers. The only rule is "no contact": every send tick the path the head
-   would take with the player's angle is simulated ~0.2–0.6 s ahead (the ping
-   delay first, flying the angle already sent, then the new one), with the
-   server's max turn rate and the current speed. If that path stays at least
-   GAP units between your collision point and every other snake's bone, the player's
-   angle goes out untouched. If not, the smallest deviation from it that keeps
-   the gap is sent instead — so pressing into a body makes the snake slide
-   along it with a hairline gap (squeeze someone without dying), and between
-   two snakes it hugs whichever side the player leans to.
-   Geometry (slither client, verified against slither.txt): body diameter 29 × sc,
-   sc = min(6, 1 + (sct − 2) / 106) (NTL's N), body points ≤ 42 apart, speed
-   sp / 32 per ms (csp = sp·vfr/4 per 8 ms frame), turn 0.033 × scang × spang
-   rad per frame (NTL's T, L). The server's hit rule is not in the client, so the
-   kept distance is: head centre ↔ their bone ≥ head radius + (1 − DEPTH) × their
-   body radius + GAP. DEPTH 100 % lets your head circle reach their bone; lower
-   keeps you further out. Both are settings; the head path is checked swept, so a
-   fast head cannot jump over a bone between two samples.
+   The snake goes wherever the player steers. Every send tick the path is
+   flown ahead in a small world model; if it is clean the player's angle goes
+   out untouched, otherwise the closest angle that stays clean is sent — and if
+   the way ahead is closed, a U-turn (or a full loop) to whichever side is open.
+
+   Death model (slither: sc = min(6, 1 + (sct−2)/106) = NTL's N, body diameter
+   29 × sc, body points ≤ 42 apart):
+     YOUR COLLISION POINT (the head tip, one head radius ahead of the head centre
+     — the dot Spine mode draws) must stay out of THEIR SKIN: the tube of their
+     own radius (14.6 × their N) around their bone. Your own skin may overlap
+     theirs freely, so thin or fat, you can squeeze right up to their skin; the
+     margin follows each snake's own thickness. DEPTH lets the point sink a
+     fraction of their radius into the skin (0 = right at the skin, safest),
+     GAP adds a fixed distance. The arena edge counts as a wall.
+   Motion (slither.txt): speed sp/32 per ms (NTL O), turn 0.033 × scang × spang
+     per 8 ms (NTL T, L). Latency: what we see is ~ping/2 old and a command acts
+     ~ping/2 later → one round trip, during which the angles already sent are
+     replayed in order. Paths are checked swept (a boosting head cannot jump a
+     bone between samples). Other heads: straight on, plus their two hardest
+     turns for the first 0.4 s (they may turn into you).
+   Choice: a U-turn under way is finished while it stays clean → the player's
+     angle → the smallest deviation, turning the same way as last time (sides
+     are left / right turns, so it never dithers; right after a save, turning
+     back the other way needs clear room) → last tick's choice carried on →
+     carry on straight → U-turn / loop, kept side first (drifting out first
+     when too wide to turn) → if nothing is clean, the most room there is.
+     Every plan must be clean under the fastest, current and slowest ping of
+     the last few seconds, and the turn it sends keeps one direction for all.
    Only the angle byte NTL already sends is changed. Off while the bot drives.
    Key: keymap id "squeeze" (default ;), toggle or hold via Key Modes.
-   Settings: localStorage.wy_sqz = { gap, depth }.
+   Settings: localStorage.wy_sqz = { depth, gap }.
    ============================================================================ */
 var NTL_SQ = (function () {
-  var cfg = { gap: 3, depth: 0.7 };
-  try { var j = JSON.parse(localStorage.getItem("wy_sqz") || "null"); if (j) for (var k in cfg) if (k in j) cfg[k] = j[k]; } catch (e) {}
-  function save() { try { localStorage.setItem("wy_sqz", JSON.stringify(cfg)); } catch (e) {} }
+  var cfg = { depth: 0, gap: 4 };
+  try { var j = JSON.parse(localStorage.getItem("wy_sqz") || "null"); if (j && j.v === 4) for (var k in cfg) if (k in j && typeof j[k] === "number") cfg[k] = j[k]; } catch (e) {}
+  function save() { try { localStorage.setItem("wy_sqz", JSON.stringify({ v: 4, depth: cfg.depth, gap: cfg.gap })); } catch (e) {} }
   function set(key, val) { cfg[key] = val; save(); }
-  var on = false, TWO_PI = Math.PI * 2;
+  var on = false, PI = Math.PI, TWO_PI = PI * 2;
   function g(n) { try { return window[n]; } catch (e) { return undefined; } }
-  function norm(a) { a %= TWO_PI; if (a > Math.PI) a -= TWO_PI; else if (a < -Math.PI) a += TWO_PI; return a; }
-  function rtt() { var v = g("mr"); if (!(v > 0)) v = g("cv"); if (!(v > 0)) v = 100; return Math.min(v, 600); }
-  function width(s) { return 29.2 * (s && s.N > 0 ? s.N : 1); }
-  function turnRate(s) { var tr = (typeof NTL_EB !== "undefined" && NTL_EB.cfg && NTL_EB.cfg.turnRate) || 0.033; return Math.max(1e-6, tr * (s.T || 1) * (s.L || 1) / 8); }   // rad / ms
-  function speed(s) { return Math.max(0.05, (s.O || 5.78) / 32); }                                                                      // units / ms
+  function norm(a) { a %= TWO_PI; if (a > PI) a -= TWO_PI; else if (a < -PI) a += TWO_PI; return a; }
+  var pingHist = [], pingNow = 100, pingMax = 100, pingMin = 100;
+  function samplePing() {                                   // current round trip, and the range of the last ~3 s
+    var v = g("mr"), c = g("cv"), p = Math.max(v > 0 ? v : 0, c > 0 ? c : 0) || 100;
+    pingHist.push(p); if (pingHist.length > 90) pingHist.shift();
+    var m = 0, n = 1e9; for (var i = 0; i < pingHist.length; i++) { if (pingHist[i] > m) m = pingHist[i]; if (pingHist[i] < n) n = pingHist[i]; }
+    pingNow = Math.min(p, 700); pingMax = Math.min(m, 700); pingMin = Math.min(n, 700);
+  }
+  function radius(s) { return 14.6 * (s && s.N > 0 ? s.N : 1); }                                   // half of 29.2 × sc
+  function turnRate(s) { return Math.max(1e-6, 0.033 * (s.T > 0 ? s.T : 1) * (s.L > 0 ? s.L : 1) / 8); }   // rad / ms
+  function speed(s) { return Math.max(0.05, (s.O > 0 ? s.O : 5.78) / 32); }                          // units / ms
 
-  /* Collision model (the one Spine mode draws): what kills is YOUR COLLISION POINT — the tip of the head, one head
-     radius ahead of the head centre along the heading — touching THEIR BONE, the centre line through their body
-     points. Skins may overlap freely. So the obstacles are line segments (bone pieces), not fat circles. */
-  var SX = new Float32Array(8192), SY = new Float32Array(8192), EX = new Float32Array(8192), EY = new Float32Array(8192), MX = new Float32Array(8192), MY = new Float32Array(8192), HL = new Float32Array(8192), RO = new Float32Array(8192), ns = 0, heads = [];
-  function addSeg(x1, y1, x2, y2, ro) { if (ns >= SX.length) return; RO[ns] = ro; SX[ns] = x1; SY[ns] = y1; EX[ns] = x2; EY[ns] = y2; MX[ns] = (x1 + x2) / 2; MY[ns] = (y1 + y2) / 2; HL[ns] = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)) / 2; ns++; }
-  function gather(me, hx, hy, reach) {
-    ns = 0; heads.length = 0;
+  /* ---- the world around the head, rebuilt every tick ---- */
+  var N0 = 12288;
+  var SX = new Float32Array(N0), SY = new Float32Array(N0), EX = new Float32Array(N0), EY = new Float32Array(N0),
+      MX = new Float32Array(N0), MY = new Float32Array(N0), HL = new Float32Array(N0), KP = new Float32Array(N0), ns = 0;
+  var heads = [], border = null;
+  function addSeg(x1, y1, x2, y2, keep) {
+    if (ns >= N0) return;
+    SX[ns] = x1; SY[ns] = y1; EX[ns] = x2; EY[ns] = y2; MX[ns] = (x1 + x2) / 2; MY[ns] = (y1 + y2) / 2;
+    HL[ns] = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)) / 2; KP[ns] = keep; ns++;
+  }
+  function gather(me, hx, hy, reach, depth, gap) {
+    ns = 0; heads.length = 0; border = null;
     var list = g("ef") || [], r2 = reach * reach;
     for (var i = 0; i < list.length; i++) {
       var o = list[i]; if (!o || o === me || o.I || !o.B) continue;
-      var B = o.B, prev = null, prevIn = false, ro = width(o) / 2;
+      var ro = radius(o), keep = ro * (1 - depth) + gap, B = o.B, prev = null, prevIn = false;
       for (var b = 0; b < B.length; b++) {
         var p = B[b]; if (!p || p.dying) { prev = null; continue; }
         var dx = p.xx - hx, dy = p.yy - hy, inR = dx * dx + dy * dy <= r2;
-        if (prev && (inR || prevIn)) addSeg(prev.xx, prev.yy, p.xx, p.yy, ro);
+        if (prev && (inR || prevIn)) addSeg(prev.xx, prev.yy, p.xx, p.yy, keep);
         prev = p; prevIn = inR;
       }
-      var ox = o.xx + (o.fx || 0), oy = o.yy + (o.fy || 0), dxh = ox - hx, dyh = oy - hy;
-      if (prev && (prevIn || dxh * dxh + dyh * dyh <= r2)) addSeg(prev.xx, prev.yy, ox, oy, ro);   // last body point → head
-      if (dxh * dxh + dyh * dyh < 4 * r2) heads.push({ x: ox, y: oy, c: Math.cos(o.ang || 0), s: Math.sin(o.ang || 0), v: speed(o), r: ro });
+      var ox = o.xx + (o.fx || 0), oy = o.yy + (o.fy || 0), dxh = ox - hx, dyh = oy - hy, near = dxh * dxh + dyh * dyh <= 4 * r2;
+      if (prev && (prevIn || near)) addSeg(prev.xx, prev.yy, ox, oy, keep);                  // last body point → head
+      if (near) heads.push({ x: ox, y: oy, a: o.ang || 0, v: speed(o), w: turnRate(o), keep: keep });
     }
+    /* the arena edge: centre (af, af), radius af (or the shrinking battledome zone) */
+    var af = g("af"), zone = g("ps") ? g("Ol") : 0, R = zone > 0 ? zone : af;
+    if (af > 0 && R > 0) border = { cx: af, cy: af, r: R * 0.99 - gap };
   }
   function segDist(px, py, x1, y1, x2, y2) {
     var vx = x2 - x1, vy = y2 - y1, wx = px - x1, wy = py - y1, L = vx * vx + vy * vy, t = L > 0 ? (wx * vx + wy * vy) / L : 0;
     t = t < 0 ? 0 : t > 1 ? 1 : t; var dx = wx - vx * t, dy = wy - vy * t; return Math.sqrt(dx * dx + dy * dy);
   }
-  /* swept distance: the collision point's move this step (a→b) against a bone piece (c→d); 0 when they cross, so a fast
-     head can never jump over a bone between two samples */
   function side(ax, ay, bx, by, px, py) { return (bx - ax) * (py - ay) - (by - ay) * (px - ax); }
-  function segSeg(ax, ay, bx, by, cx, cy, dx, dy) {
+  function segSeg(ax, ay, bx, by, cx, cy, dx, dy) {           // distance between two segments, 0 when they cross
     var d1 = side(ax, ay, bx, by, cx, cy), d2 = side(ax, ay, bx, by, dx, dy), d3 = side(cx, cy, dx, dy, ax, ay), d4 = side(cx, cy, dx, dy, bx, by);
     if (((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0))) return 0;
     return Math.min(segDist(ax, ay, cx, cy, dx, dy), segDist(bx, by, cx, cy, dx, dy), segDist(cx, cy, ax, ay, bx, by), segDist(dx, dy, ax, ay, bx, by));
   }
-  /* fly the head: for the first `lat` ms the server is still working through the angles sent during the last round trip
-     (replayed in order from the send history), then `cand` takes over. Returns the worst MARGIN met on the
-     way: distance from the head centre's swept path to a bone minus what must be kept from that bone (head radius +
-     (1 − depth) × that snake's radius + gap). Negative = contact. Stops early once it goes negative. */
-  var DT = 16;
-  var QT = [], QA = [];                                   // commands still in flight: effective time (ms from now) / angle
-  function fly(hx, hy, a0, sent, cand, lat, horizon, v, rate, rMe, depth, gap) {
-    var x = hx, y = hy, a = a0, t = 0, worst = Infinity, end = lat + horizon, mx = rate * DT, keepMe = rMe + gap, off = 1 - depth, q = 0, cur = sent;
+  /* where another head can be after t ms: straight, or its hardest turn either way */
+  function headAt(H, t, turn) {
+    if (!turn) return [H.x + Math.cos(H.a) * H.v * t, H.y + Math.sin(H.a) * H.v * t];
+    var w = H.w * turn, R = H.v / H.w, a1 = H.a + w * t;
+    return turn > 0 ? [H.x + (Math.sin(a1) - Math.sin(H.a)) * R, H.y - (Math.cos(a1) - Math.cos(H.a)) * R]
+                    : [H.x - (Math.sin(a1) - Math.sin(H.a)) * R, H.y + (Math.cos(a1) - Math.cos(H.a)) * R];
+  }
+
+  /* ---- fly one plan ----
+     plan.rel != null: after the latency, turn by exactly plan.rel radians (signed, may exceed ±π: U-turns, loops);
+     otherwise turn the short way to the absolute angle plan.abs. Before that, the in-flight commands (QT/QA) play out.
+     Returns the worst margin (distance from the collision point's swept path to a skin, minus the gap) and the heading
+     at the moment the new command lands. Stops early once the margin goes negative. */
+  var QT = [], QA = [], DT = 16, jitPad = 0;
+  /* the turn to an absolute angle: the short way, unless a side is given and the angle is so far behind that the short
+     way would be the opposite turn — then the long way round (keeps a turn going instead of flipping it) */
+  var AMB = 1.75;
+  function absTurn(d, sd, dir) {
+    d = norm(d);
+    if (dir) { if (d * dir < 0 && (d > 1 || d < -1)) d += dir * TWO_PI; }            // the direction the sent angle will make the server turn
+    else if (sd && d * sd < 0 && (d > AMB || d < -AMB)) d += sd * TWO_PI;
+    return d;
+  }
+  var res = { m: 0, hit: 0, aLat: 0, T: 0, Tf: 0, Tp: 0, pEnd: 0 };
+  function fly(hx, hy, a0, start, plan, lat, horizon, v, rate, rMe) {
+    var x = hx, y = hy, a = a0, t = 0, worst = Infinity, end = lat + horizon, mx = rate * DT, q = 0, cur = start, T = null, Tp = 0, pEnd = 0;
+    var pad = v * DT * 0.5 + 2.5 + jitPad;                                 // stepping error (half a step, more at boost) + ping wobble
+    var px = x + Math.cos(a) * rMe, py = y + Math.sin(a) * rMe;
+    res.aLat = a0; res.T = a0;
     while (t < end) {
-      while (q < QT.length && QT[q] <= t) cur = QA[q++];
-      var w = t < lat ? cur : cand, d = norm(w - a);
+      var d;
+      if (t < lat) { while (q < QT.length && QT[q] <= t) cur = QA[q++]; d = norm(cur - a); }
+      else {
+        if (T === null) {
+          res.aLat = a;
+          T = plan.tgt != null ? plan.tgt : plan.rel != null ? a + plan.rel : a + absTurn(plan.abs - a, plan.side, plan._dir);
+          if (plan.pre) { Tp = plan.pre.tgt != null ? plan.pre.tgt : a + plan.pre.rel; pEnd = plan.pre.end != null ? plan.pre.end : lat + plan.pre.ms; }
+          res.T = plan.pre && t < pEnd ? Tp : T; res.Tf = T; res.Tp = Tp; res.pEnd = pEnd;
+        }
+        d = (plan.pre && t < pEnd ? Tp : T) - a;
+      }
       a += d > mx ? mx : d < -mx ? -mx : d;
-      var px = x, py = y;
       x += Math.cos(a) * v * DT; y += Math.sin(a) * v * DT; t += DT;
-      var cx = (px + x) / 2, cy = (py + y) / 2, half = v * DT / 2;
+      var tx = x + Math.cos(a) * rMe, ty = y + Math.sin(a) * rMe;           // the collision point
+      var cx = (px + tx) / 2, cy = (py + ty) / 2, half = Math.sqrt((tx - px) * (tx - px) + (ty - py) * (ty - py)) / 2;
       for (var i = 0; i < ns; i++) {
-        var keep = keepMe + off * RO[i];
-        var mdx = cx - MX[i], mdy = cy - MY[i], lim = worst + keep + HL[i] + half;    // cheap reject
+        var mdx = cx - MX[i], mdy = cy - MY[i], lim = worst + KP[i] + pad + HL[i] + half;   // cheap reject
         if (mdx * mdx + mdy * mdy > lim * lim) continue;
-        var m = segSeg(px, py, x, y, SX[i], SY[i], EX[i], EY[i]) - keep;
-        if (m < worst) { worst = m; if (worst < 0) return worst; }
+        var m = segSeg(px, py, tx, ty, SX[i], SY[i], EX[i], EY[i]) - KP[i] - pad;
+        if (m < worst) { worst = m; if (worst < 0) { res.m = worst; res.hit = t; return res; } }
       }
       for (var h = 0; h < heads.length; h++) {
-        var H = heads[h], m2 = segSeg(px, py, x, y, H.x, H.y, H.x + H.c * H.v * t, H.y + H.s * H.v * t) - (keepMe + off * H.r);
-        if (m2 < worst) { worst = m2; if (worst < 0) return worst; }
+        var H = heads[h];
+        for (var tr = -1; tr <= 1; tr++) {
+          if (tr !== 0 && t > 400) continue;
+          /* the bone this head lays down between now and t (it stays there after the head has passed) */
+          var q0 = headAt(H, 0, tr), q2 = headAt(H, t, tr), m2;
+          if (tr === 0) m2 = segSeg(px, py, tx, ty, q0[0], q0[1], q2[0], q2[1]);
+          else { var q1 = headAt(H, t / 2, tr); m2 = Math.min(segSeg(px, py, tx, ty, q0[0], q0[1], q1[0], q1[1]), segSeg(px, py, tx, ty, q1[0], q1[1], q2[0], q2[1])); }
+          m2 -= H.keep + pad;
+          if (m2 < worst) { worst = m2; if (worst < 0) { res.m = worst; res.hit = t; return res; } }
+        }
+      }
+      if (border) {
+        var bm = border.r - pad - Math.sqrt((tx - border.cx) * (tx - border.cx) + (ty - border.cy) * (ty - border.cy));
+        if (bm < worst) { worst = bm; if (worst < 0) { res.m = worst; res.hit = t; return res; } }
+      }
+      px = tx; py = ty;
+    }
+    res.m = worst; res.hit = Infinity; return res;
+  }
+
+  /* ---- choose ---- */
+  var HUG = [];
+  for (var dg = 1; dg <= 150; dg += dg < 10 ? 1 : dg < 40 ? 2 : dg < 90 ? 4 : 8) HUG.push(dg * PI / 180);
+  /* the exact direction of the bones next to the collision point (both ways) and a few degrees around it: riding a skin
+     needs the parallel angle itself, not the nearest step of a fixed list */
+  var WALLD = [0, 0.5, -0.5, 1, -1, 2, -2, 4, -4].map(function (d) { return d * PI / 180; });
+  function wallAngles(tipx, tipy) {
+    var near = [], i;
+    for (i = 0; i < ns; i++) {
+      var dd = segDist(tipx, tipy, SX[i], SY[i], EX[i], EY[i]) - KP[i];
+      if (dd > 160) continue;
+      near.push([dd, Math.atan2(EY[i] - SY[i], EX[i] - SX[i])]);
+    }
+    near.sort(function (x, y) { return x[0] - y[0]; });
+    var out = [];
+    for (i = 0; i < near.length && i < 4; i++) for (var w = 0; w < WALLD.length; w++) { out.push(near[i][1] + WALLD[w]); out.push(near[i][1] + PI + WALLD[w]); }
+    return out;
+  }
+  /* when the player's way is closed: first "carry on straight" (a U-turn is not always physically possible — a narrow
+     corridor is safer followed than turned in), then U-turns and loops by total turn */
+  var ESC = [0, PI * 0.85, PI, PI * 1.25, PI * 1.5, PI * 2];
+  var PRE = [[PI / 6, 200], [PI / 4, 300], [PI / 3, 400], [PI / 4, 600], [PI / 2, 500]];   // drift angle, how long
+  var hist = [], lastSide = 0, lastSideAt = 0;
+  var commit = null, contA = null, prevA0 = null, lastAt = 0;   // a U-turn in progress: { aim (unwrapped heading), side, at }
+  var prev = null;                                                // last tick's choice, carried on: { abs, side } or { aim } (unwrapped)
+  /* flying one plan under both latencies (current ping and the worst recent one): the worse margin counts */
+  var F = { hx: 0, hy: 0, a0: 0, v: 0, rate: 0, rMe: 0, now: 0, latA: 0, latB: 0, latC: 0, horizon: 0 };
+  var out2 = { m: 0, hit: 0, aLat: 0, T: 0, Tf: 0, Tp: 0, pEnd: 0 };
+  /* ranking: clean plans by margin; a plan that touches by when it touches — the flight stops at the first touch, so its
+     margin says little, but a touch later is more time for the world (and the next tick) to open a way */
+  function score(r) { return r.m >= 0 ? 1e9 + r.m : r.hit + r.m * 0.01; }
+  function queueFor(lat) {                                        // in-flight commands for this latency
+    QT.length = 0; QA.length = 0;
+    var t0 = F.now - lat, start = null;
+    for (var hq = 0; hq < hist.length; hq++) {
+      if (hist[hq].t > F.now || hist[hq].t < t0 - 300) continue;
+      if (hist[hq].t <= t0) start = hist[hq].a; else { QT.push(hist[hq].t - t0); QA.push(hist[hq].a); }
+    }
+    if (start === null) { var cb = g("_c"); start = typeof cb === "number" && cb >= 0 && !QA.length ? cb * TWO_PI / 251 : F.a0; }
+    return start;
+  }
+  var flies = 0, dbg = { st: "", m: 0, mem: 0 };                // simulated paths this tick (budgets below); last choice, for tests
+  function try2(plan, extra) {
+    var hz = F.horizon + (extra || 0);
+    flies++;
+    var st = queueFor(F.latB), r = fly(F.hx, F.hy, F.a0, st, plan, F.latB, hz, F.v, F.rate, F.rMe);
+    out2.m = r.m; out2.hit = r.hit; out2.aLat = r.aLat; out2.T = r.T; out2.Tf = r.Tf; out2.Tp = r.Tp; out2.pEnd = r.pEnd;
+    /* what goes out is this latency's turn (clamped to ~150°): under the other latencies the server turns the same way,
+       so a far absolute angle keeps that direction instead of being re-resolved the short way from another heading */
+    plan._dir = plan.abs != null && Math.abs(r.T - r.aLat) > 1 ? (r.T > r.aLat ? 1 : -1) : 0;
+    /* a shorter round trip than expected makes turns start earlier (corners get cut): the fastest recent ping must be
+       clean too, and the current one when it differs */
+    if (r.m >= 0 && F.latC < F.latB - 20) {
+      st = queueFor(F.latC); r = fly(F.hx, F.hy, F.a0, st, plan, F.latC, hz, F.v, F.rate, F.rMe);
+      if (r.m < out2.m) out2.m = r.m;
+      if (r.hit < out2.hit) out2.hit = r.hit;
+      if (out2.m >= 0 && F.latA > F.latC + 20 && F.latA < F.latB - 20) {
+        st = queueFor(F.latA); r = fly(F.hx, F.hy, F.a0, st, plan, F.latA, hz, F.v, F.rate, F.rMe);
+        if (r.m < out2.m) out2.m = r.m;
+        if (r.hit < out2.hit) out2.hit = r.hit;
       }
     }
-    return worst;
+    plan._dir = 0;
+    return out2;
   }
-  var STEPS = [];
-  for (var d = 1; d <= 150; d += d < 8 ? 1 : d < 30 ? 3 : 8) STEPS.push(d * Math.PI / 180);   // fine near the wanted angle = tight hug
-  /* called from NTL's send code with the player's angle (rad, or null = mouse on the head); returns the 0-250 byte */
-  var hist = [];                                          // what we sent: { t: client ms, a: angle }
   function tick(target, s, now) {
     now = typeof now === "number" ? now : (typeof performance !== "undefined" ? performance.now() : Date.now());
     var hx = s.xx + (s.fx || 0), hy = s.yy + (s.fy || 0), a0 = s.ang || 0;
     var want = target == null ? a0 : target;
-    var v = speed(s), rate = turnRate(s), rMe = width(s) / 2;
-    /* latency: what we see is ~ping/2 old and our command lands ~ping/2 later → a full round trip before it acts.
-       horizon: a half turn at this speed and size (boost and big snakes turn wide) plus two head lengths — a path that is
-       clear that long can still be turned away from afterwards, so head-on rams at full boost are caught in time */
-    var lat = rtt() + 16, horizon = Math.max(300, Math.min(2000, Math.PI / rate * 1.1 + 2 * rMe / v));
-    var sentB = g("_c"), sent = typeof sentB === "number" && sentB >= 0 ? sentB * TWO_PI / 251 : a0;
-    /* the command the server is executing at the start of the replay = the last one sent a round trip ago; the ones
-       sent since then take effect one by one (sent at ts → acts at ts + lat, i.e. ts − now + lat from now) */
-    QT.length = 0; QA.length = 0;
-    var t0 = now - lat, start = null;
-    for (var hq = 0; hq < hist.length; hq++) {
-      if (hist[hq].t > now || hist[hq].t < t0 - 200) continue;              // clock jumped / too old to still be acting
-      if (hist[hq].t <= t0) start = hist[hq].a;
-      else { QT.push(hist[hq].t - t0); QA.push(hist[hq].a); }
-    }
-    if (start !== null) sent = start; else if (QA.length) sent = a0;   // history starts inside the window: before it, the old heading
-    var depth = Math.max(0, Math.min(1, +cfg.depth)), gap = Math.max(0, +cfg.gap || 0);
-    gather(s, hx, hy, v * (lat + horizon) + rMe + 60);
-    var best = want;
-    if (ns || heads.length) {
-      if (fly(hx, hy, a0, sent, want, lat, horizon, v, rate, rMe, depth, gap) < 0) {
-        var found = null, bestM = -Infinity, bestA = want;
-        for (var i = 0; i < STEPS.length && found === null; i++) {
-          for (var sg = -1; sg <= 1; sg += 2) {
-            var cand = want + sg * STEPS[i], m = fly(hx, hy, a0, sent, cand, lat, horizon, v, rate, rMe, depth, gap);
-            if (m >= 0 && found === null) found = cand;
-            if (m > bestM) { bestM = m; bestA = cand; }
-          }
-        }
-        best = found !== null ? found : bestA;           // nothing keeps the distance: take the most room there is
+    samplePing();
+    if (prevA0 === null || now - lastAt > 500) { contA = a0; commit = null; prev = null; } else contA += norm(a0 - prevA0);
+    prevA0 = a0; lastAt = now;
+    F.hx = hx; F.hy = hy; F.a0 = a0; F.now = now;
+    F.v = speed(s); F.rate = turnRate(s); F.rMe = radius(s);
+    F.latA = pingNow + 16; F.latB = pingMax + 24; F.latC = Math.max(20, pingMin);
+    jitPad = Math.min(8, (pingMax - pingMin) * F.v * 0.03);                    // a wobbly connection keeps a little more room
+    /* look far enough to still turn away from what we see: half a turn at this speed/size, plus a head length */
+    F.horizon = Math.max(300, Math.min(2200, PI / F.rate * 1.1 + 2 * F.rMe / F.v));
+    var depth = Math.max(0, Math.min(0.9, +cfg.depth || 0)), gap = Math.max(0, +cfg.gap || 0);
+    gather(s, hx, hy, F.v * (F.latB + F.horizon) + F.rMe + 80, depth, gap);
+
+    var pick = null, pickA = 0, pickT = 0, pickSide = 0, r;
+    flies = 0; dbg.st = "";
+    /* 0. a U-turn already under way is finished while it stays clean: switching sides half-way is how you die */
+    if (commit) {
+      var remain = commit.aim - contA, inPre = commit.preUntil && now < commit.preUntil;
+      if ((!inPre && Math.abs(remain) < 0.2) || now - commit.at > 6000) commit = null;
+      else {
+        var cplan = { tgt: a0 + remain };
+        if (inPre) cplan.pre = { tgt: a0 + (commit.aimPre - contA), end: commit.preUntil - now };
+        r = try2(cplan, Math.abs(remain) / F.rate);
+        if (r.m >= 0) { pick = cplan; pickA = r.aLat; pickT = r.T; dbg.st = "commit"; dbg.m = r.m; }
+        else commit = null;
       }
     }
-    best = ((best % TWO_PI) + TWO_PI) % TWO_PI;
-    var byte = (251 * best / TWO_PI | 0) % 251;
+    /* a fresh intervention leaves a turn direction behind: the player's angle is reached turning that way, and turning the
+       other way needs clear room (otherwise the two alternate tick by tick and the snake goes straight into the body) */
+    var mem = lastSide && now - lastSideAt < 400 ? lastSide : 0, aLB = a0, HYS = 6 + jitPad;
+    dbg.mem = mem;
+    if (!pick) {
+      var wplan = { abs: want, side: mem };
+      r = try2(wplan); aLB = r.aLat;
+      var wturn = r.T - r.aLat, wOpp = mem && wturn * mem < 0 && Math.abs(wturn) > 0.15;
+      if (r.m >= 0 && (!mem || r.m >= (wOpp ? HYS : HYS * 0.5))) {
+        pick = wplan; pickA = r.aLat; pickT = r.T; dbg.st = "want"; dbg.m = r.m;
+        if (mem && Math.abs(norm(want - aLB)) > AMB && wturn * mem > 0 && Math.abs(norm(want - aLB)) * 1.001 < Math.abs(wturn)) lastSideAt = now;   // taken the long way: still ours
+      }
+    }
+    if (!pick) {
+      var bestM = -Infinity, best = null, bestA = 0, bestT = 0, bestSide = 0;
+      var first = lastSide && now - lastSideAt < 1500 ? lastSide : 1;           // keep the side we were already on
+      /* 1. hug: the smallest deviation from the player's angle */
+      /* candidates: fixed steps either side of the player's angle + the wall-parallel ones, each tagged with its signed
+         deviation; the kept side is searched first, the other side only wins when it needs clearly less */
+      var cands = [], ci;
+      for (ci = 0; ci < HUG.length; ci++) { cands.push({ a: want + HUG[ci], dev: HUG[ci] }); cands.push({ a: want - HUG[ci], dev: -HUG[ci] }); }
+      var tipx = hx + Math.cos(a0) * F.rMe, tipy = hy + Math.sin(a0) * F.rMe, wa = wallAngles(tipx, tipy);
+      for (ci = 0; ci < wa.length; ci++) { var dv = norm(wa[ci] - want); if (Math.abs(dv) > 0.004 && Math.abs(dv) < 2.7) cands.push({ a: want + dv, dev: dv }); }
+      cands.sort(function (x, y) { return Math.abs(x.dev) - Math.abs(y.dev); });
+      var keptC = null, keptA = 0, keptT = 0, otherC = null, otherA = 0, otherT = 0;
+      for (var n = 0; n < 2; n++) {
+        var sg = n === 0 ? first : -first;
+        for (ci = 0; ci < cands.length; ci++) {
+          if (flies > (n === 0 ? 45 : 60)) break;                                  // budget: the escapes still need theirs
+          var cd = cands[ci], cdt = norm(cd.a - aLB);
+          if (!(Math.abs(cdt) < 0.03 || Math.abs(cdt) > AMB || (cdt > 0 ? 1 : -1) === sg)) continue;   // a turn the other way
+          if (n === 1 && keptC && Math.abs(cd.dev) + 0.8 > Math.abs(keptC.dev)) break;   // the other side only if clearly better
+          var plan = { abs: cd.a, side: sg };
+          r = try2(plan);
+          if (r.m >= 0) { dbg.m = r.m; if (n === 0) { keptC = cd; keptA = r.aLat; keptT = r.T; } else { otherC = cd; otherA = r.aLat; otherT = r.T; } break; }
+          if (score(r) > bestM) { bestM = score(r); best = plan; bestA = r.aLat; bestT = r.T; bestSide = sg; }
+        }
+      }
+      if (otherC) { pick = { abs: otherC.a, side: -first }; pickA = otherA; pickT = otherT; pickSide = -first; dbg.st = "hug-other"; }
+      else if (keptC) { pick = { abs: keptC.a, side: first }; pickA = keptA; pickT = keptT; pickSide = first; dbg.st = "hug"; }
+      /* 1b. last tick's choice, carried on: it was clean one tick ago, so unless the world changed it still is — the hug
+         steps may not contain that exact angle, and losing it is how a clean squeeze turns into "nothing is clean" */
+      if (!pick && prev) {
+        var pplan = prev.abs != null ? { abs: prev.abs, side: prev.side } : { tgt: a0 + (prev.aim - contA) };
+        r = try2(pplan, prev.abs != null ? 0 : Math.abs(prev.aim - contA) / F.rate);
+        if (r.m >= 0) { pick = pplan; pickA = r.aLat; pickT = r.T; pickSide = prev.side || 0; dbg.st = "carry"; dbg.m = r.m; }
+        else if (score(r) > bestM) { bestM = score(r); best = pplan; bestA = r.aLat; bestT = r.T; bestSide = prev.side || 0; }
+      }
+      /* 2. the way is closed: carry on straight, else U-turn / loop, the shortest turn that works, kept side first */
+      if (!pick) {
+        var escBad = null, escBadM = -Infinity, escBadA = 0, escBadT = 0, escBadSide = 0;
+        var plans = [];
+        for (var e = 0; e < ESC.length; e++) for (var n2 = 0; n2 < (ESC[e] ? 2 : 1); n2++) plans.push({ rel: (n2 === 0 ? first : -first) * ESC[e], side: ESC[e] ? (n2 === 0 ? first : -first) : 0 });
+        /* too wide to turn from here (boost / fat): first drift away from the turn side, then U-turn across the room */
+        for (var ps = 0; ps < PRE.length; ps++) for (var n3 = 0; n3 < 2; n3++) {
+          var sg3 = n3 === 0 ? first : -first;
+          plans.push({ rel: sg3 * PI, pre: { rel: -sg3 * PRE[ps][0], ms: PRE[ps][1] }, side: sg3 });
+        }
+        for (var e2 = 0; e2 < plans.length && !pick && flies < 110; e2++) {
+          var plan2 = plans[e2], turn = Math.abs(plan2.rel) + (plan2.pre ? Math.abs(plan2.pre.rel) : 0);
+          r = try2(plan2, turn / F.rate + (plan2.pre ? plan2.pre.ms : 0));
+          if (r.m >= 0) {
+            pick = plan2; pickA = r.aLat; pickT = r.T; pickSide = plan2.side; dbg.st = "esc" + (plan2.pre ? "-drift" : "") + " " + (plan2.rel * 57.3 | 0); dbg.m = r.m;
+            if (Math.abs(plan2.rel) >= PI * 0.8) {
+              commit = { aim: contA + (r.Tf - a0), side: plan2.side, at: now };
+              if (plan2.pre) { commit.aimPre = contA + (r.Tp - a0); commit.preUntil = now + r.pEnd; }
+            }
+          }
+          else if (score(r) > escBadM) { escBadM = score(r); escBad = plan2; escBadA = r.aLat; escBadT = r.T; escBadSide = plan2.side; }
+        }
+        /* 3. nothing is clean: whatever keeps the most room */
+        if (!pick) {
+          if (escBad && escBadM > bestM) { pick = escBad; pickA = escBadA; pickT = escBadT; pickSide = escBadSide; dbg.st = "none-esc"; dbg.m = escBadM; }
+          else { pick = best || { abs: want }; pickA = bestA; pickT = bestT; pickSide = bestSide; dbg.st = "none-hug"; dbg.m = bestM; }
+        }
+      }
+      if (pickSide) { lastSide = pickSide; lastSideAt = now; }
+    }
+    /* what to send: the plan's direction as seen from the heading the server will have when this lands (never more
+       than ~150 degrees away, so the server turns the way we mean even on a U-turn or a loop) */
+    dbg.p = pick; dbg.aL = pickA; dbg.T = pickT;
+    if (dbg.st === "want") prev = null;
+    else if (pick.abs != null) prev = { abs: pick.abs, side: pick.side || pickSide || 0 };
+    else prev = { aim: contA + (pickT - a0), side: pickSide || 0 };
+    var off = pickT - pickA;
+    var outA = pickA + Math.max(-2.6, Math.min(2.6, off));
+    outA = ((outA % TWO_PI) + TWO_PI) % TWO_PI;
+    var byte = (251 * outA / TWO_PI | 0) % 251;
     hist.push({ t: now, a: byte * TWO_PI / 251 });
-    while (hist.length && hist[0].t < now - 2000) hist.shift();
+    while (hist.length && hist[0].t < now - 2500) hist.shift();
     return byte;
   }
+
   function active() { return on && !(g("tf") && g("tf").gA); }
   /* key: keymap id "squeeze" (Revamp Keys), default ";" — toggle, or hold via Key Modes */
   function curKey() {
@@ -905,7 +1112,7 @@ var NTL_SQ = (function () {
   }
   function holdMode() { return typeof NTL_KM !== "undefined" && NTL_KM.modeOf && NTL_KM.modeOf("squeeze") === "hold"; }
   function typing() { var el = document.activeElement; if (!el) return false; var t = (el.tagName || "").toUpperCase(); return t === "INPUT" || t === "TEXTAREA" || el.isContentEditable; }
-  function reset() { hist.length = 0; }
+  function reset() { hist.length = 0; lastSide = 0; commit = null; prevA0 = null; prev = null; pingHist.length = 0; }
   function toggle() { on = !on; reset(); try { if (typeof R === "function" && typeof J !== "undefined") R(J, "Squeeze mode " + (on ? "ON" : "OFF")); } catch (e) {} try { if (typeof w9 === "function") w9(); } catch (e) {} }
   window.addEventListener("keydown", function (e) {
     if (e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
@@ -917,7 +1124,7 @@ var NTL_SQ = (function () {
     if (!holdMode() || !on) return;
     var k = curKey(); if (k && (e.key || "").toLowerCase() === k) toggle();
   }, true);
-  return { tick: tick, toggle: toggle, reset: reset, cfg: cfg, set: set, key: curKey, get active() { return active(); }, get on() { return on; }, set on(v) { on = !!v; reset(); } };
+  return { tick: tick, dbg: dbg, toggle: toggle, reset: reset, cfg: cfg, set: set, key: curKey, get active() { return active(); }, get on() { return on; }, set on(v) { on = !!v; reset(); } };
 })();
 /* ========================== END SQUEEZE MODE =============================== */
 /* ========================== SPINE MODE ===================================== */
@@ -4405,7 +4612,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
-    { v: "5.65-dev", d: "24 Sep 2026", t: "Squeeze mode (key ;): steer as tight as you like \u2014 your head may sink into another snake\u2019s skin but is kept off their bone, at any speed including boost and head-on rams. Depth and Gap in Vanced \u203a Controls." },
+    { v: "5.65-dev", d: "25 Sep 2026", t: "Squeeze mode (key ;): steer anywhere without dying \u2014 your head stops at another snake\u2019s skin whatever its thickness, and when the way closes it U-turns to the open side, boost and rams included. Depth and Gap in Vanced \u203a Controls." },
     { v: "5.64", d: "22 Sep 2026", t: "Lobby can be switched off in Vanced \u203a General and no longer appears when you come back from the skin editor or settings \u2014 only after a real round. Updates card shows UPDATE only when there is one." },
     { v: "5.64", d: "21 Sep 2026", t: "Backups: one .ntlvanced file holds every NTL and Vanced setting (keys, layouts, theme, arenas, skins); BACKUP / RESTORE in Vanced › Updates & About; old .ntlmod files still restore." },
     { v: "5.63", d: "21 Sep 2026", t: "Lobby: after a round you land on a full Vanced page instead of the home screen — final length, your best, nick and server, PLAY, HOME and a Quick settings page (placeholder for now). Enter plays, Esc goes home. Skipped while NTL auto-respawn is on. NTL 9.68’s playerID ported: a persistent 16-char id sent on connect to the servers NTL lists (Battledome included), same packet and storage keys; chat !id / !idlist / !idforce; shown in Vanced › Updates & About. Team map and Live Battledomes removed." },
@@ -4743,9 +4950,9 @@ var NTL_VS = (function () {
     if (typeof NTL_SQ !== "undefined") {
       var cq = card("Squeeze mode");
       var sqKey = (function () { var k2 = NTL_SQ.key(); return k2 ? (typeof Ad === "function" ? Ad(k2) : k2.toUpperCase()) : "none"; })();
-      cq.appendChild(vsRow("Squeeze mode", "key <b>" + sqKey + "</b> (Revamp Keys, toggle or hold) \u2014 steer as tight as you like: you may sink into another snake\u2019s skin; your head is only kept off their bone (the centre line) \u2014 at any speed, boost included. Squeeze someone without dying. Separate from the bot; off while the bot drives.", vsSwitch(NTL_SQ.on, function (v) { NTL_SQ.on = v; })));
-      cq.appendChild(vsSlider("Depth", "how far your head may sink into their skin \u2014 100% lets your head reach their bone, lower keeps you further out (raise it for tighter squeezes, lower it if you ever die)", 0, 100, 5, Math.round(NTL_SQ.cfg.depth * 100), function (v) { return v + "%"; }, function (v) { NTL_SQ.set("depth", v / 100); }));
-      cq.appendChild(vsSlider("Gap", "extra safety distance on top of the depth (units)", 0, 12, 1, NTL_SQ.cfg.gap, function (v) { return v + " u"; }, function (v) { NTL_SQ.set("gap", v); }));
+      cq.appendChild(vsRow("Squeeze mode", "key <b>" + sqKey + "</b> (Revamp Keys, toggle or hold) \u2014 steer anywhere, as tight as you like: your body may overlap theirs, only your head\u2019s collision point is kept out of their skin, sized to each snake\u2019s own thickness. When the way ahead closes it U-turns to whichever side is open \u2014 at any speed, boost included. Separate from the bot; off while the bot drives.", vsSwitch(NTL_SQ.on, function (v) { NTL_SQ.on = v; })));
+      cq.appendChild(vsSlider("Depth", "how far your collision point may enter their skin, as a share of their thickness \u2014 0% stops right at the skin (safest), higher squeezes tighter but risks a death", 0, 90, 5, Math.round(NTL_SQ.cfg.depth * 100), function (v) { return v + "%"; }, function (v) { NTL_SQ.set("depth", v / 100); }));
+      cq.appendChild(vsSlider("Gap", "extra room kept outside their skin (units) \u2014 lower is tighter", 0, 12, 1, NTL_SQ.cfg.gap, function (v) { return v + " u"; }, function (v) { NTL_SQ.set("gap", v); }));
       S.appendChild(cq);
     }
     if (typeof NTL_EC !== "undefined" && typeof NTL_EB !== "undefined") {
