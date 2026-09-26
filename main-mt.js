@@ -1044,7 +1044,7 @@ var NTL_SP = (function () {
   }, true);
 
   /* eye renderers ask this before drawing */
-  function noEyes(sn) { return on && !cfg.eyes && typeof snake !== "undefined" && sn === snake; }
+  function noEyes(sn) { if (on) return !cfg.eyes && typeof snake !== "undefined" && sn === snake; return typeof NTL_CR !== "undefined" && NTL_CR.noEyes(sn); }
 
   /* Called from ag() once the segment cache is filled and before any body
      drawing. bb is the 2D context at identity; Zw/Kw are world coords of the
@@ -1166,6 +1166,244 @@ var NTL_SP = (function () {
   return { toggle: toggle, hide: hide, noEyes: noEyes, cfg: cfg, set: set, preview: preview, get on() { return on; }, set on(v) { on = !!v; } };
 })();
 /* ========================== END SPINE MODE ================================= */
+/* ========================== VANCED SKINS =================================== */
+/* Creature skins for your own snake (drawn on your screen; the game only ever
+   gets a normal skin). Picked from the skin editor: a "Vanced Skins" button
+   next to Select Cosmetic opens a small page. Choosing a creature also sets the
+   normal skin that is closest to its colours (NTL's own save path: z7 +
+   snakercv + want_custom_skin=0), so other players see that; choosing
+   "Normal skin" puts your previous skin back.
+   Render hook (one line in NTL's body renderer ag, next to Spine mode's): when
+   a creature is on and Spine mode is off, hide() draws it on the 2D pass along
+   the centre-line cache (Zw/Kw, _w==2 on screen) and zeroes _w so the beads,
+   boost glow and death glow are never drawn. NTL_SP.noEyes() asks noEyes().
+   Settings: localStorage.wy_creature = { id, prev: { rcv, want, custom } }. */
+var NTL_CR = (function () {
+  var KEY = "wy_creature", cfg = { id: "", prev: null };
+  try { var j = JSON.parse(localStorage.getItem(KEY) || "null"); if (j) for (var k in cfg) if (k in j) cfg[k] = j[k]; } catch (e) {}
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) {} }
+  var PI = Math.PI;
+
+  /* ---- centipede ---- */
+  /* S: samples head→tail, each {x, y, a} in screen px (a = direction towards the head), rr = body radius in px */
+  function centipede(c, S, rr, t, boost, alpha) {
+    var n = S.length; if (n < 2) return;
+    var legW = Math.max(1, rr * 0.13), ph = t * (boost ? 15 : 8), i, s, side;
+    c.lineCap = "round"; c.lineJoin = "round";
+    /* tail cerci */
+    var L = S[n - 1], ta = L.a + PI;
+    c.strokeStyle = "#b83a1c"; c.lineWidth = Math.max(1, rr * 0.1); c.globalAlpha = alpha;
+    for (side = -1; side <= 1; side += 2) {
+      var ca = ta + side * 0.32, len = rr * 3.6, w = Math.sin(ph * 0.3 + side) * 0.12;
+      c.beginPath(); c.moveTo(L.x, L.y);
+      c.quadraticCurveTo(L.x + Math.cos(ca) * len * 0.5, L.y + Math.sin(ca) * len * 0.5, L.x + Math.cos(ca + w + side * 0.15) * len, L.y + Math.sin(ca + w + side * 0.15) * len);
+      c.stroke();
+    }
+    /* legs (under the body): two per segment, swept back, rowing in a wave */
+    for (i = 1; i < n; i++) {
+      s = S[i];
+      for (side = -1; side <= 1; side += 2) {
+        var sw = Math.sin(ph - i * 0.9 + (side > 0 ? PI : 0)) * 0.32;
+        var nx = Math.cos(s.a + side * PI / 2), ny = Math.sin(s.a + side * PI / 2);
+        var bx = s.x + nx * rr * 0.75, by = s.y + ny * rr * 0.75;
+        var a1 = s.a + side * (PI / 2 + 0.35) + side * sw, a2 = a1 + side * 0.55;
+        var kx = bx + Math.cos(a1) * rr * 0.7, ky = by + Math.sin(a1) * rr * 0.7;
+        var fx = kx + Math.cos(a2) * rr * 0.75, fy = ky + Math.sin(a2) * rr * 0.75;
+        c.strokeStyle = "#d9822b"; c.lineWidth = legW * 1.25; c.beginPath(); c.moveTo(bx, by); c.lineTo(kx, ky); c.stroke();
+        c.strokeStyle = "#ffc15c"; c.lineWidth = legW; c.beginPath(); c.moveTo(kx, ky); c.lineTo(fx, fy); c.stroke();
+      }
+    }
+    /* body segments, tail first so each one overlaps the one behind it */
+    for (i = n - 1; i >= 1; i--) {
+      s = S[i];
+      var k2 = 1 - (i / n) * 0.35;                                  // a little thinner towards the tail
+      c.save(); c.translate(s.x, s.y); c.rotate(s.a);
+      c.beginPath(); c.ellipse(0, 0, rr * 0.78, rr * 0.92 * k2, 0, 0, PI * 2);
+      c.fillStyle = "#26262b"; c.fill();
+      c.lineWidth = Math.max(1, rr * 0.08); c.strokeStyle = "rgba(0,0,0,.55)"; c.stroke();
+      c.beginPath(); c.ellipse(-rr * 0.05, -rr * 0.18 * k2, rr * 0.55, rr * 0.45 * k2, 0, 0, PI * 2);
+      c.fillStyle = "rgba(90,90,100,.35)"; c.fill();              // soft top light
+      c.beginPath(); c.arc(-rr * 0.12, 0, rr * 0.34 * k2, -0.9, 0.9);  // the white rib mark
+      c.strokeStyle = "rgba(235,235,235,.8)"; c.lineWidth = Math.max(1, rr * 0.12); c.stroke();
+      c.restore();
+    }
+    /* head: red plate, jaws, antennae */
+    var H = S[0];
+    c.save(); c.translate(H.x, H.y); c.rotate(H.a);
+    for (side = -1; side <= 1; side += 2) {                        // antennae
+      var wig = Math.sin(t * 3.1 + side * 1.7) * 0.18;
+      c.beginPath(); c.moveTo(rr * 0.7, side * rr * 0.3);
+      c.bezierCurveTo(rr * 2.2, side * rr * (0.9 + wig), rr * 3.4, side * rr * (1.6 + wig * 2), rr * 4.6, side * rr * (2.4 + wig * 3));
+      c.strokeStyle = "#c53a1b"; c.lineWidth = Math.max(1, rr * 0.08); c.stroke();
+    }
+    for (side = -1; side <= 1; side += 2) {                        // jaws
+      c.beginPath(); c.moveTo(rr * 0.55, side * rr * 0.45);
+      c.quadraticCurveTo(rr * 1.35, side * rr * 0.55, rr * 1.25, side * rr * 0.08);
+      c.strokeStyle = "#4a0d05"; c.lineWidth = Math.max(1.2, rr * 0.2); c.stroke();
+    }
+    var gr = c.createRadialGradient(rr * 0.2, -rr * 0.2, rr * 0.1, 0, 0, rr);
+    gr.addColorStop(0, "#f06a3a"); gr.addColorStop(0.6, "#c7361a"); gr.addColorStop(1, "#7d1a0b");
+    c.beginPath(); c.ellipse(0, 0, rr * 1.15, rr * 1.02, 0, 0, PI * 2); c.fillStyle = gr; c.fill();
+    c.lineWidth = Math.max(1, rr * 0.08); c.strokeStyle = "rgba(0,0,0,.5)"; c.stroke();
+    c.beginPath(); c.moveTo(-rr * 0.2, -rr * 0.5); c.lineTo(rr * 0.35, 0); c.lineTo(-rr * 0.2, rr * 0.5);   // plate ridge
+    c.strokeStyle = "rgba(255,190,150,.35)"; c.lineWidth = Math.max(1, rr * 0.08); c.stroke();
+    c.restore();
+  }
+
+  /* id → { name, skin (closest normal skin: slither colours of skin 29 = dark grey 80,80,80 + yellow 238,238,112), draw } */
+  var LIST = { centipede: { name: "Centipede", skin: 29, draw: centipede } };
+  function cur() { return (cfg.id && LIST[cfg.id]) || null; }
+
+  /* ---- samples along NTL's centre line, one per body segment ---- */
+  function samples(Zw, Kw, _w, n, step, g, ox, oy) {
+    var S = [], dist = 0, need = 0, i;
+    S.push({ x: Zw[0] * g + ox, y: Kw[0] * g + oy, a: 0 });
+    for (i = 1; i < n && S.length < 600; i++) {
+      var x0 = Zw[i - 1], y0 = Kw[i - 1], x1 = Zw[i], y1 = Kw[i], L = Math.sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0));
+      while (L > 0 && dist + L >= need + step) {
+        need += step; var f = (need - dist) / L;
+        S.push({ x: (x0 + (x1 - x0) * f) * g + ox, y: (y0 + (y1 - y0) * f) * g + oy, a: 0 });
+      }
+      dist += L;
+    }
+    for (i = 1; i < S.length; i++) S[i].a = Math.atan2(S[i - 1].y - S[i].y, S[i - 1].x - S[i].x);
+    S[0].a = S.length > 1 ? S[1].a : 0;
+    return S;
+  }
+  function draw(bb, cb, Zw, Kw, _w, n, r, T) {
+    var C = cur(); if (!C || n < 2) return;
+    var g = T ? T.g : gsc, ox = T ? T.ox : Xe - view_xx * g, oy = T ? T.oy : Ee - view_yy * g;
+    var a = Math.max(0, Math.min(1, cb.H * (1 - cb.X))); if (a <= 0.01) return;
+    var S = samples(Zw, Kw, _w, n, r * 1.05, g, ox, oy);
+    if (typeof cb.ang === "number") S[0].a = cb.ang;
+    bb.save(); bb.setTransform(1, 0, 0, 1, 0, 0); bb.globalCompositeOperation = "source-over"; bb.globalAlpha = a;
+    C.draw(bb, S, r * g, performance.now() / 1000, cb.BA > cb.C, a);
+    bb.restore();
+  }
+  /* called from ag(); pass 1 = GL sprite pass, 0/2 = 2D pass */
+  function hide(bb, cb, Zw, Kw, qw, _w, n, r, pass) {
+    if (pass !== 1) { try { draw(bb, cb, Zw, Kw, _w, n, r); } catch (e) {} }
+    for (var i = 0; i < n; i++) _w[i] = 0;
+  }
+  function noEyes(sn) { return !!cur() && typeof snake !== "undefined" && sn === snake; }
+
+  /* ---- choosing: the normal skin nearest to the creature goes to the server ---- */
+  function useSkin(id) {
+    try { if (typeof z7 === "function" && typeof snake !== "undefined" && snake) z7(snake, id, null); } catch (e) {}
+    try { localStorage.setItem("snakercv", "" + id); localStorage.setItem("want_custom_skin", "0"); } catch (e) {}
+    try { if (typeof Ov === "function") Ov(); } catch (e) {}
+  }
+  function pick(id) {
+    if (id && LIST[id]) {
+      if (!cur()) { try { cfg.prev = { rcv: localStorage.getItem("snakercv"), want: localStorage.getItem("want_custom_skin") }; } catch (e) {} }
+      cfg.id = id; save(); useSkin(LIST[id].skin);
+    } else {
+      var p = cfg.prev; cfg.id = ""; cfg.prev = null; save();
+      if (p) {
+        try {
+          if (p.want === "1" && typeof snake !== "undefined" && snake && typeof z7 === "function") {
+            localStorage.setItem("want_custom_skin", "1");
+            var cs = (localStorage.getItem("custom_skin") || "").split(",").map(Number); if (cs.length > 8) z7(snake, 0, new Uint8Array(cs));
+          } else useSkin(p.rcv == null ? 0 : Number(p.rcv) || 0);
+        } catch (e) {}
+      }
+    }
+    render();
+  }
+
+  /* ---- the page ---- */
+  var CSS = [
+    "#wy-cr-ov{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;}",
+    "#wy-cr{width:min(560px,94vw);max-height:88vh;overflow:auto;border-radius:16px;background:rgba(14,15,20,.94);border:1px solid rgba(255,255,255,.1);box-shadow:0 20px 60px rgba(0,0,0,.6);padding:16px;color:#e6e9ef;}",
+    "#wy-cr .hd{display:flex;align-items:center;gap:10px;margin-bottom:12px;}",
+    "#wy-cr .hd b{font-size:15px;letter-spacing:.4px;background:linear-gradient(90deg,var(--wy-l,#c9b6ff),var(--wy-s,#5ecbff));-webkit-background-clip:text;background-clip:text;color:transparent;}",
+    "#wy-cr .hd span{flex:1;font-size:11px;color:#8b93a7;}",
+    "#wy-cr .x{height:28px;padding:0 12px;border-radius:9px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#e6e9ef;font:bold 11px Arial;cursor:pointer;}",
+    "#wy-cr .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;}",
+    "#wy-cr .it{border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);cursor:pointer;overflow:hidden;}",
+    "#wy-cr .it.on{border-color:var(--wy-p,#9b7bff);box-shadow:0 0 0 2px rgba(155,123,255,.35);}",
+    "#wy-cr .it canvas{display:block;width:100%;height:96px;background:radial-gradient(circle at 40% 50%,#1b1d24,#0b0c10);}",
+    "#wy-cr .it .nm{padding:8px 10px;font:bold 12px Arial;display:flex;justify-content:space-between;align-items:center;}",
+    "#wy-cr .it .nm i{font-style:normal;font-size:10px;color:#8b93a7;font-weight:normal;}",
+    "#wy-cr .it.on .nm i{color:#9be7b5;}",
+    "#wy-cr .nt{margin-top:12px;font-size:10.5px;color:#6b7385;line-height:1.5;}"
+  ].join("\n");
+  var ov = null, raf = 0;
+  function css() { if (!document.getElementById("cr-css")) { var s = document.createElement("style"); s.id = "cr-css"; s.textContent = CSS; (document.head || document.documentElement).appendChild(s); } }
+  /* a wavy demo body in canvas px, head on the right */
+  function demo(cv, id, t) {
+    var W = cv.clientWidth || 160, Hh = cv.clientHeight || 96, S = Math.min(2, window.devicePixelRatio || 1);
+    if (cv.width !== Math.round(W * S)) { cv.width = Math.round(W * S); cv.height = Math.round(Hh * S); }
+    var c = cv.getContext("2d"); c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cv.width, cv.height);
+    var rr = 7 * S, pts = [], m = 26;
+    for (var i = 0; i < m; i++) { var u = i / (m - 1); pts.push({ x: (W * 0.84 - u * W * 0.72) * S, y: (Hh * 0.5 + Math.sin(u * 7 - t * 2.2) * Hh * 0.16 * (0.3 + u)) * S, a: 0 }); }
+    for (i = 1; i < m; i++) pts[i].a = Math.atan2(pts[i - 1].y - pts[i].y, pts[i - 1].x - pts[i].x);
+    pts[0].a = pts[1].a;
+    if (id && LIST[id]) { LIST[id].draw(c, pts, rr, t, false, 1); return; }
+    c.lineCap = "round"; c.lineJoin = "round";                     // plain snake for "Normal skin"
+    c.beginPath(); for (i = m - 1; i >= 0; i--) (i === m - 1 ? c.moveTo : c.lineTo).call(c, pts[i].x, pts[i].y);
+    c.strokeStyle = "#8f7bd8"; c.lineWidth = rr * 2; c.stroke();
+    c.fillStyle = "#fff"; for (var sd = -1; sd <= 1; sd += 2) { c.beginPath(); c.arc(pts[0].x + Math.cos(pts[0].a + sd * 0.9) * rr * 0.55, pts[0].y + Math.sin(pts[0].a + sd * 0.9) * rr * 0.55, rr * 0.32, 0, PI * 2); c.fill(); }
+  }
+  function render() {
+    if (!ov) return;
+    var items = ov.querySelectorAll(".it");
+    for (var i = 0; i < items.length; i++) { var on = (items[i].getAttribute("data-id") || "") === (cfg.id || ""); items[i].classList.toggle("on", on); items[i].querySelector("i").textContent = on ? "IN USE" : "USE"; }
+  }
+  function close() { if (ov) { ov.remove(); ov = null; } if (raf) { cancelAnimationFrame(raf); raf = 0; } }
+  function open() {
+    css(); close();
+    ov = document.createElement("div"); ov.id = "wy-cr-ov";
+    var h = '<div id="wy-cr"><div class="hd"><b>VANCED SKINS</b><span>creatures for your snake</span><button class="x">CLOSE</button></div><div class="grid">';
+    var ids = [""].concat(Object.keys(LIST));
+    ids.forEach(function (id) { h += '<div class="it" data-id="' + id + '"><canvas></canvas><div class="nm">' + (id ? LIST[id].name : "Normal skin") + "<i></i></div></div>"; });
+    h += '</div><div class="nt">The creature is drawn on your screen. Other players see the normal skin closest to its colours — it is set for you when you pick one, and your previous skin comes back when you pick Normal skin.</div></div>';
+    ov.innerHTML = h;
+    ["mousedown", "mouseup", "click", "dblclick", "wheel", "touchstart", "touchmove", "touchend", "pointerdown", "pointerup", "contextmenu", "keydown", "keyup"].forEach(function (t) {
+      ov.addEventListener(t, function (e) { e.stopPropagation(); }, { passive: t === "wheel" || t.indexOf("touch") === 0 });
+    });
+    ov.addEventListener("click", function (e) {
+      if (e.target === ov || (e.target.classList && e.target.classList.contains("x"))) { close(); return; }
+      var it = e.target.closest && e.target.closest(".it"); if (it) pick(it.getAttribute("data-id") || "");
+    });
+    document.body.appendChild(ov); render();
+    var cvs = ov.querySelectorAll(".it canvas"), t0 = performance.now();
+    (function loop() { if (!ov) return; var t = (performance.now() - t0) / 1000; for (var i = 0; i < cvs.length; i++) demo(cvs[i], ids[i], t); raf = requestAnimationFrame(loop); })();
+  }
+
+  /* ---- the button in the skin editor, next to Select Cosmetic ---- */
+  var holder = null, icon = "";
+  function iconURL() {
+    if (icon) return icon;
+    var cv = document.createElement("canvas"); cv.width = 238; cv.height = 174; var c = cv.getContext("2d");
+    var pts = [], m = 18;
+    for (var i = 0; i < m; i++) { var u = i / (m - 1), ang = -0.4 + u * 3.6; pts.push({ x: 120 + Math.cos(ang) * 52 * (1 - u * 0.25), y: 66 + Math.sin(ang) * 40 * (1 - u * 0.25), a: 0 }); }
+    for (i = 1; i < m; i++) pts[i].a = Math.atan2(pts[i - 1].y - pts[i].y, pts[i - 1].x - pts[i].x);
+    pts[0].a = pts[1].a;
+    centipede(c, pts, 10, 0.6, false, 1);
+    c.font = "bold 30px Arial"; c.textAlign = "center"; c.lineJoin = "round";
+    c.lineWidth = 6; c.strokeStyle = "rgba(0,0,0,.85)"; c.strokeText("Vanced Skins", 119, 160);
+    c.fillStyle = "#6fbf6a"; c.fillText("Vanced Skins", 119, 160);
+    return (icon = cv.toDataURL("image/png"));
+  }
+  function tick() {
+    var ref = document.getElementById("scosh"); if (!ref) { if (holder) holder.style.display = "none"; return; }
+    if (!holder || !holder.isConnected) {
+      holder = document.createElement("div"); holder.id = "wy-crh";
+      holder.innerHTML = '<a class="btn btnt" draggable="false" id="wy-crb" style="width:119px;height:87px;" href="#"><img class="nsi" border="0" draggable="false" width="119" height="87" src="' + iconURL() + '"></a>';
+      holder.querySelector("a").addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); open(); });
+      (ref.parentNode || document.body).appendChild(holder);
+    }
+    var cs = getComputedStyle(ref), shown = cs.display !== "none" && cs.visibility !== "hidden";
+    holder.style.cssText = "position:fixed;z-index:50;display:" + (shown ? "block" : "none") + ";bottom:" + cs.bottom + ";transform:" + (ref.style.transform || "none") + ";transform-origin:" + cs.transformOrigin + ";opacity:" + cs.opacity + ";left:" + ((parseFloat(ref.style.left) || ref.getBoundingClientRect().left) + 110) + "px;";
+    if (!shown && ov) close();
+  }
+  function boot() { if (!document.body) { setTimeout(boot, 50); return; } setInterval(tick, 400); }
+  boot();
+
+  return { hide: hide, noEyes: noEyes, open: open, close: close, pick: pick, cfg: cfg, LIST: LIST, get id() { return cur() ? cfg.id : ""; } };
+})();
+/* ========================== END VANCED SKINS =============================== */
 /* ========================== PRO GUARD ====================================== */
 /* Predictive auto-dodge. Every ~33 ms it forward-simulates your head along
    the heading you are steering to, using the game's own integration
@@ -4405,6 +4643,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
+    { v: "5.66-dev", d: "26 Sep 2026", t: "Vanced Skins: a new button in the skin editor opens creature skins for your snake \u2014 Centipede first. Other players see the normal skin closest to the creature\u2019s colours." },
     { v: "5.65", d: "26 Sep 2026", t: "Global chat (the SlitherControl+ room) removed — the chat box is NTL’s team chat again, with the emoji / GIF picker. Assist (and the other hold keys) now stays on while an on-screen button is held, so Assist go skinless / Assist map show on phones. Team list follows NTL’s KeyOwners in players list, Online players status (version) and the team detail toggle again. Everywhere NTL sent or showed its own version (team list, tag server, settings title) it now uses the NTL VANCED version you are running — the updated one after an in-app update; the version text left the stats line. Squeeze mode is in the build but unavailable for now." },
     { v: "5.64", d: "22 Sep 2026", t: "Lobby can be switched off in Vanced \u203a General and no longer appears when you come back from the skin editor or settings \u2014 only after a real round. Updates card shows UPDATE only when there is one." },
     { v: "5.64", d: "21 Sep 2026", t: "Backups: one .ntlvanced file holds every NTL and Vanced setting (keys, layouts, theme, arenas, skins); BACKUP / RESTORE in Vanced › Updates & About; old .ntlmod files still restore." },
@@ -6615,7 +6854,7 @@ fj=Dh.yy+Dh.fy;Sh=zb+.5*(fh-zb);Th=Db+.5*(Zb-Db);gj=fh+.5*(kj-fh);Eh=Zb+.5*(fj-Z
 yy:Xh},Wb.push(Lb));dh++;zh<=Oh&&(Mb=Math.sqrt((Lb.xx-vh.xx)*(Lb.xx-vh.xx)+(Lb.yy-vh.yy)*(Lb.yy-vh.yy)),Lb.d=Mb,vh=Lb,zh++);if(1==Yb){Yb=2;Sb=-9999;break}Ub-=Xb;0>=Ub?(Yb=1,$b+=Xb+Ub):$b+=Xb}$b-=ph;Ph=$b/Xb;Ub+=$b;Vh=!0}Vh&&(Ub-=$b)}if(1>=Yb&&(-1E-4<=Ub&&0>=Ub&&(Ub=0),0<=Ub||1==Yb)&&(Tb=cb.B[Ah-1],ah=cb.B[Ah-2],Tb&&(zb=Tb.xx+Tb.fx,Db=Tb.yy+Tb.fy),ah))for(fh=ah.xx+ah.fx,Zb=ah.yy+ah.fy;0<=Ub||1==Yb;){Jh=fh-(zb-fh)*($b-.5);Xh=Zb-(Db-Zb)*($b-.5);dh<Wb.length?(Lb=Wb[dh],Lb.xx=Jh,Lb.yy=Xh):(Lb={xx:Jh,yy:Xh},
 Wb.push(Lb));dh++;zh<=Oh&&(Mb=Math.sqrt((Lb.xx-vh.xx)*(Lb.xx-vh.xx)+(Lb.yy-vh.yy)*(Lb.yy-vh.yy)),Lb.d=Mb,vh=Lb,zh++);if(1==Yb){Yb=2;break}Ub-=Xb;0>=Ub?(Yb=1,$b+=Xb+Ub):$b+=Xb;-1E-4<=Ub&&0>=Ub&&(Ub=0)}}var Fh=zh-1;Fh>Wb.length&&(Fh=Wb.length);Ce&&(Fh=0);if(3<=Fh){for(Sb=Ih=0;Sb<Fh-1;Sb++)Ih+=Wb[Sb].d;var Gh=Wb[0];ph=Ih/(Fh-2);var Nh=1;var Hh=ph;for(Sb=0;Sb<Fh;Sb++)Wb[Sb].ox=Wb[Sb].xx,Wb[Sb].oy=Wb[Sb].yy;for(Sb=1;Sb<Fh;Sb++)for(Lb=Wb[Sb];;){var Bh=Wb[Nh];if(Hh<Bh.d){Lb.xx=Gh.ox+(Bh.ox-Gh.ox)*Hh/Bh.d;
 Lb.yy=Gh.oy+(Bh.oy-Gh.oy)*Hh/Bh.d;var Qh=Math.pow(Sb/Fh,2);Lb.xx+=(Lb.ox-Lb.xx)*Qh;Lb.yy+=(Lb.oy-Lb.yy)*Qh;Hh+=ph;break}else if(Hh-=Bh.d,Gh=Bh,Nh++,Nh>=Fh){Sb=Fh+1;break}}}var nj=Bb=0;for(Sb=0;Sb<dh;Sb++){zb=Wb[Sb].xx;Db=Wb[Sb].yy;Zw[Bb]=zb;Kw[Bb]=Db;qw[Bb]=0;lb&&(nj--,0>=nj&&(nj=3));_w[Bb]=zb>=xc&&Db>=Oc&&zb<=Cc&&Db<=Hc?lb&&3!=nj?1:2:0;1<=Bb&&(wh=zb-wj,xh=Db-xj,qw[Bb]=-4<=wh&&-4<=xh&&4>wh&&4>xh?Vu[32*xh+128<<8|32*wh+128]:-8<=wh&&-8<=xh&&8>wh&&8>xh?Vu[16*xh+128<<8|16*wh+128]:-16<=wh&&-16<=xh&&16>
-wh&&16>xh?Vu[8*xh+128<<8|8*wh+128]:-127<=wh&&-127<=xh&&127>wh&&127>xh?Vu[xh+128<<8|wh+128]:Math.atan2(xh,wh));var wj=zb;var xj=Db;Bb++}2<=dh&&(qw[0]=qw[1],cb.OA=qw[1]+Math.PI)}NTL_SP.on&&cb===snake&&NTL_SP.hide(bb,cb,Zw,Kw,qw,_w,Bb,eb,jb);bb.save();bb.translate(Xe,Ee);pb=gsc*eb*52/32;hb=gsc*eb*62/32;Pb=cb.H*(1-cb.X);Pb*=Pb;Vb=1;if(2!==jb){var ij=Oe&&Cg&&Eg&&Oe.available(bb)&&(3===(mg|0)?!!k7:!!F0);ij&&=Oe.bindAtlas(3===(mg|0)?"kmcsnews":"kmcss",3===(mg|0)?k7:F0);if(ij&&pg!==z4.length){pg=z4.length;Mg=new Float32Array(3*pg);for(var Uh=0;Uh<pg;Uh++){var nh=z4[Uh];
+wh&&16>xh?Vu[8*xh+128<<8|8*wh+128]:-127<=wh&&-127<=xh&&127>wh&&127>xh?Vu[xh+128<<8|wh+128]:Math.atan2(xh,wh));var wj=zb;var xj=Db;Bb++}2<=dh&&(qw[0]=qw[1],cb.OA=qw[1]+Math.PI)}cb===snake&&(NTL_SP.on?NTL_SP.hide(bb,cb,Zw,Kw,qw,_w,Bb,eb,jb):NTL_CR.id&&NTL_CR.hide(bb,cb,Zw,Kw,qw,_w,Bb,eb,jb));bb.save();bb.translate(Xe,Ee);pb=gsc*eb*52/32;hb=gsc*eb*62/32;Pb=cb.H*(1-cb.X);Pb*=Pb;Vb=1;if(2!==jb){var ij=Oe&&Cg&&Eg&&Oe.available(bb)&&(3===(mg|0)?!!k7:!!F0);ij&&=Oe.bindAtlas(3===(mg|0)?"kmcsnews":"kmcss",3===(mg|0)?k7:F0);if(ij&&pg!==z4.length){pg=z4.length;Mg=new Float32Array(3*pg);for(var Uh=0;Uh<pg;Uh++){var nh=z4[Uh];
 Mg[3*Uh]=parseInt(nh.substr(1,2),16)/255;Mg[3*Uh+1]=parseInt(nh.substr(3,2),16)/255;Mg[3*Uh+2]=parseInt(nh.substr(5,2),16)/255}}if(!NTL_PF.on&&cb.BA>cb.C&&(s5&&cb.skb_boost||!Me&&mb||pe&&!mb)){Vb=cb.H*(1-cb.X)*Math.max(0,Math.min(1,(cb.BA-cb.M)/(cb.p-cb.M)));.6<Vb&&(Vb=.6);jh=Math.pow(Vb,.5);Qb=1.5*gsc*eb*(1+.9375*jh);ch=4;lb&&(ch=12);var Zh=ij&&L7&&S7&&Oe.pushSpriteAdd&&Oe.bindSpriteAtlasAdd;Zh&&(Wv!==L7&&Oe.updateSpriteAtlas&&(Oe.updateSpriteAtlas("pci_kfmc",L7),Wv=L7),Oe.bindSpriteAtlasAdd("pci_kfmc",L7)||
 (Zh=!1));if(Zh){var jj=1/(L7.width||1),yj=1/(L7.height||1),rj=cb.sA&&cb.sA.length?cb.sA:null,tj=rj?rj.length:0,tb=S7.length;for(nb=Bb-1;0<=nb;nb--)if(2==_w[nb]){var wb=rj?rj[nb%tj]|0:fb;if(0>wb||wb>=tb)wb=fb<tb?fb:0;var Ab=S7[wb]|0,xb=G7[wb]|0,yb=Pb*jh*.38*(.6+.4*Math.cos(nb/ch-1.15*cb.DA));if(!(0>=yb)){var Gb=4>nb?Qb*(1+(4-nb)*qb):Qb;Oe.pushSpriteAdd(Xe+(Zw[nb]-view_xx)*gsc,Ee+(Kw[nb]-view_yy)*gsc,0,Gb,Gb,yb,Ab*jj,xb*yj,(Ab+62)*jj,(xb+62)*yj)}}}else{Kb=M7[fb];bb.save();bb.globalCompositeOperation=
 "lighter";if(cb.sA&&cb.sA.length){var Cb=cb.sA;bh=Cb.length;for(nb=Bb-1;0<=nb;nb--)2==_w[nb]&&(Eb=Zw[nb],Jb=Kw[nb],Kb=Cb[nb%bh]|0,Kb=M7[Kb],ob=(Eb-view_xx)*gsc,sb=(Jb-view_yy)*gsc,bb.globalAlpha=Pb*jh*.38*(.6+.4*Math.cos(nb/ch-1.15*cb.DA)),bb.translate(ob,sb),4>nb?(Ib=Qb*(1+(4-nb)*qb),bb.drawImage(Kb,-Ib,-Ib,2*Ib,2*Ib)):bb.drawImage(Kb,-Qb,-Qb,2*Qb,2*Qb),bb.translate(-ob,-sb))}else for(nb=Bb-1;0<=nb;nb--)2==_w[nb]&&(Eb=Zw[nb],Jb=Kw[nb],ob=(Eb-view_xx)*gsc,sb=(Jb-view_yy)*gsc,bb.globalAlpha=Pb*jh*
