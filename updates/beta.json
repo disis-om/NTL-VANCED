@@ -1,12 +1,12 @@
 {
-  "version": "5.64",
+  "version": "5.65",
   "channel": "stable",
-  "date": "2026-09-22",
-  "size": 7950071,
-  "sha256": "502ee711f678c49f4f8498d890906c61b6dac16aa95030905a3a323ad068e0bd",
+  "date": "2026-09-26",
+  "size": 7958194,
+  "sha256": "a97786bd3aea522dd3c8007fcdf766241fea98107028a40f3b68303136fb7c3b",
   "minLoader": 3,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.64/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.64/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.64/NTL-VANCED-v5.64.zip",
-  "notes": "# Backups, lobby control, cleaner updates\n\n## Backups\n- One **.ntlvanced** file holds everything: NTL and Vanced settings, keys, on-screen layouts, theme, custom arenas and skins\n- **BACKUP** and **RESTORE** in Vanced › Updates & About; older `.ntlmod` files still restore\n\n## Lobby\n- Can be switched off in **Vanced › General**\n- Appears only after a real round — coming back from the skin editor or settings goes straight to the home screen\n\n## Updates\n- **UPDATE** appears only when a new version is waiting\n- Checks no longer hang: every request times out and the first mirror that answers wins\n- **STABLE** and **PACKAGED** are explained in the card and shown only when they apply\n\n## Fixes\n- Custom tag authorisation no longer throws when a saved tag is gone\n- Loading screen removed; the start-up work that made the launcher appear sooner stays\n"
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.65/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.65/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.65/NTL-VANCED-v5.65.zip",
+  "notes": "## Chat\n- Global chat removed: the chat box is NTL's team chat again\n- The emoji / GIF / sticker picker stays\n\n## Assist on phones\n- On-screen **Assist** now stays on while the button is held, so **Assist go skinless** and **Assist map** work on mobile\n- Set Assist to **TOGGLE** in Revamp Keys and a tap turns it on, the next tap turns it off\n- The same fix applies to the front laser (Tab) and skin peek (W) buttons\n\n## Team list\n- **KeyOwners in players list** works again: the key owner is shown as the main name, also while peeking (W)\n- **Online players status** shows each member's version\n- The team detail list toggle (A) hides the list again\n\n## Version\n- NTL VANCED reports its own version everywhere: team list, tag server and settings title\n- After an in-app update the new version is reported, not the one from the installed folder\n- The version text was removed from the stats line (bottom right), to make it cleaner.\n\n## Fixes\n- All NTL settings checked one by one against the original NTL: every setting works the same.\n\n# NTL VANCED BY OM RAJPUT.\n"
 }
