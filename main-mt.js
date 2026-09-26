@@ -177,7 +177,7 @@ var NTL_DX = (function () {
 /* ========================== END DIAGNOSTICS ================================ */
 
 /* ========================== PANEL EDIT MODE ================================ */
-/* The mod's own panels (Thinking log, Global chat) follow NTL's info-box
+/* The mod's own panels (Thinking log) follow NTL's info-box
    rule: while NTL's settings page is open (iA) they get a grey border, a red
    resize square and can be moved — right-click grabs a panel and it follows
    the mouse until the next click (NTL's way), or drag it with a finger /
@@ -327,135 +327,8 @@ var NTL_LG = (function () {
   return { add: add, clear: clear, cfg: cfg, set: set };
 })();
 /* ========================== END THINKING LOG =============================== */
-/* ========================== GLOBAL CHAT ==================================== */
-/* One room shared by everyone on the same chat server, independent of the
-   game server you play on. Protocol is the SlitherControl+ one (plain JSON
-   over a WebSocket), so the default server is theirs; point it at your own
-   with the same protocol from Vanced › Global chat.
-     client → {type:"user-join",username} {type:"get-history"} {type:"get-online-users"}
-              {type:"chat-message",text,channel:"global",mentions,timestamp}
-              {type:"update-username",oldUsername,newUsername}
-     server → {type:"chat-message"|"system-message",username,text,timestamp,mentions}
-              {type:"chat-history",messages:[…]} {type:"online-users",usernames:[…]}
-   Settings: localStorage.wy_gchat. */
-var NTL_GC = (function () {
-  var KEY = "wy_gchat", DEFAULT_URL = "wss://globalchat-ui8m.onrender.com";
-  var cfg = { on: false, url: DEFAULT_URL, nick: "", ping: true, users: true, open: true };
-  try { var j = JSON.parse(localStorage.getItem(KEY) || "null"); if (j) for (var k in cfg) if (k in j) cfg[k] = j[k]; } catch (e) {}
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) {} }
-  function g(n) { try { return window[n]; } catch (e) { return undefined; } }
-  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
-  function nick() {
-    if (cfg.nick) return cfg.nick;
-    var n = ""; try { n = (document.getElementById("nick") || {}).value || localStorage.getItem("nick") || ""; } catch (e) {}
-    n = String(n).trim().slice(0, 24); return n || "Player" + Math.floor(Math.random() * 9000 + 1000);
-  }
-  var CSS = [
-    "#wy-gc{position:fixed;right:8px;bottom:118px;width:320px;height:300px;display:none;flex-direction:column;z-index:100;border-radius:12px;background:rgba(0,0,0,var(--wy-bg-a,.28));font:12px Arial,'Helvetica Neue',Helvetica,sans-serif;color:#e6e9ef;text-shadow:none;overflow:hidden;zoom:var(--wy-scale,1);}",
-    "#wy-gc.on{display:flex;}#wy-gc.min{height:auto;}#wy-gc.min .b,#wy-gc.min .u,#wy-gc.min .c{display:none;}",
-    "#wy-gc .h{display:flex;align-items:center;gap:8px;padding:7px 10px;flex:none;user-select:none;cursor:pointer;}",
-    "#wy-gc .h .t{font:bold 9.5px Arial;letter-spacing:1.4px;background:linear-gradient(90deg,var(--wy-l),var(--wy-s));-webkit-background-clip:text;background-clip:text;color:transparent;}",
-    "#wy-gc .h .st{width:7px;height:7px;border-radius:50%;background:#ff8a8a;flex:none;}#wy-gc .h .st.ok{background:#9be7b5;box-shadow:0 0 6px rgba(155,231,181,.7);}",
-    "#wy-gc .h .n{font:10px Arial;color:#8b93a7;margin-left:auto;}",
-    "#wy-gc .h button{height:20px;padding:0 7px;border-radius:6px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#aab2c5;font:bold 9px Arial;letter-spacing:.6px;cursor:pointer;}",
-    "#wy-gc .h button.on{background:rgba(var(--wy-p-rgb),.3);color:#fff;}",
-    "#wy-gc .b{flex:1;min-height:0;overflow:auto;padding:0 8px 6px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.14) transparent;}",
-    "#wy-gc .b::-webkit-scrollbar{width:6px}#wy-gc .b::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:6px}",
-    "#wy-gc .m{position:relative;margin:3px 0;padding:5px 8px 12px;border-radius:9px;background:rgba(255,255,255,.04);line-height:1.35;word-break:break-word;}",
-    "#wy-gc .m .nm{font-weight:bold;color:var(--wy-l);font-size:11px;}#wy-gc .m.me .nm{color:var(--wy-s);}#wy-gc .m.sys{background:transparent;color:#8b93a7;font-size:11px;padding-bottom:5px;}",
-    "#wy-gc .m .tx{display:block;color:#e6e9ef;}#wy-gc .m .ts{position:absolute;right:7px;bottom:2px;font-size:9px;color:#6b7385;}",
-    "#wy-gc .m.mention{background:rgba(var(--wy-p-rgb),.18);box-shadow:inset 0 0 0 1px rgba(var(--wy-p-rgb),.4);}#wy-gc .m .mt{color:#ffd166;font-weight:bold;}",
-    "#wy-gc .u{display:none;flex:none;max-height:90px;overflow:auto;padding:4px 10px 6px;border-top:1px solid rgba(255,255,255,.06);font:11px Arial;color:#aab2c5;line-height:1.6;}#wy-gc.users .u{display:block;}",
-    "#wy-gc .u span{display:inline-block;margin:2px 6px 2px 0;padding:1px 7px;border-radius:99px;background:rgba(255,255,255,.06);}",
-    "#wy-gc .c{display:flex;gap:6px;padding:6px 8px 8px;flex:none;border-top:1px solid rgba(255,255,255,.06);}",
-    "#wy-gc .c input{flex:1;min-width:0;height:30px;padding:0 10px;border-radius:9px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.35);color:#e6e9ef;font:12px Arial;outline:none;}",
-    "#wy-gc .c input:focus{border-color:rgba(var(--wy-p-rgb),.7);}#wy-gc .c input::placeholder{color:#6b7385;}",
-    "#wy-gc .c button{height:30px;padding:0 12px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:linear-gradient(90deg,var(--wy-p),var(--wy-b));color:#fff;font:bold 11px Arial;letter-spacing:.6px;cursor:pointer;}",
-    "html.wy-editing #wy-gc{display:none!important;}",
-    "@media (max-width:600px){#wy-gc{width:min(320px,62vw);height:240px;bottom:100px;}}"
-  ].join("\n");
-  var box = null, body = null, list = null, inp = null, st = null, cnt = null, ubtn = null, ws = null, tries = 0, seen = {}, seenN = 0, lastPing = 0, unread = 0, users = [];
-  function css() { if (!document.getElementById("gc-css")) { var s2 = document.createElement("style"); s2.id = "gc-css"; s2.textContent = CSS; (document.head || document.documentElement).appendChild(s2); } }
-  function build() {
-    if (box) return; css();
-    box = document.createElement("div"); box.id = "wy-gc";
-    box.innerHTML = '<div class="h"><span class="st"></span><span class="t">GLOBAL CHAT</span><span class="n"></span><button class="ub">USERS</button><button class="mb">–</button></div><div class="b"></div><div class="u"></div><div class="c"><input placeholder="Message everyone…" maxlength="200" autocomplete="off" spellcheck="false"><button>SEND</button></div>';
-    body = box.querySelector(".b"); list = box.querySelector(".u"); inp = box.querySelector("input"); st = box.querySelector(".st"); cnt = box.querySelector(".n"); ubtn = box.querySelector(".ub");
-    ["mousedown", "touchstart", "wheel", "click", "keydown", "keyup", "keypress"].forEach(function (t) { box.addEventListener(t, function (e) { e.stopPropagation(); }, { passive: t === "wheel" || t === "touchstart" }); });
-    box.querySelector(".mb").onclick = function () { cfg.open = !cfg.open; save(); box.classList.toggle("min", !cfg.open); box.querySelector(".mb").textContent = cfg.open ? "–" : "+"; if (cfg.open) { unread = 0; title(); } };
-    ubtn.onclick = function () { cfg.users = !cfg.users; save(); box.classList.toggle("users", cfg.users); ubtn.classList.toggle("on", cfg.users); };
-    box.querySelector(".h .t").onclick = function () { rename(); };
-    box.querySelector(".c button").onclick = send;
-    inp.addEventListener("keydown", function (e) { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); send(); } if (e.key === "Escape") inp.blur(); });
-    box.classList.toggle("min", !cfg.open); box.classList.toggle("users", cfg.users); ubtn.classList.toggle("on", cfg.users);
-    document.body.appendChild(box);
-  }
-  function title() { if (cnt) cnt.textContent = (users.length ? users.length + " online" : "") + (unread && !cfg.open ? " · " + unread + " new" : ""); }
-  function rename() {
-    var n = prompt("Global chat nickname", nick()); if (n == null) return; n = String(n).trim().slice(0, 24); if (!n) return;
-    var old = nick(); cfg.nick = n; save();
-    addMsg("System", "Nickname changed to " + n, null, true);
-    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "update-username", oldUsername: old, newUsername: n }));
-  }
-  function mentions(t) { var m = t.match(/@([A-Za-z0-9_\-\.]{2,24})/g) || []; return m.map(function (x) { return x.slice(1); }); }
-  function addMsg(user, text, ts, sys) {
-    if (!box) build();
-    var me = nick(), mine = user === me, ment = !sys && !mine && mentions(text).some(function (m) { return m.toLowerCase() === me.toLowerCase(); });
-    var d = document.createElement("div"); d.className = "m" + (sys ? " sys" : "") + (mine ? " me" : "") + (ment ? " mention" : "");
-    var html = esc(text), media = false;
-    try { if (!sys && typeof NTL_GF !== "undefined") { var r2 = NTL_GF.render(html); if (r2 !== html) { html = r2; media = true; } } } catch (e) {}
-    if (!media) html = html.replace(/@([A-Za-z0-9_\-\.]{2,24})/g, '<span class="mt">@$1</span>');
-    d.innerHTML = sys ? html : '<span class="nm">' + esc(user) + '</span><span class="tx">' + html + '</span><span class="ts">' + (ts ? new Date(ts).toTimeString().slice(0, 5) : "") + "</span>";
-    var stick = body.scrollTop + body.clientHeight >= body.scrollHeight - 12;
-    body.appendChild(d); while (body.children.length > 120) body.removeChild(body.firstChild);
-    if (stick) body.scrollTop = body.scrollHeight;
-    if (!cfg.open && !sys) { unread++; title(); }
-    if (ment) ping();
-  }
-  function ping() {
-    if (!cfg.ping) return; var now = Date.now(); if (now - lastPing < 2000) return; lastPing = now;
-    try { var Gs = g("Gs"); var a = new Audio((Gs || "") + "chat.mp3"); a.volume = 0.5; a.play().catch(function () {}); } catch (e) {}
-  }
-  function sendText(t) { if (!box) build(); inp.value = String(t || ""); send(); }
-  function send() {
-    var t = (inp.value || "").trim(); if (!t) return;
-    if (!ws || ws.readyState !== 1) { addMsg("System", "Not connected to the chat server.", null, true); return; }
-    var ts = new Date().toISOString(), me = nick();
-    ws.send(JSON.stringify({ type: "chat-message", text: t, channel: "global", mentions: mentions(t), timestamp: ts }));
-    remember(me, t); addMsg(me, t, ts, false); inp.value = "";
-  }
-  function remember(u, t) { var k2 = u + " " + t; if (seen[k2]) return false; seen[k2] = 1; if (++seenN > 600) { seen = {}; seenN = 0; } return true; }
-  function status(ok, txt) { if (st) st.classList.toggle("ok", !!ok); if (txt) addMsg("System", txt, null, true); }
-  function connect() {
-    if (!cfg.on || ws) return;
-    build(); var url = (cfg.url || DEFAULT_URL).trim();
-    try { ws = new WebSocket(url); } catch (e) { status(false, "Bad server URL"); ws = null; return; }
-    ws.onopen = function () { tries = 0; status(true, "Connected as " + nick()); ws.send(JSON.stringify({ type: "user-join", username: nick() })); ws.send(JSON.stringify({ type: "get-history" })); ws.send(JSON.stringify({ type: "get-online-users" })); };
-    ws.onmessage = function (ev) {
-      var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
-      if (m.type === "chat-message" || m.type === "system-message") {
-        var txt = m.text || "";
-        if (m.type === "system-message" && /welcome\s+to\s+slithe?r?\s*control/i.test(txt)) txt = "Welcome to NTL VANCED, " + nick() + "!";
-        if (remember(m.username || "System", txt)) addMsg(m.username || "System", txt, m.timestamp, m.type === "system-message"); }
-      else if (m.type === "chat-history" && Array.isArray(m.messages)) { m.messages.slice(-40).forEach(function (x) { if (remember(x.username || "System", x.text)) addMsg(x.username || "System", x.text || "", x.timestamp, !x.username); }); }
-      else if (m.type === "online-users" && Array.isArray(m.usernames)) { users = m.usernames.slice(0, 200); list.innerHTML = users.map(function (u) { return "<span>" + esc(u) + "</span>"; }).join(""); title(); }
-    };
-    ws.onclose = function () { ws = null; status(false); if (cfg.on) { var wait = Math.min(30000, 2000 * Math.pow(2, tries++)); setTimeout(connect, wait); } };
-    ws.onerror = function () { try { ws.close(); } catch (e) {} };
-  }
-  function disconnect() { if (ws) { var w = ws; ws = null; try { w.onclose = null; w.close(); } catch (e) {} } status(false); }
-  function place() { if (!box) return; box.classList.toggle("on", !!cfg.on); }
-  function set(key, val) {
-    cfg[key] = val; save();
-    if (key === "on") { if (val) { build(); connect(); } else disconnect(); place(); }
-    if (key === "url" && cfg.on) { disconnect(); tries = 0; connect(); }
-    if (key === "nick" && cfg.on && ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "update-username", oldUsername: "", newUsername: nick() }));
-  }
-  function boot() { if (!document.body) { setTimeout(boot, 50); return; } if (cfg.on) { build(); connect(); } place(); setInterval(place, 1500); setInterval(function () { if (ws && ws.readyState === 1 && cfg.users) ws.send(JSON.stringify({ type: "get-online-users" })); }, 20000); }
-  boot();
-  return { cfg: cfg, set: set, nick: nick, rename: rename, sendText: sendText, DEFAULT_URL: DEFAULT_URL, get on() { return !!cfg.on; }, get connected() { return !!(ws && ws.readyState === 1); } };
-})();
-/* ========================== END GLOBAL CHAT ================================ */
+/* Global chat (SlitherControl+ room) was removed in 5.65 — clear what it left behind. */
+try { ["wy_gchat", "wy_ctab", "wy_pos_gchat"].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
 /* ========================== PERFORMANCE ==================================== */
 /* Two knobs and a meter.
    rs   – render scale 0.5..1: multiplies NTL's own HD resolution factor (ga)
@@ -789,6 +662,7 @@ var NTL_SQ = (function () {
   try { var j = JSON.parse(localStorage.getItem("wy_sqz") || "null"); if (j && j.v === 4) for (var k in cfg) if (k in j && typeof j[k] === "number") cfg[k] = j[k]; } catch (e) {}
   function save() { try { localStorage.setItem("wy_sqz", JSON.stringify({ v: 4, depth: cfg.depth, gap: cfg.gap })); } catch (e) {} }
   function set(key, val) { cfg[key] = val; save(); }
+  var LOCKED = true;   // unavailable in this build: nothing can switch it on. Everything stays so it can come back with one flag.
   var on = false, PI = Math.PI, TWO_PI = PI * 2;
   function g(n) { try { return window[n]; } catch (e) { return undefined; } }
   function norm(a) { a %= TWO_PI; if (a > PI) a -= TWO_PI; else if (a < -PI) a += TWO_PI; return a; }
@@ -1103,7 +977,7 @@ var NTL_SQ = (function () {
     return byte;
   }
 
-  function active() { return on && !(g("tf") && g("tf").gA); }
+  function active() { return !LOCKED && on && !(g("tf") && g("tf").gA); }
   /* key: keymap id "squeeze" (Revamp Keys), default ";" — toggle, or hold via Key Modes */
   function curKey() {
     var a9 = g("a9"); if (a9 === null && typeof ms === "function") { try { ms(); a9 = g("a9"); } catch (e) {} }
@@ -1113,7 +987,9 @@ var NTL_SQ = (function () {
   function holdMode() { return typeof NTL_KM !== "undefined" && NTL_KM.modeOf && NTL_KM.modeOf("squeeze") === "hold"; }
   function typing() { var el = document.activeElement; if (!el) return false; var t = (el.tagName || "").toUpperCase(); return t === "INPUT" || t === "TEXTAREA" || el.isContentEditable; }
   function reset() { hist.length = 0; lastSide = 0; commit = null; prevA0 = null; prev = null; pingHist.length = 0; }
-  function toggle() { on = !on; reset(); try { if (typeof R === "function" && typeof J !== "undefined") R(J, "Squeeze mode " + (on ? "ON" : "OFF")); } catch (e) {} try { if (typeof w9 === "function") w9(); } catch (e) {} }
+  function toggle() {
+    if (LOCKED) { on = false; try { if (typeof R === "function" && typeof J !== "undefined") R(J, "Squeeze mode is unavailable in this build"); } catch (e) {} return; }
+    on = !on; reset(); try { if (typeof R === "function" && typeof J !== "undefined") R(J, "Squeeze mode " + (on ? "ON" : "OFF")); } catch (e) {} try { if (typeof w9 === "function") w9(); } catch (e) {} }
   window.addEventListener("keydown", function (e) {
     if (e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
     var k = curKey(); if (!k || (e.key || "").toLowerCase() !== k) return;
@@ -1124,7 +1000,7 @@ var NTL_SQ = (function () {
     if (!holdMode() || !on) return;
     var k = curKey(); if (k && (e.key || "").toLowerCase() === k) toggle();
   }, true);
-  return { tick: tick, dbg: dbg, toggle: toggle, reset: reset, cfg: cfg, set: set, key: curKey, get active() { return active(); }, get on() { return on; }, set on(v) { on = !!v; reset(); } };
+  return { tick: tick, dbg: dbg, toggle: toggle, reset: reset, cfg: cfg, set: set, key: curKey, get active() { return active(); }, LOCKED: LOCKED, get on() { return !LOCKED && on; }, set on(v) { on = !LOCKED && !!v; reset(); } };
 })();
 /* ========================== END SQUEEZE MODE =============================== */
 /* ========================== SPINE MODE ===================================== */
@@ -1817,10 +1693,19 @@ var NTL_KM = (function () {
   function press(id) {
     var key = (typeof a9 !== "undefined" && a9 && a9[id]) || ""; if (!key) return false;
     var b = baseMode(id);
-    if (b === "double") dbl(key); else { fire("keydown", key); if (b === "hold") fire("keyup", key); }
+    if (b === "hold") return hold(id, true) && hold(id, false);
+    if (b === "double") dbl(key); else fire("keydown", key);
     return true;
   }
-  return { baseMode: baseMode, allowed: allowed, modeOf: modeOf, set: set, save: save, all: all, replace: replace, press: press, LABEL: LABEL, FIXED: FIXED };
+  /* A hold action from a button: down/up like the physical key; in TOGGLE mode every press flips it (latched) */
+  function hold(id, isDown) {
+    var key = (typeof a9 !== "undefined" && a9 && a9[id]) || ""; if (!key) return false;
+    if (baseMode(id) !== "hold") { if (isDown) press(id); return true; }
+    if (modeOf(id) === "toggle") { if (isDown) { if (latch[id]) { latch[id] = false; fire("keyup", key); } else { latch[id] = true; fire("keydown", key); } } return true; }
+    fire(isDown ? "keydown" : "keyup", key);
+    return true;
+  }
+  return { baseMode: baseMode, allowed: allowed, modeOf: modeOf, set: set, save: save, all: all, replace: replace, press: press, hold: hold, LABEL: LABEL, FIXED: FIXED };
 })();
 /* ========================== END KEY MODES ================================== */
 /* ============================================================================
@@ -2652,8 +2537,6 @@ var NTL_GF = (function () {
 
   var CSS = [
     "#divChat #ichat{padding-right:34px!important;padding-left:10px!important;}",
-    "#wy-gc .c .wy-gifbtn{position:static;flex:none;width:34px;height:28px;}",
-    "#wy-gc .wy-gif img{display:block;max-width:100%;max-height:var(--wy-gif,200px);border-radius:8px;background:rgba(255,255,255,.05);cursor:pointer;}#wy-gc .m .wy-gif{display:block;margin:2px 0 0;}",
     "#divChat .emojiPickerIcon{display:none!important;}",
     "#wy-gif.emoji .g{grid-template-columns:repeat(auto-fill,minmax(34px,1fr));grid-auto-rows:34px;gap:2px;}",
     "#wy-gif .em{display:flex;align-items:center;justify-content:center;font-size:22px;line-height:1;border-radius:6px;cursor:pointer;user-select:none;-webkit-user-select:none;font-family:'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif;}",
@@ -2707,12 +2590,11 @@ var NTL_GF = (function () {
     if (!cfg.on || !html) return html;
     var t = String(html).replace(/&nbsp;/g, " ").trim().replace(/&amp;/g, "&");
     if (!/^https?:\/\/\S+$/.test(t) || !isMedia(t)) return html;
-    return '<span class="wy-gif"><img loading="lazy" onload="var c=this.closest(&#39;#chat,#wy-gc .b&#39;);c&&c.scrollHeight-c.scrollTop-c.clientHeight<260&&(c.scrollTop=c.scrollHeight)" src="' + t.replace(/"/g, "&quot;") + '" alt="GIF"></span>';
+    return '<span class="wy-gif"><img loading="lazy" onload="var c=this.closest(&#39;#chat&#39;);c&&c.scrollHeight-c.scrollTop-c.clientHeight<260&&(c.scrollTop=c.scrollHeight)" src="' + t.replace(/"/g, "&quot;") + '" alt="GIF"></span>';
   }
   function chatClicks() {
     var ch = document.getElementById("chat"); if (!ch || ch.__wyGf) return; ch.__wyGf = 1;
     ch.addEventListener("click", function (e) { var t = e.target; if (t && t.tagName === "IMG" && t.parentNode && t.parentNode.className === "wy-gif") { t.classList.toggle("big"); e.stopPropagation(); } }, true);
-    var gb = document.querySelector("#wy-gc .b"); if (gb && !gb.__wyGf) { gb.__wyGf = 1; gb.addEventListener("click", function (e) { var t = e.target; if (t && t.tagName === "IMG" && t.parentNode && t.parentNode.className === "wy-gif") { t.classList.toggle("big"); e.stopPropagation(); } }, true); }
   }
 
   /* ---------- KLIPY ---------- */
@@ -2755,9 +2637,8 @@ var NTL_GF = (function () {
     var h = ""; list.forEach(function (e) { var c = emoChar(e); if (c) h += '<div class="em" title="' + esc(e.name) + '" data-e="' + esc(c) + '">' + c + "</div>"; });
     grid.innerHTML = h; grid.scrollTop = 0;
   }
-  function isGlobal() { try { return typeof NTL_CT !== "undefined" && NTL_CT.global; } catch (e) { return false; } }
   function insertEmoji(c) {
-    var t = isGlobal() ? document.querySelector("#wy-gc .c input") : ((typeof W5 !== "undefined" && W5) || document.getElementById("ichat")); if (!t) return;
+    var t = (typeof W5 !== "undefined" && W5) || document.getElementById("ichat"); if (!t) return;
     var v = t.value || "", a = t.selectionStart != null ? t.selectionStart : v.length, b = t.selectionEnd != null ? t.selectionEnd : a;
     t.value = v.slice(0, a) + c + v.slice(b); try { t.selectionStart = t.selectionEnd = a + c.length; } catch (e) {}
     try { t.dispatchEvent(new Event("input", { bubbles: true })); } catch (e) {}
@@ -2824,7 +2705,7 @@ var NTL_GF = (function () {
     tSearch = setTimeout(function () { doSearch(q); }, 600);
   }
   function send(url, slug) {
-    try { if (isGlobal()) NTL_GC.sendText(url); else if (typeof w3 === "function") w3(url); else if (typeof W5 !== "undefined" && typeof c3 === "function") { W5.value = url; c3(); } } catch (e) {}
+    try { if (typeof w3 === "function") w3(url); else if (typeof W5 !== "undefined" && typeof c3 === "function") { W5.value = url; c3(); } } catch (e) {}
     if (slug) { try { fetch(api(kind + "/share/" + encodeURIComponent(slug) + "?customer_id=" + encodeURIComponent(cid())), { method: "POST" }).catch(function () {}); } catch (e) {} delete cache[listPath(kind, "", " recent")]; }
     close();
   }
@@ -2899,13 +2780,10 @@ var NTL_GF = (function () {
     b.addEventListener("click", function (e) { e.stopPropagation(); }, true);
     return b;
   }
-  var btn2 = null;
   function tweak() {
     var comp = document.getElementById("divChat"); if (!comp) return;
     if (!btn || !btn.isConnected) { btn = mkBtn(); btn.id = "wy-gifbtn"; comp.appendChild(btn); }
-    var gcc = document.querySelector("#wy-gc .c");                                   // the global chat composer gets its own button
-    if (gcc && (!btn2 || !btn2.isConnected)) { btn2 = mkBtn(); gcc.insertBefore(btn2, gcc.querySelector("button")); }
-    btn.style.display = cfg.on ? "" : "none"; if (btn2) btn2.style.display = cfg.on ? "" : "none";
+    btn.style.display = cfg.on ? "" : "none";
     if (open) place();
     chatClicks();
   }
@@ -2914,94 +2792,6 @@ var NTL_GF = (function () {
   return { cfg: cfg, set: set, render: render, open: openP, close: close, DEFAULT_KEY: DEFAULT_KEY, get on() { return !!cfg.on; } };
 })();
 /* ========================== END CHAT GIFS ================================== */
-/* ========================== CHAT TABS ====================================== */
-/* NTL's team chat and the Global chat (SlitherControl+ room) share NTL's chat
-   box: a tab bar (TEAM | GLOBAL) at the top of #bchat switches between NTL's
-   own #chat/#divChat and the #wy-gc panel, which is re-parented into #bchat
-   and stretched to fill it. Unread counter on the inactive GLOBAL tab, status
-   dot, USERS / NICK buttons for the global room. Nothing of NTL's chat DOM or
-   handlers is changed — the box just gets a header and a second page. */
-var NTL_CT = (function () {
-  var KEY = "wy_ctab", active = "team";
-  try { active = localStorage.getItem(KEY) === "global" ? "global" : "team"; } catch (e) {}
-  var CSS = [
-    "#wy-ctab{position:absolute;left:6px;right:6px;top:4px;height:22px;display:none;align-items:center;gap:4px;z-index:3;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;user-select:none;-webkit-user-select:none;}",
-    "#bchat.wy-tabs #wy-ctab{display:flex;}",
-    "#wy-ctab .tb{height:20px;padding:0 9px;border-radius:7px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#8b93a7;font:bold 9px Arial;letter-spacing:1.2px;line-height:18px;cursor:pointer;display:flex;align-items:center;gap:5px;}",
-    "#wy-ctab .tb.on{background:linear-gradient(90deg,var(--wy-p),var(--wy-b));color:#fff;border-color:rgba(255,255,255,.28);}",
-    "#wy-ctab .tb .bd{min-width:14px;height:14px;padding:0 4px;border-radius:7px;background:#ff8a8a;color:#1a0a0a;font:bold 9px Arial;line-height:14px;text-align:center;display:none;}",
-    "#wy-ctab .tb .bd.on{display:inline-block;}",
-    "#wy-ctab .st{width:6px;height:6px;border-radius:50%;background:#ff8a8a;}#wy-ctab .st.ok{background:#9be7b5;box-shadow:0 0 5px rgba(155,231,181,.7);}",
-    "#wy-ctab .sp{flex:1;}",
-    "#wy-ctab .ib{height:20px;padding:0 7px;border-radius:6px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#aab2c5;font:bold 9px Arial;letter-spacing:.6px;cursor:pointer;display:none;}",
-    "#wy-ctab .ib.on{background:rgba(var(--wy-p-rgb),.3);color:#fff;}",
-    "#bchat.wy-tabs.wy-global #wy-ctab .ib{display:block;}",
-    /* team page shifts down under the bar */
-    "#bchat.wy-tabs #chat{top:30px!important;}",
-    "#bchat.wy-tabs.wy-global #chat,#bchat.wy-tabs.wy-global #divChat{display:none!important;}",
-    /* global page: the #wy-gc panel lives inside the box */
-    "#bchat #wy-gc{position:absolute!important;left:6px!important;right:6px!important;top:30px!important;bottom:6px!important;width:auto!important;height:auto!important;zoom:1!important;border-radius:8px;background:transparent!important;z-index:2;display:none!important;outline:none!important;resize:none!important;}",
-    "#bchat.wy-tabs.wy-global #wy-gc{display:flex!important;}",
-    "#bchat #wy-gc .h{display:none!important;}",
-    "#bchat #wy-gc .b{padding:0 2px 4px;}",
-    "#bchat #wy-gc .c{padding:5px 0 0;border-top:none;gap:5px;align-items:center;}",
-    "#bchat #wy-gc .c input{height:28px;border-radius:8px;background:rgba(255,255,255,.07);font:12px Arial;}",
-    "#bchat #wy-gc .c button{height:28px;padding:0 10px;font-size:10px;}",
-    "#bchat #wy-gc .u{max-height:70px;}"
-  ].join("\n");
-  var bar = null, tTeam = null, tGlob = null, badge = null, dot = null, ub = null, nb = null, unread = 0, obs = null;
-  function css() { if (!document.getElementById("ct-css")) { var s = document.createElement("style"); s.id = "ct-css"; s.textContent = CSS; (document.head || document.documentElement).appendChild(s); } }
-  function GC() { return typeof NTL_GC !== "undefined" ? NTL_GC : null; }
-  function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
-  function stop(e) { e.stopPropagation(); }
-  function build(bc) {
-    css();
-    bar = el("div"); bar.id = "wy-ctab";
-    tTeam = el("div", "tb", "TEAM"); tGlob = el("div", "tb", '<span class="st"></span>GLOBAL<span class="bd"></span>');
-    badge = tGlob.querySelector(".bd"); dot = tGlob.querySelector(".st");
-    ub = el("div", "ib", "USERS"); nb = el("div", "ib", "NICK");
-    bar.appendChild(tTeam); bar.appendChild(tGlob); bar.appendChild(el("div", "sp")); bar.appendChild(ub); bar.appendChild(nb);
-    ["mousedown", "touchstart", "click", "wheel", "keydown"].forEach(function (t) { bar.addEventListener(t, stop, { passive: t === "wheel" || t === "touchstart" }); });
-    tTeam.addEventListener("pointerdown", function (e) { e.preventDefault(); show("team"); }, true);
-    tGlob.addEventListener("pointerdown", function (e) { e.preventDefault(); show("global"); }, true);
-    ub.addEventListener("pointerdown", function (e) { e.preventDefault(); var gc = GC(); if (!gc) return; gc.set("users", !gc.cfg.users); ub.classList.toggle("on", !!gc.cfg.users); }, true);
-    nb.addEventListener("pointerdown", function (e) { e.preventDefault(); var gc = GC(); if (gc) gc.rename(); }, true);
-    bc.appendChild(bar);
-  }
-  function show(which) {
-    active = which; try { localStorage.setItem(KEY, which); } catch (e) {}
-    var bc = document.getElementById("bchat"); if (!bc) return;
-    bc.classList.toggle("wy-global", which === "global");
-    tTeam.classList.toggle("on", which === "team"); tGlob.classList.toggle("on", which === "global");
-    if (which === "global") { unread = 0; badge.classList.remove("on"); var b = document.querySelector("#wy-gc .b"); if (b) b.scrollTop = b.scrollHeight; }
-  }
-  function watch(gcBox) {
-    if (obs) return;
-    var b = gcBox.querySelector(".b"); if (!b) return;
-    obs = new MutationObserver(function (ms) {
-      if (active === "global") return;
-      for (var i = 0; i < ms.length; i++) for (var j = 0; j < ms[i].addedNodes.length; j++) { var n = ms[i].addedNodes[j]; if (n.nodeType === 1 && n.classList.contains("m") && !n.classList.contains("sys") && !n.classList.contains("me")) unread++; }
-      if (unread) { badge.textContent = unread > 99 ? "99+" : unread; badge.classList.add("on"); }
-    });
-    obs.observe(b, { childList: true });
-  }
-  function tick() {
-    var bc = document.getElementById("bchat"), gc = GC(); if (!bc) return;
-    var on = !!(gc && gc.cfg.on);
-    if (!bar) { if (!on) return; build(bc); }
-    var gcBox = document.getElementById("wy-gc");
-    if (on && gcBox && gcBox.parentNode !== bc) { gcBox.classList.remove("min"); bc.appendChild(gcBox); watch(gcBox); }
-    bc.classList.toggle("wy-tabs", on);
-    if (!on) { if (bc.classList.contains("wy-global")) show("team"); return; }
-    if (bc.classList.contains("wy-global") !== (active === "global")) show(active);
-    if (!tTeam.classList.contains("on") && !tGlob.classList.contains("on")) show(active);
-    dot.classList.toggle("ok", !!gc.connected); ub.classList.toggle("on", !!gc.cfg.users);
-  }
-  function boot() { if (!document.body) { setTimeout(boot, 50); return; } setInterval(tick, 700); }
-  boot();
-  return { show: show, get active() { return active; }, get global() { return active === "global" && !!(GC() && GC().cfg.on); } };
-})();
-/* ========================== END CHAT TABS ================================== */
 var NTL_CH = (function () {
   var CSS = [
     /* ---- box ---- */
@@ -3010,7 +2800,7 @@ var NTL_CH = (function () {
     "#bchat #chat::-webkit-scrollbar{width:6px}#bchat #chat::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:6px}",
     /* ---- messages ---- */
     "#divtl .wy-tp.solo{outline:1px solid rgba(var(--wy-l-rgb),.6);background:rgba(var(--wy-p-rgb),.16)!important;}",
-    "#bchat > #chat, #bchat > #divChat, #bchat > #wy-ctab, #bchat > #wy-gc, #divtl > *, #divpl > *, #wy-hud > *, #time-hud > *, #timebot-hud > *, #wy-log > *, #eemenu > *, #clq > *{opacity:var(--wy-fg-a,1);}",
+    "#bchat > #chat, #bchat > #divChat, #divtl > *, #divpl > *, #wy-hud > *, #time-hud > *, #timebot-hud > *, #wy-log > *, #eemenu > *, #clq > *{opacity:var(--wy-fg-a,1);}",
     "#chat .wy-msg{position:relative;margin:0 0 3px;padding:4px 44px 4px 8px;border-radius:8px;background:rgba(255,255,255,.055);word-break:break-word;text-shadow:0 1px 1px rgba(0,0,0,.6);}",
     "#chat .wy-msg.wy-sys{background:transparent;padding:1px 8px;font-size:11px;opacity:.95;}",
     "#chat .wy-nick{font-weight:bold;margin-right:6px;}",
@@ -3242,6 +3032,7 @@ var NTL_TP = (function () {
     "#divtl .wy-tp-dt{margin-top:2px;padding-left:23px;font:10px Consolas,Menlo,monospace;color:#c3cad9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}",
     "#divtl .wy-tp-dt .wy-l{color:#8b93a7;font-size:8px;letter-spacing:.8px;text-transform:uppercase;margin-right:3px;}#divtl .wy-tp-dt .wy-s{color:#5c6478;margin:0 4px;}",
     "#divtl .wy-tp-srv{margin-top:3px;padding-left:23px;display:flex;align-items:center;gap:6px;font:10.5px Consolas,Menlo,monospace;color:#9aa3b8;}",
+    "#divtl .wy-tp-ver{margin-left:auto;opacity:.7;}",
     "#divtl .wy-tp-srv.menu{color:#7b84a0;font-style:italic;font-family:Arial,sans-serif;}",
     "#divtl .wy-tp-here{color:#9be7b5;font:italic 10.5px Arial,sans-serif;}",
     "#divtl .wy-tp-owner{flex:none;font:9.5px Consolas,Menlo,monospace;color:#8b93a7;padding:0 5px;border-radius:99px;background:rgba(255,255,255,.06);max-width:70px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}",
@@ -3273,10 +3064,12 @@ var NTL_TP = (function () {
   function card(mb, own, kb, same) {
     if (typeof Ig !== "undefined" && Ig) return '<span class="wy-tp-flags"><img src="' + lo(mb.nick) + '"></span>';   // NTL's compact "flags only" mode (L key)
     var menu = "_GAME_MENU_" == mb.srv, nick = D4(mb.nick.slice(8)), owner = D4(mb.owner || "");
+    if (owner && ((typeof pA !== "undefined" && pA) || (typeof se !== "undefined" && se))) { var sw = nick; nick = owner; owner = sw; }   // NTL: key owners instead of nicks
+    var ver = typeof t4 !== "undefined" && t4 && mb.ver ? '<span class="wy-tp-ver">v' + D4(String(mb.ver)) + "</span>" : "";
     var soloOn = same && g("S5") && g("N5") === mb.nick;
     var h = '<div class="' + (same ? "plist " : "") + "wy-tp" + (own ? " me" : "") + (same ? " same" : "") + (soloOn ? " solo" : "") + '" data-kb="' + kb + '"' + (same ? ' title="hover or tap: show only this member on the minimap"' : "") + ">";
     h += '<div class="wy-tp-row"><img src="' + lo(mb.nick) + '"><span class="wy-tp-name"' + (own ? ' style="color:' + Li + '"' : "") + ">" + nick + "</span>";
-    if (owner && owner !== nick) h += '<span class="wy-tp-owner" title="key owner">' + owner + "</span>";
+    if (owner && owner !== nick) h += '<span class="wy-tp-owner" title="' + (owner === D4(mb.owner || "") ? "key owner" : "in-game nick") + '">' + owner + "</span>";
     if ("" != mb.mmm) h += '<span class="wy-tp-b msg" title="has a message">!</span>';
     if ("true" == mb.an) h += '<span class="wy-tp-b an" title="auto no prey">*</span>';
     if ("true" == mb.bot) h += '<span class="wy-tp-b bot" title="bot">B</span>';
@@ -3287,7 +3080,7 @@ var NTL_TP = (function () {
     h += '<div class="wy-tp-srv' + (menu ? " menu" : "") + '">';
     if (same) h += '<span class="wy-tp-here">on your server</span>';
     else if (!menu) h += '<button class="myPlayButton" onclick=\'' + X.name + '("' + mb.srv + '")\'>Play</button>';
-    h += (menu ? "in game menu" : same ? "" : mb.srv) + "</div></div>";
+    h += (menu ? "in game menu" : same ? "" : mb.srv) + ver + "</div></div>";
     return h;
   }
   /* NTL's own solo-dot feature (h3/I3 with S5/N5) wired through delegated listeners, so it survives the list re-rendering
@@ -4612,7 +4405,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
-    { v: "5.65-dev", d: "25 Sep 2026", t: "Squeeze mode (key ;): steer anywhere without dying \u2014 your head stops at another snake\u2019s skin whatever its thickness, and when the way closes it U-turns to the open side, boost and rams included. Depth and Gap in Vanced \u203a Controls." },
+    { v: "5.65-dev", d: "26 Sep 2026", t: "Global chat (the SlitherControl+ room) removed — the chat box is NTL’s team chat again, with the emoji / GIF picker. Assist (and the other hold keys) now stays on while an on-screen button is held, so Assist go skinless / Assist map show on phones. Team list follows NTL’s KeyOwners in players list, Online players status (version) and the team detail toggle again. Squeeze mode is in the build but unavailable for now." },
     { v: "5.64", d: "22 Sep 2026", t: "Lobby can be switched off in Vanced \u203a General and no longer appears when you come back from the skin editor or settings \u2014 only after a real round. Updates card shows UPDATE only when there is one." },
     { v: "5.64", d: "21 Sep 2026", t: "Backups: one .ntlvanced file holds every NTL and Vanced setting (keys, layouts, theme, arenas, skins); BACKUP / RESTORE in Vanced › Updates & About; old .ntlmod files still restore." },
     { v: "5.63", d: "21 Sep 2026", t: "Lobby: after a round you land on a full Vanced page instead of the home screen — final length, your best, nick and server, PLAY, HOME and a Quick settings page (placeholder for now). Enter plays, Esc goes home. Skipped while NTL auto-respawn is on. NTL 9.68’s playerID ported: a persistent 16-char id sent on connect to the servers NTL lists (Battledome included), same packet and storage keys; chat !id / !idlist / !idforce; shown in Vanced › Updates & About. Team map and Live Battledomes removed." },
@@ -4840,8 +4633,7 @@ var NTL_VS = (function () {
     guard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>',
     bot: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 8V4M8 4h8"/><circle cx="9" cy="13" r="1.3"/><circle cx="15" cy="13" r="1.3"/><path d="M9 17h6"/></svg>',
     about: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
-    changelog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
-    gchat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg>'
+    changelog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>'
   };
   function css() { if (document.getElementById("vs-css")) return; var st = document.createElement("style"); st.id = "vs-css"; st.textContent = CSS; document.head.appendChild(st); }
   function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
@@ -4930,7 +4722,7 @@ var NTL_VS = (function () {
     }
     var c2 = card("Panels");
     if (typeof NTL_LG !== "undefined") c2.appendChild(vsRow("Thinking log", "under the leaderboard: every Guard, Bot and AI decision as it happens", vsSwitch(NTL_LG.cfg.on, function (v) { NTL_LG.set("on", v); })));
-    var rsP = el("button", "vs-btn", "RESET POSITIONS"); rsP.onclick = function () { ["log", "gchat"].forEach(function (k2) { try { localStorage.removeItem("wy_pos_" + k2); } catch (e) {} }); location.reload(); };
+    var rsP = el("button", "vs-btn", "RESET POSITIONS"); rsP.onclick = function () { ["log"].forEach(function (k2) { try { localStorage.removeItem("wy_pos_" + k2); } catch (e) {} }); location.reload(); };
     c2.appendChild(vsRow("Move & resize panels", "open NTL \u203a Settings: the Thinking log gets a grey frame \u2014 right-click to grab / click to drop (or drag the header), pull the red corner to resize. The chat box is NTL\u2019s own and moves the same way. Saved automatically.", rsP));
     if (typeof NTL_GF !== "undefined") {
       var GF = NTL_GF, gfGrp = el("div", "vs-sub" + (GF.cfg.on ? "" : " dim"));
@@ -4949,6 +4741,7 @@ var NTL_VS = (function () {
     var CU = typeof NTL_CU !== "undefined" ? NTL_CU : null;
     if (typeof NTL_SQ !== "undefined") {
       var cq = card("Squeeze mode");
+      if (NTL_SQ.LOCKED) { cq.classList.add("vs-locked"); cq.appendChild(el("div", "vs-lock", "<span>UNAVAILABLE IN THIS BUILD</span>")); }
       var sqKey = (function () { var k2 = NTL_SQ.key(); return k2 ? (typeof Ad === "function" ? Ad(k2) : k2.toUpperCase()) : "none"; })();
       cq.appendChild(vsRow("Squeeze mode", "key <b>" + sqKey + "</b> (Revamp Keys, toggle or hold) \u2014 steer anywhere, as tight as you like: your body may overlap theirs, only your head\u2019s collision point is kept out of their skin, sized to each snake\u2019s own thickness. When the way ahead closes it U-turns to whichever side is open \u2014 at any speed, boost included. Separate from the bot; off while the bot drives.", vsSwitch(NTL_SQ.on, function (v) { NTL_SQ.on = v; })));
       cq.appendChild(vsSlider("Depth", "how far your collision point may enter their skin, as a share of their thickness \u2014 0% stops right at the skin (safest), higher squeezes tighter but risks a death", 0, 90, 5, Math.round(NTL_SQ.cfg.depth * 100), function (v) { return v + "%"; }, function (v) { NTL_SQ.set("depth", v / 100); }));
@@ -5143,21 +4936,6 @@ var NTL_VS = (function () {
       aiGrp.appendChild(vsSlider("Plan interval", "how often the coach is asked while nothing is happening", 1.5, 6, 0.5, (AI.cfg.interval || 2500) / 1000, function (v) { return (+v).toFixed(1) + "s"; }, function (v) { AI.set("interval", Math.round(v * 1000)); }));
       aiGrp.appendChild(vsRow("Emergency calls", "ask the coach the instant Pro Guard has to dodge", vsSwitch(AI.cfg.emergency, function (v) { AI.set("emergency", v); })));
       aiCard.appendChild(aiGrp); S.appendChild(aiCard); syncProv();
-    }
-
-    /* ================= GLOBAL CHAT ================= */
-    var GC = typeof NTL_GC !== "undefined" ? NTL_GC : null;
-    S = section("gchat", "Global chat", "NEW");
-    h(S, "Global chat", "One room for everyone, whatever game server you are on.");
-    if (GC) {
-      var gcGrp = el("div", "vs-sub" + (GC.cfg.on ? "" : " dim"));
-      var gcCard = card(); gcCard.appendChild(vsRow("Global chat", "a GLOBAL tab inside the chat box, next to TEAM", vsSwitch(GC.cfg.on, function (v) { GC.set("on", v); gcGrp.classList.toggle("dim", !v); })));
-      var nkIn = vsInput("nickname (default: your game nick)", GC.cfg.nick || "", "m"), nkB = el("button", "vs-btn", "SAVE"); nkB.onclick = function () { GC.set("nick", nkIn.value.trim().slice(0, 24)); };
-      var nkW = el("div", "vs-cols"); nkW.appendChild(nkIn); nkW.appendChild(nkB); gcGrp.appendChild(vsRow("Nickname", "what others see; empty = your game nickname", nkW));
-      gcGrp.appendChild(vsRow("Ping on mention", "sound when someone writes @yournick", vsSwitch(GC.cfg.ping, function (v) { GC.set("ping", v); })));
-      gcGrp.appendChild(vsRow("Online users", "show who is in the room", vsSwitch(GC.cfg.users, function (v) { GC.set("users", v); })));
-      gcCard.appendChild(vsRow("Powered by SlitherControl+", "the chat room and its server belong to SlitherControl+. This is not an NTL or NTL VANCED service.", null, "vs-note"));
-      gcCard.appendChild(gcGrp); S.appendChild(gcCard);
     }
 
     /* ================= ABOUT ================= */
@@ -5458,7 +5236,7 @@ var NTL_AR = (function () {
   var DEAD = 23;
 
   /* anything that is mod/game UI must never steer */
-  var UI = "#wy-gif,.wy-gifbtn,#wy-ctab,#wy-tc,#wy-ar,#wy-cu,#wy-gc,#wy-log,#bchat,#divChat,#chat,#settpage,#rk-box,#sv-box,#vs-box,#eemenu,#mtop-bar,#divtl,#divpl,#mgraph-box,#ttbox,#mmap,#dx-ov,#tc-ov,#tc-cc,#tc-pop,#tc-pop2,#wn-ov,input,textarea,button,select,a";
+  var UI = "#wy-gif,.wy-gifbtn,#wy-tc,#wy-ar,#wy-cu,#wy-log,#bchat,#divChat,#chat,#settpage,#rk-box,#sv-box,#vs-box,#eemenu,#mtop-bar,#divtl,#divpl,#mgraph-box,#ttbox,#mmap,#dx-ov,#tc-ov,#tc-cc,#tc-pop,#tc-pop2,#wn-ov,input,textarea,button,select,a";
   function isUI(t) { if (!t || !t.closest) return true; try { return !!t.closest(UI); } catch (e) { return true; } }
 
   var CSS = [
@@ -5745,7 +5523,9 @@ var NTL_TC = (function () {
         case "nicksplus": return !!g("rr");
         case "autonoprey": return !!g("ug");
         case "smalltags": return !!g("bi");
-        case "asytoggle": return !!g("xe");
+        case "asytoggle": case "asy": return !!g("xe");
+        case "tabls": return !!g("he");
+        case "peek": return !!g("ie");
         case "autorespawn": return !!g("ii");
         case "rvneg": return g("oa") < 0;
         case "rvpos": return g("oa") > 0;
@@ -5781,14 +5561,18 @@ var NTL_TC = (function () {
     }
     if (typeof NTL_KM !== "undefined" && NTL_KM.press) NTL_KM.press(id);
   }
+  function isHold(k) { return typeof NTL_KM !== "undefined" && NTL_KM.hold && NTL_KM.baseMode(k) === "hold"; }
   function wireAct(node, w) {
+    var held = false;
+    function release() { if (!held) return; held = false; NTL_KM.hold(w.k, false); paintOn(); }
     node.addEventListener("pointerdown", function (e) {
       if (editing) return;
       e.preventDefault(); e.stopPropagation();
       try { node.setPointerCapture(e.pointerId); } catch (x) {}
-      fire(w.k);
+      if (isHold(w.k)) { held = true; NTL_KM.hold(w.k, true); } else fire(w.k);
       paintOn();
     });
+    ["pointerup", "pointercancel", "lostpointercapture"].forEach(function (t) { node.addEventListener(t, release); });
     node.addEventListener("click", function (e) { e.stopPropagation(); e.preventDefault(); });   // swallow the primary touch's follow-up click
   }
   function wireBoost(node, w) {
@@ -6877,7 +6661,7 @@ Do=function(bb){return""!=bb&&bb in Bo?!0:!1},mo=function(bb){var ab="";switch(b
 case "x255255255":return"white";case "x255192203":return"pink";case "x255105180":return"hotpink";case "x221160221":return"plum"}},xo=function(bb,ab,cb){if("cnc"!=bb&&"cmc"!=bb&&"csc"!=bb&&"blc"!=bb||.1>cb||1<cb)return!1;switch(ab){case "red":window[bb+"_R"]=255;window[bb+"_G"]=0;window[bb+"_B"]=0;break;case "#ff6d00":window[bb+"_R"]=255;window[bb+"_G"]=109;window[bb+"_B"]=0;break;case "green":window[bb+"_R"]=0;window[bb+"_G"]=128;window[bb+"_B"]=0;break;case "lime":window[bb+"_R"]=0;window[bb+"_G"]=
 255;window[bb+"_B"]=0;break;case "blue":window[bb+"_R"]=0;window[bb+"_G"]=0;window[bb+"_B"]=255;break;case "dodgerblue":window[bb+"_R"]=30;window[bb+"_G"]=144;window[bb+"_B"]=255;break;case "magenta":window[bb+"_R"]=255;window[bb+"_G"]=0;window[bb+"_B"]=255;break;case "cyan":window[bb+"_R"]=0;window[bb+"_G"]=255;window[bb+"_B"]=255;break;case "yellow":window[bb+"_R"]=255;window[bb+"_G"]=255;window[bb+"_B"]=0;break;case "white":window[bb+"_R"]=255;window[bb+"_G"]=255;window[bb+"_B"]=255;break;case "pink":window[bb+
 "_R"]=255;window[bb+"_G"]=192;window[bb+"_B"]=203;break;case "hotpink":window[bb+"_R"]=255;window[bb+"_G"]=105;window[bb+"_B"]=180;break;case "plum":window[bb+"_R"]=221;window[bb+"_G"]=160;window[bb+"_B"]=221;break;default:return!1}window[bb+"_A"]=cb;localStorage&&localStorage.setItem(bb+"_R",window[bb+"_R"]);localStorage&&localStorage.setItem(bb+"_G",window[bb+"_G"]);localStorage&&localStorage.setItem(bb+"_B",window[bb+"_B"]);localStorage&&localStorage.setItem(bb+"_A",window[bb+"_A"]);return!0},
-R=function(bb,ab){for(;160<F5.childNodes.length;)F5.removeChild(F5.firstChild);1==F5.innerText.length&&(F5.innerText="");bb==J&&S8||("SCRIPTBOT "==bb||bb==J?(bb="#",jQuery("#chat").append('<div class="wy-msg wy-sys"><span style="color: rgba('+csc_R+","+csc_G+","+csc_B+","+csc_A+');"># '+ab+"</span></div>")):(ab=ab.replace(/&nbsp;/g," "),jQuery("#chat").append('<div class="wy-msg"><span class="wy-nick" style="color: rgba('+cnc_R+","+cnc_G+","+cnc_B+","+cnc_A+');">'+D4(bb)+'</span><span class="wy-text" style="color: rgba('+cmc_R+","+cmc_G+","+cmc_B+","+cmc_A+');">'+NTL_GF.render(ab)+"</span>"+(Oa?'<span class="wy-time">'+Xo().slice(0,5)+"</span>":"")+"</div>")),F5.scrollTop=F5.scrollHeight,ar&&Yg&&"#"!=bb&&(jQuery("#divChat").show(),jQuery("#chat").fadeTo("fast",1),Yg=!1))},Oo=function(bb,ab,cb,eb){R4.push([D4(bb),D4(ab),cb,eb])},Co=function(){R4.sort();for(var bb=0,ab=R4.length;bb<ab;bb++){var cb=R4[bb];}cb=J4?'<div class="wy-pl-h"><span>Team</span><span class="wy-pl-c">'+R4.length+'</span><span class="wy-pl-k">'+(t4?"nick · owner · server":"")+'</span></div>'+J4:"";Y4!==cb&&(Y4=cb,Z5.innerHTML=cb)},Ho=function(){var bb=[];if(""!=zc.innerText&&playing&&!Ce){var ab=zc.innerText.split("\n"),cb=dc.innerText.split("\n");for(P=0;10>P;P++)bb.push({nick:ab[P],score:cb[P]})}return bb},Xo=function(){var bb=new Date,ab=bb.getHours(),cb=bb.getMinutes();bb=bb.getSeconds();10>ab&&(ab="0"+ab);10>cb&&(cb="0"+cb);10>bb&&(bb="0"+bb);return ab+":"+cb+":"+bb},Eo="Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" "),
+R=function(bb,ab){for(;160<F5.childNodes.length;)F5.removeChild(F5.firstChild);1==F5.innerText.length&&(F5.innerText="");bb==J&&S8||("SCRIPTBOT "==bb||bb==J?(bb="#",jQuery("#chat").append('<div class="wy-msg wy-sys"><span style="color: rgba('+csc_R+","+csc_G+","+csc_B+","+csc_A+');"># '+ab+"</span></div>")):(ab=ab.replace(/&nbsp;/g," "),jQuery("#chat").append('<div class="wy-msg"><span class="wy-nick" style="color: rgba('+cnc_R+","+cnc_G+","+cnc_B+","+cnc_A+');">'+D4(bb)+'</span><span class="wy-text" style="color: rgba('+cmc_R+","+cmc_G+","+cmc_B+","+cmc_A+');">'+NTL_GF.render(ab)+"</span>"+(Oa?'<span class="wy-time">'+Xo().slice(0,5)+"</span>":"")+"</div>")),F5.scrollTop=F5.scrollHeight,ar&&Yg&&"#"!=bb&&(jQuery("#divChat").show(),jQuery("#chat").fadeTo("fast",1),Yg=!1))},Oo=function(bb,ab,cb,eb){R4.push([D4(bb),D4(ab),cb,eb])},Co=function(){R4.sort();for(var bb=0,ab=R4.length;bb<ab;bb++){var cb=R4[bb];}cb=J4&&!A3?'<div class="wy-pl-h"><span>Team</span><span class="wy-pl-c">'+R4.length+'</span><span class="wy-pl-k">'+(pA||se?"owner · nick":"nick · owner")+'</span></div>'+J4:"";Y4!==cb&&(Y4=cb,Z5.innerHTML=cb)},Ho=function(){var bb=[];if(""!=zc.innerText&&playing&&!Ce){var ab=zc.innerText.split("\n"),cb=dc.innerText.split("\n");for(P=0;10>P;P++)bb.push({nick:ab[P],score:cb[P]})}return bb},Xo=function(){var bb=new Date,ab=bb.getHours(),cb=bb.getMinutes();bb=bb.getSeconds();10>ab&&(ab="0"+ab);10>cb&&(cb="0"+cb);10>bb&&(bb="0"+bb);return ab+":"+cb+":"+bb},Eo="Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" "),
 Mo="Sun Mon Tue Wed Thu Fri Sat".split(" "),po=!1,ho=function(){var bb=new Date,ab=bb.getFullYear(),cb=bb.getMonth()+1,eb=bb.getDate(),gb=bb.getHours(),ib=bb.getMinutes(),db=bb.getSeconds();10>eb&&(eb="0"+eb);10>cb&&(cb="0"+cb);10>gb&&(gb="0"+gb);10>ib&&(ib="0"+ib);10>db&&(db="0"+db);var hb=-((new Date).getTimezoneOffset()/60);playing&&!Ce&&ko!=bso.ip&&(Io="",To(bso.ip),ko=bso.ip);"object"==typeof Io&&(bb=new Date(bb.getTime()+6E4*bb.getTimezoneOffset()+1E3*Io.utc),yo.innerHTML='<span class="wy-l">Server</span>'+Mo[bb.getDay()]+
 ", "+bb.getDate()+" "+Eo[bb.getMonth()]+" "+bb.getFullYear()+" "+(t=bb.getHours(),10>t?"0"+t:t)+":"+(t=bb.getMinutes(),10>t?"0"+t:t)+":"+(t=bb.getSeconds(),10>t?"0"+t:t));Uo.innerHTML='<span class="wy-l">Local</span>'+ab+"-"+cb+"-"+eb+" "+gb+":"+ib+":"+db+'<span class="wy-l" style="margin:0 8px 0 5px">GMT'+(0<hb?"+"+hb:hb)+"</span>"},Io="",ko="",Uo=null,Yo=null,yo=null,jo=null,Ro=null,Jo=null,Lo=null,_=null,So=null,Go=null,No=null,To=function(bb){var ab="",cb=new XMLHttpRequest;cb.open("GET","https://ntl-slither.com/ss/gt.php?srv="+bb+"&inc="+d7+FA+WA,!0);cb.timeout=2E3;cb.onload=
 function(eb){4===cb.readyState&&200===cb.status&&(ab=cb.responseText,a(ab)&&(Io=JSON.parse(ab)),Yo.src=Io.flag)};cb.onerror=function(eb){};cb.send(null)},Vo=function(bb){for(var ab=(new Date).getTime(),cb=0;1E7>cb&&!((new Date).getTime()-ab>bb);cb++);},Wo=function(){ze.style.bottom="25px";Qe.style.bottom="45px";be.style.bottom="65px";ue.style.bottom="85px";wc.style.bottom="105px";2==j?(localStorage.infobox||ti||(uc.style.right=4,uc.style.bottom="130px"),lc.innerHTML='<b><span style="position:absolute;top:3.5%;left:47.5%">N</span><span style="position:absolute;bottom:4%;left:48%">S</span><span style="position:absolute;top:45.5%;left:5%">W</span><span style="position:absolute;top:45.5%;right:6.5%">E</span></b>',
