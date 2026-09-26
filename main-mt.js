@@ -1423,10 +1423,340 @@ var NTL_CR = (function () {
     c.restore();
   }
 
+  /* ---- shared helpers for the creatures below ---- */
+  function hash(i) { var x = Math.sin(i * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
+  function side2(s, sd, d) { var a = s.a + sd * PI / 2; return [s.x + Math.cos(a) * d, s.y + Math.sin(a) * d]; }
+  function outline(c, S, wf) {                                   // closed body outline, width wf(i) either side
+    var n = S.length, i, p; c.beginPath();
+    for (i = 0; i < n; i++) { p = side2(S[i], -1, wf(i)); (i ? c.lineTo : c.moveTo).call(c, p[0], p[1]); }
+    for (i = n - 1; i >= 0; i--) { p = side2(S[i], 1, wf(i)); c.lineTo(p[0], p[1]); }
+    c.closePath();
+  }
+  function line(c, S, from, to, off) {                           // polyline along the body, optional sideways offset fn
+    c.beginPath(); for (var i = from; i < to; i++) { var p = off ? side2(S[i], 1, off(i)) : [S[i].x, S[i].y]; (i > from ? c.lineTo : c.moveTo).call(c, p[0], p[1]); }
+  }
+  function taper(n, a, b) { return function (i) { return a + (b - a) * (i / Math.max(1, n - 1)); }; }
+  function glowDot(c, x, y, r, col, a) {
+    var g = c.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, "rgba(" + col + "," + a + ")"); g.addColorStop(1, "rgba(" + col + ",0)");
+    c.fillStyle = g; c.beginPath(); c.arc(x, y, r, 0, PI * 2); c.fill();
+  }
+  function puff(c, x0, y0, ang, rr, t, n, spread, col, rate, dist) {   // drifting particles (smoke, fire, frost, gas)
+    for (var k = 0; k < n; k++) {
+      var f = (t * rate + k / n) % 1, d = rr * (0.5 + f * dist), sw = (hash(k + Math.floor(t * rate + k / n) * 7) - 0.5) * spread;
+      glowDot(c, x0 + Math.cos(ang + sw) * d, y0 + Math.sin(ang + sw) * d, rr * (0.35 + f * 0.9), col, 0.75 * (1 - f));
+    }
+  }
+  function limbs(c, S, rr, t, boost, at, col, claw, len) {       // small walking legs at the given sample indexes
+    for (var k = 0; k < at.length; k++) {
+      var s = S[Math.min(S.length - 1, at[k])]; if (!s) continue;
+      for (var sd = -1; sd <= 1; sd += 2) {
+        var st = Math.sin(t * (boost ? 12 : 6) + k * PI + (sd > 0 ? PI : 0)) * 0.45, b = side2(s, sd, rr * 0.6);
+        var a1 = s.a + sd * PI / 2 - sd * st, kx = b[0] + Math.cos(a1) * rr * len, ky = b[1] + Math.sin(a1) * rr * len;
+        var a2 = s.a + sd * 0.5, fx = kx + Math.cos(a2) * rr * len * 0.6, fy = ky + Math.sin(a2) * rr * len * 0.6;
+        c.strokeStyle = col; c.lineWidth = Math.max(1.2, rr * 0.26); c.beginPath(); c.moveTo(b[0], b[1]); c.lineTo(kx, ky); c.lineTo(fx, fy); c.stroke();
+        if (claw) { c.strokeStyle = claw; c.lineWidth = Math.max(1, rr * 0.08); for (var q = -1; q <= 1; q++) { var qa = a2 + q * 0.45; c.beginPath(); c.moveTo(fx, fy); c.lineTo(fx + Math.cos(qa) * rr * 0.25, fy + Math.sin(qa) * rr * 0.25); c.stroke(); } }
+      }
+    }
+  }
+
+  /* ---- chinese dragon: gold scales, red mane, whiskers, antlers ---- */
+  function chinese(c, S, rr, t, boost, alpha) {
+    var n = S.length; if (n < 3) return;
+    var i, s, sd, wf = function (i) { var u = i / (n - 1); return rr * (u < 0.1 ? 0.8 + u * 2 : 1 - (u - 0.1) * 0.7); };
+    c.lineCap = "round"; c.lineJoin = "round";
+    limbs(c, S, rr, t, boost, [Math.round(n * 0.12), Math.round(n * 0.45)], "#b8860b", "#fff3c4", 0.85);
+    outline(c, S, wf); c.fillStyle = "#e0ad2a"; c.fill(); c.lineWidth = Math.max(1, rr * 0.1); c.strokeStyle = "#6b4400"; c.stroke();
+    c.strokeStyle = "rgba(120,70,0,.55)"; c.lineWidth = Math.max(1, rr * 0.08);
+    for (i = 2; i < n - 1; i++) { s = S[i]; var w = wf(i); for (var r2 = -1; r2 <= 1; r2 += 2) { var p = side2(s, r2, w * 0.45); c.save(); c.translate(p[0], p[1]); c.rotate(s.a); c.beginPath(); c.arc(-w * 0.1, 0, w * 0.33, -1.1, 1.1); c.stroke(); c.restore(); } }
+    line(c, S, 1, n); c.strokeStyle = "rgba(255,245,190,.7)"; c.lineWidth = Math.max(1, rr * 0.16); c.stroke();
+    if (boost) {                                                   // a shimmer running down the body
+      c.globalCompositeOperation = "lighter";
+      for (i = 1; i < n; i++) { var sh = Math.sin(i * 0.45 - t * 12); if (sh > 0.7) glowDot(c, S[i].x, S[i].y, wf(i) * 1.3, "255,240,160", (sh - 0.7) * 2); }
+      c.globalCompositeOperation = "source-over";
+    }
+    c.strokeStyle = "#d8262a"; c.lineWidth = Math.max(1, rr * 0.14);          // red mane tufts along the back
+    for (i = 2; i < n - 2; i += 2) {
+      s = S[i]; var wv = Math.sin(t * 6 - i * 0.6) * 0.35, ml = wf(i) * 1.1;
+      for (sd = -1; sd <= 1; sd += 2) { var a = s.a + PI + sd * (0.5 + wv * sd); c.beginPath(); c.moveTo(s.x, s.y); c.quadraticCurveTo(s.x + Math.cos(a + sd * 0.4) * ml * 0.6, s.y + Math.sin(a + sd * 0.4) * ml * 0.6, s.x + Math.cos(a) * ml, s.y + Math.sin(a) * ml); c.stroke(); }
+    }
+    var L = S[n - 1], ta = L.a + PI;                                // flame tuft on the tail
+    for (i = 0; i < 5; i++) { var fa = ta + (i - 2) * 0.3 + Math.sin(t * 7 + i) * 0.1, fl = rr * (1.4 + (i % 2) * 0.5); c.beginPath(); c.moveTo(L.x, L.y); c.quadraticCurveTo(L.x + Math.cos(fa + 0.3) * fl * 0.6, L.y + Math.sin(fa + 0.3) * fl * 0.6, L.x + Math.cos(fa) * fl, L.y + Math.sin(fa) * fl); c.strokeStyle = i % 2 ? "#ff8a1f" : "#d8262a"; c.lineWidth = Math.max(1, rr * 0.2); c.stroke(); }
+    var H = S[0]; c.save(); c.translate(H.x, H.y); c.rotate(H.a);
+    for (sd = -1; sd <= 1; sd += 2) {                              // red mane around the head
+      for (i = 0; i < 4; i++) { var ma = PI + sd * (0.6 + i * 0.35) + Math.sin(t * 5 + i) * 0.1; c.beginPath(); c.moveTo(-rr * 0.2, sd * rr * 0.4); c.lineTo(Math.cos(ma) * rr * 1.5, Math.sin(ma) * rr * 1.5); c.strokeStyle = "#d8262a"; c.lineWidth = Math.max(1, rr * 0.22); c.stroke(); }
+      c.beginPath(); c.moveTo(-rr * 0.1, sd * rr * 0.35); c.lineTo(-rr * 1.1, sd * rr * 0.9); c.moveTo(-rr * 0.6, sd * rr * 0.62); c.lineTo(-rr * 0.8, sd * rr * 1.05);   // antlers
+      c.strokeStyle = "#fff3c4"; c.lineWidth = Math.max(1, rr * 0.13); c.stroke();
+      var ww = Math.sin(t * 4 + sd) * 0.4;                           // whiskers
+      c.beginPath(); c.moveTo(rr * 1.2, sd * rr * 0.25); c.bezierCurveTo(rr * 1.6, sd * rr * (1 + ww), rr * 0.4, sd * rr * (1.8 - ww), -rr * 0.6, sd * rr * (2.4 + ww)); c.strokeStyle = "#8a1010"; c.lineWidth = Math.max(1, rr * 0.07); c.stroke();
+    }
+    c.beginPath(); c.ellipse(0, 0, rr * 0.95, rr * 0.8, 0, 0, PI * 2); c.fillStyle = "#e8b832"; c.fill();
+    c.beginPath(); c.ellipse(rr * 0.85, 0, rr * 0.6, rr * 0.5, 0, 0, PI * 2); c.fill(); c.lineWidth = Math.max(1, rr * 0.08); c.strokeStyle = "#6b4400"; c.stroke();
+    for (sd = -1; sd <= 1; sd += 2) { c.beginPath(); c.ellipse(rr * 0.25, sd * rr * 0.38, rr * 0.2, rr * 0.15, 0, 0, PI * 2); c.fillStyle = "#fff"; c.fill(); c.beginPath(); c.arc(rr * 0.3, sd * rr * 0.38, rr * 0.09, 0, PI * 2); c.fillStyle = "#c21010"; c.fill(); }
+    c.restore();
+  }
+
+  /* ---- electric eel: dark body, rippling fins, neon lines, lightning on boost ---- */
+  function eel(c, S, rr, t, boost, alpha) {
+    var n = S.length; if (n < 3) return;
+    var i, s, sd, wf = taper(n, rr * 0.9, rr * 0.25);
+    c.lineCap = "round"; c.lineJoin = "round";
+    for (sd = -1; sd <= 1; sd += 2) {                              // fins
+      line(c, S, 1, n, function (i) { return sd * (wf(i) + rr * (0.25 + 0.2 * Math.sin(i * 0.8 - t * 9))); });
+      c.strokeStyle = "rgba(60,140,255,.45)"; c.lineWidth = Math.max(1.5, rr * 0.45); c.stroke();
+    }
+    outline(c, S, wf); c.fillStyle = "#16233f"; c.fill(); c.lineWidth = Math.max(1, rr * 0.08); c.strokeStyle = "#050a14"; c.stroke();
+    c.globalCompositeOperation = "lighter";
+    var pulse = boost ? 1 : 0.55 + 0.25 * Math.sin(t * 3);
+    for (sd = -1; sd <= 1; sd += 2) {
+      line(c, S, 1, n, function (i) { return sd * wf(i) * 0.45; });
+      c.strokeStyle = "rgba(57,225,255," + (0.25 * pulse) + ")"; c.lineWidth = Math.max(2, rr * 0.35); c.stroke();
+      c.strokeStyle = "rgba(160,245,255," + (0.9 * pulse) + ")"; c.lineWidth = Math.max(1, rr * 0.1); c.stroke();
+    }
+    c.globalCompositeOperation = "source-over";
+    for (i = 3; i < n - 1; i += 3) { s = S[i]; c.fillStyle = "#ffd23f"; c.beginPath(); c.arc(s.x, s.y, Math.max(1, wf(i) * 0.18), 0, PI * 2); c.fill(); }
+    if (boost) {                                                   // lightning arcs off the body
+      c.globalCompositeOperation = "lighter"; var fr = Math.floor(t * 18);
+      for (var b = 0; b < 5; b++) {
+        var bi = 1 + Math.floor(hash(fr * 5 + b) * (n - 2)); s = S[bi]; if (!s) continue; sd = hash(fr + b * 3) > 0.5 ? 1 : -1;
+        var p = side2(s, sd, wf(bi)); c.beginPath(); c.moveTo(p[0], p[1]);
+        var ang = s.a + sd * PI / 2, x = p[0], y = p[1];
+        for (var z = 1; z <= 4; z++) { ang += (hash(fr * 13 + b * 7 + z) - 0.5) * 1.2; x += Math.cos(ang) * rr * 0.55; y += Math.sin(ang) * rr * 0.55; c.lineTo(x, y); }
+        c.strokeStyle = "rgba(120,220,255,.4)"; c.lineWidth = Math.max(2, rr * 0.3); c.stroke(); c.strokeStyle = "#eaffff"; c.lineWidth = Math.max(1, rr * 0.08); c.stroke();
+      }
+      c.globalCompositeOperation = "source-over";
+    }
+    var H = S[0]; c.save(); c.translate(H.x, H.y); c.rotate(H.a);
+    c.beginPath(); c.ellipse(rr * 0.2, 0, rr * 1.05, rr * 0.8, 0, 0, PI * 2); c.fillStyle = "#1c2c50"; c.fill(); c.lineWidth = Math.max(1, rr * 0.08); c.strokeStyle = "#050a14"; c.stroke();
+    for (sd = -1; sd <= 1; sd += 2) { c.beginPath(); c.arc(rr * 0.55, sd * rr * 0.4, rr * 0.16, 0, PI * 2); c.fillStyle = "#ffd23f"; c.fill(); c.beginPath(); c.arc(rr * 0.6, sd * rr * 0.4, rr * 0.07, 0, PI * 2); c.fillStyle = "#000"; c.fill(); }
+    c.restore();
+  }
+
+  /* ---- train: steam engine and carriages on a track ---- */
+  function train(c, S, rr, t, boost, alpha) {
+    var n = S.length; if (n < 3) return;
+    var i, s, sd, CAR = 3;
+    c.lineCap = "butt"; c.lineJoin = "round";
+    c.strokeStyle = "#5a3b1e"; c.lineWidth = Math.max(1, rr * 0.25);         // sleepers
+    for (i = 0; i < n; i++) { s = S[i]; var a = side2(s, -1, rr * 1.15), b = side2(s, 1, rr * 1.15); c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke(); }
+    for (sd = -1; sd <= 1; sd += 2) { line(c, S, 0, n, function () { return sd * rr * 0.85; }); c.strokeStyle = "#8f959c"; c.lineWidth = Math.max(1, rr * 0.12); c.stroke(); }
+    function box(i0, i1, w, fill) {                                 // a car spanning samples i0 (front) … i1 (back)
+      var A = S[i0], B = S[Math.min(n - 1, i1)], cx = (A.x + B.x) / 2, cy = (A.y + B.y) / 2, ang = Math.atan2(A.y - B.y, A.x - B.x), len = Math.hypot(A.x - B.x, A.y - B.y) + rr * 0.9;
+      c.save(); c.translate(cx, cy); c.rotate(ang); return { len: len, w: w, done: function () { c.restore(); } };
+    }
+    var colors = ["#b3261e", "#1f4f8f", "#2e7d32", "#c07a12"];
+    for (var k = CAR * Math.floor((n - 1) / CAR); k >= CAR; k -= CAR) {   // carriages, last first
+      var bx = box(k, k + CAR - 1, rr * 1.5), L = bx.len, W = bx.w, col = colors[(k / CAR) % colors.length | 0];
+      c.fillStyle = "#111"; for (sd = -1; sd <= 1; sd += 2) for (var wq = -1; wq <= 1; wq += 2) { c.beginPath(); c.arc(wq * L * 0.32, sd * W * 0.55, rr * 0.28, 0, PI * 2); c.fill(); }
+      c.fillStyle = col; c.fillRect(-L / 2, -W / 2, L, W); c.lineWidth = Math.max(1, rr * 0.1); c.strokeStyle = "#1a1a1a"; c.strokeRect(-L / 2, -W / 2, L, W);
+      c.fillStyle = "#3a3a3a"; c.fillRect(-L / 2 + rr * 0.15, -W * 0.22, L - rr * 0.3, W * 0.44);                     // roof
+      c.fillStyle = "#ffe08a"; for (var wn = 0; wn < 3; wn++) { var wx = -L / 2 + L * (0.2 + wn * 0.3); c.fillRect(wx - rr * 0.18, -W / 2 + rr * 0.05, rr * 0.36, rr * 0.16); c.fillRect(wx - rr * 0.18, W / 2 - rr * 0.21, rr * 0.36, rr * 0.16); }
+      c.fillStyle = "#222"; c.fillRect(L / 2, -rr * 0.08, rr * 0.45, rr * 0.16);                                     // coupling
+      bx.done();
+      if (boost) { c.globalCompositeOperation = "lighter"; for (var sp = 0; sp < 2; sp++) { var ss = S[Math.min(n - 1, k + (sp ? 2 : 0))], sp2 = side2(ss, hash(k + sp + Math.floor(t * 20)) > 0.5 ? 1 : -1, rr * 0.9); glowDot(c, sp2[0], sp2[1], rr * 0.35, "255,170,60", 0.9); } c.globalCompositeOperation = "source-over"; }
+    }
+    var eb = box(0, Math.min(n - 1, CAR - 1), rr * 1.6), EL = eb.len, EW = eb.w;           // the engine
+    c.fillStyle = "#111"; for (sd = -1; sd <= 1; sd += 2) for (var wq2 = -1; wq2 <= 1; wq2 += 2) { c.beginPath(); c.arc(wq2 * EL * 0.3, sd * EW * 0.55, rr * 0.32, 0, PI * 2); c.fill(); }
+    c.fillStyle = "#a3201a"; c.fillRect(-EL / 2, -EW / 2, EL * 0.38, EW);                                           // cab
+    c.fillStyle = "#1d1d1f"; c.beginPath(); c.moveTo(-EL / 2 + EL * 0.36, -EW * 0.42); c.lineTo(EL / 2 - rr * 0.3, -EW * 0.42); c.quadraticCurveTo(EL / 2 + rr * 0.3, 0, EL / 2 - rr * 0.3, EW * 0.42); c.lineTo(-EL / 2 + EL * 0.36, EW * 0.42); c.closePath(); c.fill();   // boiler
+    c.strokeStyle = "#d4af37"; c.lineWidth = Math.max(1, rr * 0.1); for (var bd = 0; bd < 3; bd++) { var bxx = -EL / 2 + EL * (0.45 + bd * 0.14); c.beginPath(); c.moveTo(bxx, -EW * 0.42); c.lineTo(bxx, EW * 0.42); c.stroke(); }
+    c.fillStyle = "#444"; c.beginPath(); c.arc(EL * 0.3, 0, rr * 0.32, 0, PI * 2); c.fill(); c.fillStyle = "#000"; c.beginPath(); c.arc(EL * 0.3, 0, rr * 0.18, 0, PI * 2); c.fill();   // chimney
+    c.globalCompositeOperation = "lighter"; glowDot(c, EL / 2 + rr * 0.5, 0, rr * 1.4, "255,230,140", 0.55); c.globalCompositeOperation = "source-over";   // headlight
+    var smokeX = EL * 0.3, sm = eb; sm.done();
+    var H = S[0], hx = H.x + Math.cos(H.a) * smokeX * 0.9, hy = H.y + Math.sin(H.a) * smokeX * 0.9;
+    puff(c, hx, hy, H.a + PI, rr, t, boost ? 10 : 6, 0.6, "200,200,205", boost ? 1.6 : 0.9, 6);
+  }
+
+  /* ---- robot snake: metal plates, neon spine, laser eye, thruster ---- */
+  function robot(c, S, rr, t, boost, alpha) {
+    var n = S.length; if (n < 3) return;
+    var i, s, sd;
+    c.lineCap = "round"; c.lineJoin = "round";
+    line(c, S, 0, n); c.strokeStyle = "#20262e"; c.lineWidth = rr * 1.5; c.stroke();              // dark joints underneath
+    var L = S[n - 1], ta = L.a + PI;
+    if (boost) { c.globalCompositeOperation = "lighter"; puff(c, L.x, L.y, ta, rr, t, 9, 0.35, "90,200,255", 3, 4); c.globalCompositeOperation = "source-over"; }
+    for (i = n - 1; i >= 1; i--) {
+      s = S[i]; var k = 1 - (i / n) * 0.35, w = rr * 0.92 * k;
+      c.save(); c.translate(s.x, s.y); c.rotate(s.a);
+      var g = c.createLinearGradient(0, -w, 0, w); g.addColorStop(0, "#c9d2dc"); g.addColorStop(0.5, "#8c97a4"); g.addColorStop(1, "#5d6772");
+      c.fillStyle = g; c.beginPath(); c.moveTo(-rr * 0.45, -w); c.lineTo(rr * 0.35, -w); c.lineTo(rr * 0.5, -w * 0.6); c.lineTo(rr * 0.5, w * 0.6); c.lineTo(rr * 0.35, w); c.lineTo(-rr * 0.45, w); c.closePath(); c.fill();
+      c.lineWidth = Math.max(1, rr * 0.07); c.strokeStyle = "#2c333b"; c.stroke();
+      c.fillStyle = "#e6ebf0"; for (sd = -1; sd <= 1; sd += 2) { c.beginPath(); c.arc(-rr * 0.2, sd * w * 0.7, Math.max(0.8, rr * 0.07), 0, PI * 2); c.fill(); }
+      c.restore();
+    }
+    c.globalCompositeOperation = "lighter";                         // neon spine
+    var pu = boost ? 1 : 0.6 + 0.2 * Math.sin(t * 4);
+    line(c, S, 1, n); c.strokeStyle = "rgba(41,224,255," + 0.3 * pu + ")"; c.lineWidth = Math.max(2, rr * 0.5); c.stroke();
+    c.strokeStyle = "rgba(200,250,255," + pu + ")"; c.lineWidth = Math.max(1, rr * 0.12); c.stroke();
+    if (boost) for (i = 1; i < n; i++) { var sh = Math.sin(i * 0.7 - t * 16); if (sh > 0.85) glowDot(c, S[i].x, S[i].y, rr * 0.9, "41,224,255", 0.8); }
+    c.globalCompositeOperation = "source-over";
+    c.save(); c.translate(L.x, L.y); c.rotate(L.a); c.fillStyle = "#3b434d"; c.beginPath(); c.moveTo(-rr * 0.2, -rr * 0.45); c.lineTo(-rr * 0.9, -rr * 0.6); c.lineTo(-rr * 0.9, rr * 0.6); c.lineTo(-rr * 0.2, rr * 0.45); c.closePath(); c.fill(); c.restore();   // thruster
+    var H = S[0]; c.save(); c.translate(H.x, H.y); c.rotate(H.a);
+    c.fillStyle = "#9aa6b3"; c.beginPath(); c.moveTo(-rr * 0.6, -rr * 0.9); c.lineTo(rr * 0.6, -rr * 0.9); c.lineTo(rr * 1.2, -rr * 0.3); c.lineTo(rr * 1.2, rr * 0.3); c.lineTo(rr * 0.6, rr * 0.9); c.lineTo(-rr * 0.6, rr * 0.9); c.closePath(); c.fill();
+    c.lineWidth = Math.max(1, rr * 0.09); c.strokeStyle = "#2c333b"; c.stroke();
+    c.fillStyle = "#1b1f24"; c.fillRect(rr * 0.35, -rr * 0.6, rr * 0.3, rr * 1.2);                   // visor
+    c.globalCompositeOperation = "lighter"; glowDot(c, rr * 0.5, 0, rr * 0.9, "255,45,45", 0.8); c.globalCompositeOperation = "source-over";
+    c.fillStyle = "#ff3b3b"; c.fillRect(rr * 0.42, -rr * 0.5, rr * 0.16, rr * 1.0);
+    c.strokeStyle = "#cfd6de"; c.lineWidth = Math.max(1, rr * 0.07); c.beginPath(); c.moveTo(-rr * 0.3, 0); c.lineTo(-rr * 1.1, -rr * 0.5); c.stroke();   // antenna
+    if (Math.floor(t * 2) % 2 === 0) { c.globalCompositeOperation = "lighter"; glowDot(c, -rr * 1.1, -rr * 0.5, rr * 0.35, "120,255,120", 0.9); c.globalCompositeOperation = "source-over"; }
+    c.restore();
+  }
+
+  /* ---- phoenix: burning body, fire wings, long flaming tail, embers ---- */
+  function phoenix(c, S, rr, t, boost, alpha) {
+    var n = S.length; if (n < 3) return;
+    var i, s, sd, wf = taper(n, rr * 0.85, rr * 0.3);
+    c.lineCap = "round"; c.lineJoin = "round";
+    var L = S[n - 1], ta = L.a + PI;
+    for (i = 0; i < 5; i++) {                                      // tail plumes
+      var fa = ta + (i - 2) * 0.22 + Math.sin(t * 3 + i) * 0.12, fl = rr * (4 + (i % 2) * 1.5), ex = L.x + Math.cos(fa) * fl, ey = L.y + Math.sin(fa) * fl;
+      var g = c.createLinearGradient(L.x, L.y, ex, ey); g.addColorStop(0, "#ffd24a"); g.addColorStop(0.6, "#ff6a00"); g.addColorStop(1, "rgba(200,20,0,0)");
+      c.strokeStyle = g; c.lineWidth = Math.max(1.5, rr * 0.35); c.beginPath(); c.moveTo(L.x, L.y); c.quadraticCurveTo(L.x + Math.cos(fa + 0.4) * fl * 0.5, L.y + Math.sin(fa + 0.4) * fl * 0.5, ex, ey); c.stroke();
+    }
+    var W0 = S[Math.min(n - 1, Math.max(1, Math.round(n * 0.12)))], flap = 0.7 + 0.3 * Math.sin(t * (boost ? 10 : 4));
+    for (sd = -1; sd <= 1; sd += 2) {                              // fire wings, a fan of long feathers
+      for (var f = 0; f < 6; f++) {
+        var wa = W0.a + sd * (PI / 2 + 0.1 + f * 0.17), wl = rr * (4.4 - f * 0.35) * flap, wx = W0.x + Math.cos(wa) * wl, wy = W0.y + Math.sin(wa) * wl;
+        var wg = c.createLinearGradient(W0.x, W0.y, wx, wy); wg.addColorStop(0, "#ffe27a"); wg.addColorStop(0.5, "#ff7a1a"); wg.addColorStop(1, "rgba(220,30,0,.2)");
+        c.strokeStyle = wg; c.lineWidth = Math.max(1.5, rr * 0.5); c.beginPath(); c.moveTo(W0.x, W0.y); c.quadraticCurveTo(W0.x + Math.cos(wa - sd * 0.25) * wl * 0.6, W0.y + Math.sin(wa - sd * 0.25) * wl * 0.6, wx, wy); c.stroke();
+      }
+    }
+    outline(c, S, wf); var bg = c.createLinearGradient(S[0].x, S[0].y, L.x, L.y); bg.addColorStop(0, "#ff8c1a"); bg.addColorStop(1, "#d93a00"); c.fillStyle = bg; c.fill();
+    for (i = 1; i < n - 1; i++) {                                  // feathers along both sides
+      s = S[i]; var fw = wf(i);
+      for (sd = -1; sd <= 1; sd += 2) {
+        var sw = Math.sin(t * 7 - i * 0.7) * 0.25, a = s.a + PI + sd * (1.05 + sw), b = side2(s, sd, fw * 0.85), len = fw * 2.3;
+        c.fillStyle = i % 2 ? "#ff5a00" : "#ffb020"; c.beginPath(); c.moveTo(b[0], b[1]);
+        c.quadraticCurveTo(b[0] + Math.cos(a + sd * 0.5) * len * 0.7, b[1] + Math.sin(a + sd * 0.5) * len * 0.7, b[0] + Math.cos(a) * len, b[1] + Math.sin(a) * len);
+        c.quadraticCurveTo(b[0] + Math.cos(a - sd * 0.3) * len * 0.4, b[1] + Math.sin(a - sd * 0.3) * len * 0.4, b[0], b[1]); c.fill(); c.strokeStyle = "rgba(120,20,0,.75)"; c.lineWidth = Math.max(1, rr * 0.06); c.stroke();
+      }
+    }
+    line(c, S, 1, n); c.strokeStyle = "#ffd24a"; c.lineWidth = Math.max(1, rr * 0.3); c.stroke();
+    c.globalCompositeOperation = "lighter";
+    line(c, S, 0, n); c.strokeStyle = "rgba(255,120,20," + (boost ? 0.35 : 0.18) + ")"; c.lineWidth = rr * (boost ? 3 : 2.2); c.stroke();
+    for (var e = 0; e < (boost ? 14 : 7); e++) {                    // embers drifting off the tail
+      var ef2 = (t * 0.8 + e / 7) % 1, ei = Math.min(n - 1, Math.floor(n * (0.3 + hash(e) * 0.7))), es = S[ei], ea = es.a + PI + (hash(e * 3) - 0.5) * 1.6;
+      glowDot(c, es.x + Math.cos(ea) * rr * ef2 * 4, es.y + Math.sin(ea) * rr * ef2 * 4, rr * 0.35, "255,180,60", 0.9 * (1 - ef2));
+    }
+    c.globalCompositeOperation = "source-over";
+    var H = S[0]; c.save(); c.translate(H.x, H.y); c.rotate(H.a);
+    for (i = 0; i < 3; i++) { var ca = PI + (i - 1) * 0.35 + Math.sin(t * 6 + i) * 0.1; c.beginPath(); c.moveTo(0, 0); c.lineTo(Math.cos(ca) * rr * 1.8, Math.sin(ca) * rr * 1.8); c.strokeStyle = i === 1 ? "#ffd24a" : "#ff5a00"; c.lineWidth = Math.max(1, rr * 0.28); c.stroke(); }   // crest
+    c.beginPath(); c.ellipse(0, 0, rr * 0.85, rr * 0.75, 0, 0, PI * 2); c.fillStyle = "#ff8c1a"; c.fill();
+    c.beginPath(); c.moveTo(rr * 0.7, -rr * 0.3); c.lineTo(rr * 1.6, 0); c.lineTo(rr * 0.7, rr * 0.3); c.closePath(); c.fillStyle = "#ffd24a"; c.fill();   // beak
+    for (sd = -1; sd <= 1; sd += 2) { c.beginPath(); c.arc(rr * 0.25, sd * rr * 0.35, rr * 0.14, 0, PI * 2); c.fillStyle = "#2a0a00"; c.fill(); }
+    c.restore();
+  }
+
+  /* ---- ice serpent: pale body, crystal shards, frost mist, frost breath ---- */
+  function ice(c, S, rr, t, boost, alpha) {
+    var n = S.length; if (n < 3) return;
+    var i, s, sd, wf = function (i) { var u = i / (n - 1); return rr * (u < 0.1 ? 0.8 + u * 2 : 1 - (u - 0.1) * 0.72); };
+    c.lineCap = "round"; c.lineJoin = "round";
+    c.globalCompositeOperation = "lighter";
+    for (i = 0; i < 8; i++) { var mf = (t * 0.4 + i / 8) % 1, mi = Math.min(n - 1, Math.floor(hash(i + 3) * n)), ms = S[mi], mp = side2(ms, hash(i) > 0.5 ? 1 : -1, wf(mi) + rr * mf * 1.5); glowDot(c, mp[0], mp[1], rr * (0.6 + mf), "200,240,255", 0.35 * (1 - mf)); }
+    c.globalCompositeOperation = "source-over";
+    outline(c, S, wf); var g = c.createLinearGradient(S[0].x, S[0].y, S[n - 1].x, S[n - 1].y); g.addColorStop(0, "#bfe9fb"); g.addColorStop(1, "#7cc3e6"); c.fillStyle = g; c.fill();
+    c.lineWidth = Math.max(1, rr * 0.1); c.strokeStyle = "#e8fbff"; c.stroke();
+    c.strokeStyle = "rgba(60,140,190,.45)"; c.lineWidth = Math.max(1, rr * 0.08);
+    for (i = 2; i < n - 1; i++) { s = S[i]; var w = wf(i); c.save(); c.translate(s.x, s.y); c.rotate(s.a); c.beginPath(); c.moveTo(-w * 0.3, -w * 0.7); c.lineTo(w * 0.1, 0); c.lineTo(-w * 0.3, w * 0.7); c.stroke(); c.restore(); }
+    for (i = 2; i < n - 1; i += 2) {                               // crystal shards along the back
+      s = S[i]; var sz = wf(i) * 1.6, cs = (i % 4 === 0) ? 1 : -1, ba = s.a + PI - cs * (0.75 + (hash(i) - 0.5) * 0.3), cp = side2(s, cs, wf(i) * 0.55);
+      c.save(); c.translate(cp[0], cp[1]); c.rotate(ba);
+      c.beginPath(); c.moveTo(0, 0); c.lineTo(sz * 0.35, -sz * 0.18); c.lineTo(sz * 1.1, 0); c.lineTo(sz * 0.35, sz * 0.18); c.closePath();
+      c.fillStyle = "#f4feff"; c.fill(); c.strokeStyle = "#2f86b8"; c.lineWidth = Math.max(1, rr * 0.1); c.stroke();
+      c.beginPath(); c.moveTo(sz * 0.2, 0); c.lineTo(sz * 0.9, 0); c.strokeStyle = "rgba(47,134,184,.6)"; c.lineWidth = Math.max(1, rr * 0.05); c.stroke();
+      c.restore();
+    }
+    var H = S[0]; c.save(); c.translate(H.x, H.y); c.rotate(H.a);
+    if (boost) { c.globalCompositeOperation = "lighter"; puff(c, rr * 0.8, 0, 0, rr, t, 9, 0.5, "210,245,255", 2.5, 5); c.globalCompositeOperation = "source-over"; }
+    for (sd = -1; sd <= 1; sd += 2) { c.beginPath(); c.moveTo(-rr * 0.1, sd * rr * 0.45); c.lineTo(-rr * 1.3, sd * rr * 0.85); c.lineTo(-rr * 0.5, sd * rr * 0.3); c.closePath(); c.fillStyle = "#eafcff"; c.fill(); c.strokeStyle = "#5aaed6"; c.lineWidth = Math.max(1, rr * 0.06); c.stroke(); }
+    c.beginPath(); c.moveTo(-rr * 0.8, -rr * 0.75); c.lineTo(rr * 0.7, -rr * 0.6); c.lineTo(rr * 1.4, 0); c.lineTo(rr * 0.7, rr * 0.6); c.lineTo(-rr * 0.8, rr * 0.75); c.closePath();
+    c.fillStyle = "#c6ecfc"; c.fill(); c.lineWidth = Math.max(1, rr * 0.08); c.strokeStyle = "#5aaed6"; c.stroke();
+    for (sd = -1; sd <= 1; sd += 2) { c.globalCompositeOperation = "lighter"; glowDot(c, rr * 0.35, sd * rr * 0.35, rr * 0.4, "80,220,255", 0.9); c.globalCompositeOperation = "source-over"; c.fillStyle = "#e6fbff"; c.beginPath(); c.arc(rr * 0.35, sd * rr * 0.35, rr * 0.1, 0, PI * 2); c.fill(); }
+    c.restore();
+  }
+
+  /* ---- caterpillar: round green segments, little legs, cute face ---- */
+  function caterpillar(c, S, rr, t, boost, alpha) {
+    var n = S.length; if (n < 2) return;
+    var i, s, sd, sp = boost ? 16 : 7;
+    c.lineCap = "round"; c.lineJoin = "round";
+    for (i = 1; i < n; i++) {                                      // stubby legs
+      s = S[i];
+      for (sd = -1; sd <= 1; sd += 2) { var lf = Math.sin(t * sp - i * 0.9) * 0.3, b = side2(s, sd, rr * 0.75), a = s.a + sd * (PI / 2 + 0.3 + lf); c.strokeStyle = "#2b3a1a"; c.lineWidth = Math.max(1, rr * 0.16); c.beginPath(); c.moveTo(b[0], b[1]); c.lineTo(b[0] + Math.cos(a) * rr * 0.45, b[1] + Math.sin(a) * rr * 0.45); c.stroke(); }
+    }
+    for (i = n - 1; i >= 1; i--) {                                 // body balls, bouncing a little
+      s = S[i]; var bob = 1 + Math.sin(t * sp * 0.6 - i * 0.8) * 0.06, r = rr * 0.95 * bob;
+      var g = c.createRadialGradient(s.x - r * 0.3, s.y - r * 0.3, r * 0.1, s.x, s.y, r); g.addColorStop(0, "#b8f27c"); g.addColorStop(0.7, "#5fbf3a"); g.addColorStop(1, "#347a1f");
+      c.fillStyle = g; c.beginPath(); c.arc(s.x, s.y, r, 0, PI * 2); c.fill(); c.lineWidth = Math.max(1, rr * 0.06); c.strokeStyle = "rgba(20,50,10,.6)"; c.stroke();
+      c.fillStyle = "#ffe14d"; c.beginPath(); c.arc(s.x, s.y, r * 0.18, 0, PI * 2); c.fill();
+      c.fillStyle = "#1f2a12"; for (sd = -1; sd <= 1; sd += 2) { var dp = side2(s, sd, r * 0.55); c.beginPath(); c.arc(dp[0], dp[1], r * 0.08, 0, PI * 2); c.fill(); }
+    }
+    var H = S[0]; c.save(); c.translate(H.x, H.y); c.rotate(H.a);
+    for (sd = -1; sd <= 1; sd += 2) {                              // antennae with balls
+      var aw = Math.sin(t * 5 + sd) * 0.2, ax = rr * 1.5, ay = sd * rr * (1.1 + aw);
+      c.strokeStyle = "#2b3a1a"; c.lineWidth = Math.max(1, rr * 0.1); c.beginPath(); c.moveTo(rr * 0.2, sd * rr * 0.5); c.quadraticCurveTo(rr * 0.9, sd * rr * 0.6, ax, ay); c.stroke();
+      c.fillStyle = "#ff6b6b"; c.beginPath(); c.arc(ax, ay, rr * 0.2, 0, PI * 2); c.fill();
+    }
+    var hg = c.createRadialGradient(-rr * 0.3, -rr * 0.3, rr * 0.1, 0, 0, rr * 1.15); hg.addColorStop(0, "#ffe985"); hg.addColorStop(1, "#e0a92a");
+    c.fillStyle = hg; c.beginPath(); c.arc(0, 0, rr * 1.15, 0, PI * 2); c.fill(); c.lineWidth = Math.max(1, rr * 0.07); c.strokeStyle = "rgba(90,60,0,.6)"; c.stroke();
+    for (sd = -1; sd <= 1; sd += 2) { c.fillStyle = "#fff"; c.beginPath(); c.arc(rr * 0.35, sd * rr * 0.42, rr * 0.3, 0, PI * 2); c.fill(); c.fillStyle = "#111"; c.beginPath(); c.arc(rr * 0.45, sd * rr * 0.42, rr * 0.16, 0, PI * 2); c.fill(); c.fillStyle = "#fff"; c.beginPath(); c.arc(rr * 0.5, sd * rr * 0.36, rr * 0.05, 0, PI * 2); c.fill(); }
+    c.strokeStyle = "#7a3b0c"; c.lineWidth = Math.max(1, rr * 0.08); c.beginPath(); c.arc(rr * 0.55, 0, rr * 0.3, -1.1, 1.1); c.stroke();   // smile
+    c.restore();
+  }
+
+  /* ---- zombie snake: rotten green, stitches, bones showing, toxic gas ---- */
+  function zombie(c, S, rr, t, boost, alpha) {
+    var n = S.length; if (n < 3) return;
+    var i, s, sd, wf = taper(n, rr * 0.95, rr * 0.35);
+    c.lineCap = "round"; c.lineJoin = "round";
+    if (boost) { c.globalCompositeOperation = "lighter"; var L0 = S[n - 1]; puff(c, L0.x, L0.y, L0.a + PI, rr, t, 10, 1.2, "120,255,80", 1.2, 4); c.globalCompositeOperation = "source-over"; }
+    outline(c, S, wf); c.fillStyle = "#7f9a5a"; c.fill(); c.lineWidth = Math.max(1, rr * 0.1); c.strokeStyle = "#2f3a1f"; c.stroke();
+    for (i = 2; i < n - 1; i++) {
+      s = S[i]; var h = hash(i), w = wf(i);
+      if (h < 0.3) { var p = side2(s, h < 0.15 ? 1 : -1, w * 0.35); c.fillStyle = "rgba(70,90,40,.8)"; c.beginPath(); c.ellipse(p[0], p[1], w * 0.45, w * 0.3, s.a, 0, PI * 2); c.fill(); }   // rot patches
+      else if (h < 0.42) { c.fillStyle = "#8a1e1e"; c.beginPath(); c.arc(s.x, s.y, w * 0.32, 0, PI * 2); c.fill(); c.fillStyle = "rgba(255,120,120,.4)"; c.beginPath(); c.arc(s.x - w * 0.08, s.y - w * 0.08, w * 0.12, 0, PI * 2); c.fill(); }   // wounds
+      else if (h < 0.55) {                                         // bones showing
+        c.save(); c.translate(s.x, s.y); c.rotate(s.a); c.strokeStyle = "#ece6d6"; c.lineWidth = Math.max(1, rr * 0.13);
+        for (sd = -1; sd <= 1; sd += 2) { c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(-w * 0.1, sd * w * 0.6, -w * 0.45, sd * w * 0.8); c.stroke(); }
+        c.restore();
+      }
+      if (i % 4 === 0) {                                           // stitches across the body
+        c.save(); c.translate(s.x, s.y); c.rotate(s.a); c.strokeStyle = "#1e2412"; c.lineWidth = Math.max(1, rr * 0.07);
+        c.beginPath(); c.moveTo(0, -w * 0.8); c.lineTo(0, w * 0.8); c.stroke();
+        for (var q = -2; q <= 2; q++) { c.beginPath(); c.moveTo(-w * 0.18, q * w * 0.3); c.lineTo(w * 0.18, q * w * 0.3); c.stroke(); }
+        c.restore();
+      }
+    }
+    var H = S[0]; c.save(); c.translate(H.x, H.y); c.rotate(H.a);
+    c.beginPath(); c.ellipse(0, 0, rr * 1.0, rr * 0.9, 0, 0, PI * 2); c.fillStyle = "#89a462"; c.fill(); c.lineWidth = Math.max(1, rr * 0.09); c.strokeStyle = "#2f3a1f"; c.stroke();
+    c.fillStyle = "#1a1a10"; c.beginPath(); c.moveTo(rr * 0.6, -rr * 0.4); c.lineTo(rr * 1.0, 0); c.lineTo(rr * 0.6, rr * 0.4); c.closePath(); c.fill();   // mouth
+    c.fillStyle = "#f2ecd0"; for (var tq = -1; tq <= 1; tq += 2) { c.beginPath(); c.moveTo(rr * 0.65, tq * rr * 0.2); c.lineTo(rr * 0.85, tq * rr * 0.12); c.lineTo(rr * 0.68, tq * rr * 0.05); c.fill(); }
+    var dang = Math.sin(t * 3) * rr * 0.1;                          // the hanging eye
+    c.strokeStyle = "#8a1e1e"; c.lineWidth = Math.max(1, rr * 0.06); c.beginPath(); c.moveTo(rr * 0.2, -rr * 0.4); c.lineTo(rr * 0.5 + dang, -rr * 0.95); c.stroke();
+    c.fillStyle = "#f4f1e0"; c.beginPath(); c.arc(rr * 0.5 + dang, -rr * 0.95, rr * 0.26, 0, PI * 2); c.fill(); c.fillStyle = "#b8141e"; c.beginPath(); c.arc(rr * 0.58 + dang, -rr * 0.95, rr * 0.1, 0, PI * 2); c.fill();
+    c.strokeStyle = "#1e2412"; c.lineWidth = Math.max(1, rr * 0.09);                                      // stitched-shut eye
+    c.beginPath(); c.moveTo(rr * 0.05, rr * 0.25); c.lineTo(rr * 0.45, rr * 0.55); c.moveTo(rr * 0.45, rr * 0.25); c.lineTo(rr * 0.05, rr * 0.55); c.stroke();
+    c.restore();
+  }
+
   /* id → { name, skin (the closest normal skin by slither's colours), draw }
      centipede → 29 (dark grey 80,80,80 + yellow 238,238,112) · dragon → 63 (red 255,64,64 + dark grey 80,80,80) ·
-     skeleton → 65 (white 255,255,255 + pale yellow 238,238,112) */
-  var LIST = { centipede: { name: "Centipede", skin: 29, draw: centipede }, dragon: { name: "Dragon", skin: 63, draw: dragon }, skeleton: { name: "Skeleton", skin: 65, draw: skeleton } };
+     skeleton → 65 (white 255,255,255 + pale yellow 238,238,112) · chinese, phoenix → 56 (orange 240,144,32) ·
+     eel → 64 (blue 72,84,255 + dark grey) · train, zombie → 29 · robot → 44 (grey 144,144,144) ·
+     ice → 49 (sky 101,200,232 + white) · caterpillar → 27 (green 60,192,72) */
+  var LIST = {
+    centipede: { name: "Centipede", skin: 29, draw: centipede },
+    dragon: { name: "Dragon", skin: 63, draw: dragon },
+    skeleton: { name: "Skeleton", skin: 65, draw: skeleton },
+    chinese: { name: "Chinese Dragon", skin: 56, draw: chinese },
+    eel: { name: "Electric Eel", skin: 64, draw: eel },
+    train: { name: "Train", skin: 29, draw: train },
+    robot: { name: "Robot Snake", skin: 44, draw: robot },
+    phoenix: { name: "Phoenix", skin: 56, draw: phoenix },
+    ice: { name: "Ice Serpent", skin: 49, draw: ice },
+    caterpillar: { name: "Caterpillar", skin: 27, draw: caterpillar },
+    zombie: { name: "Zombie Snake", skin: 29, draw: zombie }
+  };
   function cur() { return (cfg.id && LIST[cfg.id]) || null; }
 
   /* ---- samples along NTL's centre line, one per body segment ---- */
@@ -4818,7 +5148,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
-    { v: "5.66-dev", d: "26 Sep 2026", t: "Vanced Skins: a new button in the skin editor opens creature skins for your snake \u2014 Centipede, Dragon (wings, fire breath on boost) and Skeleton (eyes glow on boost). Other players see the normal skin closest to the creature\u2019s colours." },
+    { v: "5.66-dev", d: "26 Sep 2026", t: "Vanced Skins: a new button in the skin editor opens creature skins for your snake \u2014 Centipede, Dragon, Skeleton, Chinese Dragon, Electric Eel, Train, Robot Snake, Phoenix, Ice Serpent, Caterpillar and Zombie Snake, each with its own boost effect. Other players see the normal skin closest to the creature\u2019s colours." },
     { v: "5.65", d: "26 Sep 2026", t: "Global chat (the SlitherControl+ room) removed — the chat box is NTL’s team chat again, with the emoji / GIF picker. Assist (and the other hold keys) now stays on while an on-screen button is held, so Assist go skinless / Assist map show on phones. Team list follows NTL’s KeyOwners in players list, Online players status (version) and the team detail toggle again. Everywhere NTL sent or showed its own version (team list, tag server, settings title) it now uses the NTL VANCED version you are running — the updated one after an in-app update; the version text left the stats line. Squeeze mode is in the build but unavailable for now." },
     { v: "5.64", d: "22 Sep 2026", t: "Lobby can be switched off in Vanced \u203a General and no longer appears when you come back from the skin editor or settings \u2014 only after a real round. Updates card shows UPDATE only when there is one." },
     { v: "5.64", d: "21 Sep 2026", t: "Backups: one .ntlvanced file holds every NTL and Vanced setting (keys, layouts, theme, arenas, skins); BACKUP / RESTORE in Vanced › Updates & About; old .ntlmod files still restore." },
