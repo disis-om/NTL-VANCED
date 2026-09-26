@@ -1340,9 +1340,93 @@ var NTL_CR = (function () {
     c.restore();
   }
 
+  /* ---- skeleton ---- */
+  function skeleton(c, S, rr, t, boost, alpha) {
+    var n = S.length; if (n < 3) return;
+    var i, s, side, BONE = "#ece6d6", SHADE = "#b9b09a", DARK = "rgba(0,0,0,.55)";
+    var cage = Math.max(3, Math.round(n * 0.38)), hip = Math.min(n - 2, cage + 2);
+    c.lineCap = "round"; c.lineJoin = "round";
+    function bone(x1, y1, x2, y2, w) {                             // a bone with knobbed ends
+      c.strokeStyle = DARK; c.lineWidth = w + Math.max(1, w * 0.35); c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+      c.strokeStyle = BONE; c.lineWidth = w; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+      c.fillStyle = BONE; c.beginPath(); c.arc(x2, y2, w * 0.62, 0, PI * 2); c.fill();
+    }
+    /* ribs: pairs curving back from each vertebra of the chest, longest in the middle of the cage */
+    for (i = 2; i < cage; i++) {
+      s = S[i]; var u = (i - 1) / (cage - 1), len = rr * (1.0 + Math.sin(u * PI) * 0.75), rw = Math.max(1, rr * 0.2);
+      var rattle = boost ? Math.sin(t * 40 + i) * 0.06 : 0;
+      for (side = -1; side <= 1; side += 2) {
+        var a0 = s.a + side * (PI / 2 - 0.15 + rattle), a1 = s.a + side * (PI / 2 + 0.75);
+        var mx = s.x + Math.cos(a0) * len * 0.6, my = s.y + Math.sin(a0) * len * 0.6, ex = mx + Math.cos(a1) * len * 0.55, ey = my + Math.sin(a1) * len * 0.55;
+        c.strokeStyle = DARK; c.lineWidth = rw + Math.max(1, rw * 0.4); c.beginPath(); c.moveTo(s.x, s.y); c.quadraticCurveTo(mx, my, ex, ey); c.stroke();
+        c.strokeStyle = BONE; c.lineWidth = rw; c.beginPath(); c.moveTo(s.x, s.y); c.quadraticCurveTo(mx, my, ex, ey); c.stroke();
+      }
+    }
+    /* legs from the hip: thigh + shin + little foot bones, walking */
+    s = S[hip];
+    for (side = -1; side <= 1; side += 2) {
+      var st = Math.sin(t * (boost ? 12 : 6) + (side > 0 ? PI : 0)) * 0.5;
+      var ha = s.a + side * (PI / 2 + 0.2) - side * st, kx = s.x + Math.cos(ha) * rr * 1.1, ky = s.y + Math.sin(ha) * rr * 1.1;
+      var sa = s.a + PI + side * 0.3 + st * 0.3, fx = kx + Math.cos(sa) * rr * 0.95, fy = ky + Math.sin(sa) * rr * 0.95;
+      bone(s.x, s.y, kx, ky, Math.max(1.2, rr * 0.24)); bone(kx, ky, fx, fy, Math.max(1, rr * 0.2));
+      for (var tq = -1; tq <= 1; tq++) { var ta = sa + tq * 0.4; bone(fx, fy, fx + Math.cos(ta) * rr * 0.3, fy + Math.sin(ta) * rr * 0.3, Math.max(1, rr * 0.09)); }
+    }
+    /* front legs (arms) just behind the skull */
+    s = S[Math.min(n - 1, 2)];
+    for (side = -1; side <= 1; side += 2) {
+      var st2 = Math.sin(t * (boost ? 12 : 6) + (side > 0 ? 0 : PI)) * 0.5;
+      var aa = s.a + side * (PI / 2 - 0.1) - side * st2, ax = s.x + Math.cos(aa) * rr * 0.95, ay = s.y + Math.sin(aa) * rr * 0.95;
+      var fa2 = s.a + side * 0.35, hx2 = ax + Math.cos(fa2) * rr * 0.75, hy2 = ay + Math.sin(fa2) * rr * 0.75;
+      bone(s.x, s.y, ax, ay, Math.max(1, rr * 0.2)); bone(ax, ay, hx2, hy2, Math.max(1, rr * 0.16));
+      for (var tq2 = -1; tq2 <= 1; tq2++) { var fa3 = fa2 + tq2 * 0.45; bone(hx2, hy2, hx2 + Math.cos(fa3) * rr * 0.25, hy2 + Math.sin(fa3) * rr * 0.25, Math.max(1, rr * 0.08)); }
+    }
+    /* pelvis */
+    c.save(); c.translate(S[hip].x, S[hip].y); c.rotate(S[hip].a);
+    c.beginPath(); c.ellipse(0, 0, rr * 0.55, rr * 0.9, 0, 0, PI * 2); c.fillStyle = BONE; c.fill(); c.lineWidth = Math.max(1, rr * 0.08); c.strokeStyle = DARK; c.stroke();
+    c.fillStyle = "rgba(40,30,20,.65)"; for (side = -1; side <= 1; side += 2) { c.beginPath(); c.ellipse(-rr * 0.05, side * rr * 0.42, rr * 0.2, rr * 0.25, 0, 0, PI * 2); c.fill(); }
+    c.restore();
+    /* spinal cord joining the vertebrae, then one vertebra per segment, shrinking along the tail */
+    c.beginPath(); for (i = 0; i < n; i++) (i ? c.lineTo : c.moveTo).call(c, S[i].x, S[i].y);
+    c.strokeStyle = DARK; c.lineWidth = Math.max(1.5, rr * 0.2); c.stroke();
+    c.strokeStyle = SHADE; c.lineWidth = Math.max(1, rr * 0.12); c.stroke();
+    for (i = n - 1; i >= 1; i--) {
+      s = S[i]; var k = i < cage ? 1 : Math.max(0.3, 1 - (i - cage) / (n - cage) * 0.7);
+      c.save(); c.translate(s.x, s.y); c.rotate(s.a);
+      c.beginPath(); c.ellipse(0, 0, rr * 0.42 * k, rr * 0.3 * k, 0, 0, PI * 2); c.fillStyle = BONE; c.fill();
+      c.lineWidth = Math.max(1, rr * 0.07); c.strokeStyle = DARK; c.stroke();
+      c.beginPath(); c.moveTo(-rr * 0.1 * k, -rr * 0.5 * k); c.lineTo(-rr * 0.1 * k, rr * 0.5 * k);              // side processes
+      c.strokeStyle = SHADE; c.lineWidth = Math.max(1, rr * 0.12 * k); c.stroke();
+      c.restore();
+    }
+    /* skull */
+    var H = S[0];
+    c.save(); c.translate(H.x, H.y); c.rotate(H.a);
+    c.beginPath(); c.moveTo(rr * 0.55, -rr * 0.42); c.lineTo(rr * 1.25, -rr * 0.22); c.lineTo(rr * 1.25, rr * 0.22); c.lineTo(rr * 0.55, rr * 0.42); c.closePath();   // jaw / snout
+    c.fillStyle = SHADE; c.fill(); c.lineWidth = Math.max(1, rr * 0.07); c.strokeStyle = DARK; c.stroke();
+    c.strokeStyle = "rgba(40,30,20,.7)"; c.lineWidth = Math.max(1, rr * 0.06);
+    for (var tt = 0; tt < 4; tt++) { var tx = rr * (0.7 + tt * 0.15); c.beginPath(); c.moveTo(tx, -rr * 0.3); c.lineTo(tx, rr * 0.3); c.stroke(); }   // teeth
+    c.beginPath(); c.ellipse(0, 0, rr * 0.9, rr * 0.82, 0, 0, PI * 2);
+    var sg = c.createRadialGradient(-rr * 0.2, -rr * 0.2, rr * 0.1, 0, 0, rr * 0.9); sg.addColorStop(0, "#fffaf0"); sg.addColorStop(1, "#cfc6ae");
+    c.fillStyle = sg; c.fill(); c.lineWidth = Math.max(1, rr * 0.08); c.strokeStyle = DARK; c.stroke();
+    var glow = boost ? 0.75 + 0.25 * Math.sin(t * 20) : 0;
+    for (side = -1; side <= 1; side += 2) {                        // eye sockets (glowing green on boost)
+      c.beginPath(); c.ellipse(rr * 0.25, side * rr * 0.36, rr * 0.26, rr * 0.22, 0, 0, PI * 2); c.fillStyle = "#1a1510"; c.fill();
+      if (glow) {
+        var eg = c.createRadialGradient(rr * 0.25, side * rr * 0.36, 0, rr * 0.25, side * rr * 0.36, rr * 0.45);
+        eg.addColorStop(0, "rgba(160,255,120," + glow + ")"); eg.addColorStop(1, "rgba(60,255,60,0)");
+        c.globalCompositeOperation = "lighter"; c.fillStyle = eg; c.beginPath(); c.arc(rr * 0.25, side * rr * 0.36, rr * 0.45, 0, PI * 2); c.fill(); c.globalCompositeOperation = "source-over";
+      }
+    }
+    c.beginPath(); c.moveTo(rr * 0.62, -rr * 0.08); c.lineTo(rr * 0.78, 0); c.lineTo(rr * 0.62, rr * 0.08); c.closePath(); c.fillStyle = "#1a1510"; c.fill();   // nose hole
+    c.strokeStyle = "rgba(60,50,40,.45)"; c.lineWidth = Math.max(1, rr * 0.05);                                                              // a crack
+    c.beginPath(); c.moveTo(-rr * 0.55, -rr * 0.1); c.lineTo(-rr * 0.3, -rr * 0.02); c.lineTo(-rr * 0.2, -rr * 0.18); c.stroke();
+    c.restore();
+  }
+
   /* id → { name, skin (the closest normal skin by slither's colours), draw }
-     centipede → 29 (dark grey 80,80,80 + yellow 238,238,112) · dragon → 63 (red 255,64,64 + dark grey 80,80,80) */
-  var LIST = { centipede: { name: "Centipede", skin: 29, draw: centipede }, dragon: { name: "Dragon", skin: 63, draw: dragon } };
+     centipede → 29 (dark grey 80,80,80 + yellow 238,238,112) · dragon → 63 (red 255,64,64 + dark grey 80,80,80) ·
+     skeleton → 65 (white 255,255,255 + pale yellow 238,238,112) */
+  var LIST = { centipede: { name: "Centipede", skin: 29, draw: centipede }, dragon: { name: "Dragon", skin: 63, draw: dragon }, skeleton: { name: "Skeleton", skin: 65, draw: skeleton } };
   function cur() { return (cfg.id && LIST[cfg.id]) || null; }
 
   /* ---- samples along NTL's centre line, one per body segment ---- */
@@ -4734,7 +4818,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
-    { v: "5.66-dev", d: "26 Sep 2026", t: "Vanced Skins: a new button in the skin editor opens creature skins for your snake \u2014 Centipede and Dragon (wings, fire breath on boost). Other players see the normal skin closest to the creature\u2019s colours." },
+    { v: "5.66-dev", d: "26 Sep 2026", t: "Vanced Skins: a new button in the skin editor opens creature skins for your snake \u2014 Centipede, Dragon (wings, fire breath on boost) and Skeleton (eyes glow on boost). Other players see the normal skin closest to the creature\u2019s colours." },
     { v: "5.65", d: "26 Sep 2026", t: "Global chat (the SlitherControl+ room) removed — the chat box is NTL’s team chat again, with the emoji / GIF picker. Assist (and the other hold keys) now stays on while an on-screen button is held, so Assist go skinless / Assist map show on phones. Team list follows NTL’s KeyOwners in players list, Online players status (version) and the team detail toggle again. Everywhere NTL sent or showed its own version (team list, tag server, settings title) it now uses the NTL VANCED version you are running — the updated one after an in-app update; the version text left the stats line. Squeeze mode is in the build but unavailable for now." },
     { v: "5.64", d: "22 Sep 2026", t: "Lobby can be switched off in Vanced \u203a General and no longer appears when you come back from the skin editor or settings \u2014 only after a real round. Updates card shows UPDATE only when there is one." },
     { v: "5.64", d: "21 Sep 2026", t: "Backups: one .ntlvanced file holds every NTL and Vanced setting (keys, layouts, theme, arenas, skins); BACKUP / RESTORE in Vanced › Updates & About; old .ntlmod files still restore." },
