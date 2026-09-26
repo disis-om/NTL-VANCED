@@ -1833,7 +1833,7 @@ var NTL_CR = (function () {
     "#wy-cr .it.on .nm i{color:#9be7b5;}",
     "#wy-cr .nt{margin-top:12px;font-size:10.5px;color:#6b7385;line-height:1.5;}"
   ].join("\n");
-  var ov = null, raf = 0;
+  var ov = null, raf = 0, lastSel = -1;
   function css() { if (!document.getElementById("cr-css")) { var s = document.createElement("style"); s.id = "cr-css"; s.textContent = CSS; (document.head || document.documentElement).appendChild(s); } }
   /* a wavy demo body in canvas px, head on the right */
   function demo(cv, id, t) {
@@ -1855,7 +1855,7 @@ var NTL_CR = (function () {
     var items = ov.querySelectorAll(".it");
     for (var i = 0; i < items.length; i++) { var on = (items[i].getAttribute("data-id") || "") === (cfg.id || ""); items[i].classList.toggle("on", on); items[i].querySelector("i").textContent = on ? "IN USE" : "USE"; }
   }
-  function close() { if (ov) { ov.remove(); ov = null; } if (raf) { cancelAnimationFrame(raf); raf = 0; } }
+  function close() { if (ov) { ov.remove(); ov = null; } if (raf) { cancelAnimationFrame(raf); raf = 0; } lastSel = -1; }
   function open() {
     css(); close();
     ov = document.createElement("div"); ov.id = "wy-cr-ov";
@@ -1873,7 +1873,16 @@ var NTL_CR = (function () {
     });
     document.body.appendChild(ov); render();
     var cvs = ov.querySelectorAll(".it canvas"), t0 = performance.now();
-    (function loop() { if (!ov) return; var t = (performance.now() - t0) / 1000; for (var i = 0; i < cvs.length; i++) demo(cvs[i], ids[i], t); raf = requestAnimationFrame(loop); })();
+    /* every card is drawn once as a still; only the creature in use keeps moving (animating all of them at once
+       stalls phones) */
+    for (var i0 = 0; i0 < cvs.length; i0++) demo(cvs[i0], ids[i0], 0.6);
+    (function loop() {
+      if (!ov) return;
+      var t = (performance.now() - t0) / 1000, sel = ids.indexOf(cfg.id || "");
+      if (sel >= 0 && sel !== lastSel && lastSel >= 0) demo(cvs[lastSel], ids[lastSel], 0.6);   // the previous one goes still again
+      lastSel = sel; if (sel >= 0) demo(cvs[sel], ids[sel], t);
+      raf = requestAnimationFrame(loop);
+    })();
   }
 
   /* ---- the button in the skin editor, next to Select Cosmetic ---- */
