@@ -1250,8 +1250,99 @@ var NTL_CR = (function () {
     c.restore();
   }
 
-  /* id → { name, skin (closest normal skin: slither colours of skin 29 = dark grey 80,80,80 + yellow 238,238,112), draw } */
-  var LIST = { centipede: { name: "Centipede", skin: 29, draw: centipede } };
+  /* ---- dragon ---- */
+  function dragon(c, S, rr, t, boost, alpha) {
+    var n = S.length; if (n < 3) return;
+    var i, s, side, k;
+    function wd(i) { var u = i / (n - 1); return rr * (u < 0.12 ? 0.8 + u * 1.6 : 1 - (u - 0.12) * 0.72); }   // neck → chest → tapering tail
+    function nrm(s, side) { return [Math.cos(s.a + side * PI / 2), Math.sin(s.a + side * PI / 2)]; }
+    c.lineCap = "round"; c.lineJoin = "round";
+    /* legs: front pair near the chest, back pair at the hips, stepping */
+    var legAt = [Math.max(2, Math.round(n * 0.14)), Math.max(3, Math.round(n * 0.42))];
+    for (k = 0; k < 2; k++) {
+      s = S[Math.min(n - 1, legAt[k])];
+      for (side = -1; side <= 1; side += 2) {
+        var st = Math.sin(t * (boost ? 12 : 6) + k * PI + (side > 0 ? PI : 0)) * 0.45, N = nrm(s, side), w = wd(legAt[k]);
+        var bx = s.x + N[0] * w * 0.7, by = s.y + N[1] * w * 0.7, a1 = s.a + side * (PI / 2) + st * side * -1;
+        var kx = bx + Math.cos(a1) * rr * 0.9, ky = by + Math.sin(a1) * rr * 0.9, a2 = s.a + side * 0.5, fx = kx + Math.cos(a2) * rr * 0.55, fy = ky + Math.sin(a2) * rr * 0.55;
+        c.strokeStyle = "#5e1010"; c.lineWidth = Math.max(1.5, rr * 0.34); c.beginPath(); c.moveTo(bx, by); c.lineTo(kx, ky); c.lineTo(fx, fy); c.stroke();
+        c.strokeStyle = "#f3d27a"; c.lineWidth = Math.max(1, rr * 0.09);                              // claws
+        for (var cl = -1; cl <= 1; cl++) { var ca = a2 + cl * 0.45; c.beginPath(); c.moveTo(fx, fy); c.lineTo(fx + Math.cos(ca) * rr * 0.3, fy + Math.sin(ca) * rr * 0.3); c.stroke(); }
+      }
+    }
+    /* body as one smooth outline, tapering to the tail */
+    c.beginPath();
+    for (i = 0; i < n; i++) { var P = nrm(S[i], -1), w2 = wd(i); (i ? c.lineTo : c.moveTo).call(c, S[i].x + P[0] * w2, S[i].y + P[1] * w2); }
+    for (i = n - 1; i >= 0; i--) { var Q = nrm(S[i], 1), w3 = wd(i); c.lineTo(S[i].x + Q[0] * w3, S[i].y + Q[1] * w3); }
+    c.closePath(); c.fillStyle = "#8f1d17"; c.fill();
+    c.lineWidth = Math.max(1, rr * 0.1); c.strokeStyle = "rgba(20,0,0,.7)"; c.stroke();
+    /* scales: rows of small arcs across the back */
+    c.strokeStyle = "rgba(40,0,0,.45)"; c.lineWidth = Math.max(1, rr * 0.08);
+    for (i = 2; i < n - 1; i++) {
+      s = S[i]; var ww = wd(i);
+      for (var r2 = -1; r2 <= 1; r2 += 2) { c.save(); c.translate(s.x + Math.cos(s.a + PI / 2) * r2 * ww * 0.45, s.y + Math.sin(s.a + PI / 2) * r2 * ww * 0.45); c.rotate(s.a); c.beginPath(); c.arc(-ww * 0.1, 0, ww * 0.32, -1.1, 1.1); c.stroke(); c.restore(); }
+    }
+    /* gold ridge line + back spikes pointing to the tail */
+    c.beginPath(); for (i = 1; i < n; i++) (i > 1 ? c.lineTo : c.moveTo).call(c, S[i].x, S[i].y);
+    c.strokeStyle = "rgba(242,193,78,.55)"; c.lineWidth = Math.max(1, rr * 0.12); c.stroke();
+    c.fillStyle = "#f2c14e";
+    for (i = 2; i < n - 1; i += 2) {
+      s = S[i]; var sz = wd(i) * 0.75, ba = s.a + PI;
+      c.beginPath(); c.moveTo(s.x + Math.cos(s.a + PI / 2) * sz * 0.35, s.y + Math.sin(s.a + PI / 2) * sz * 0.35);
+      c.lineTo(s.x + Math.cos(ba) * sz, s.y + Math.sin(ba) * sz); c.lineTo(s.x - Math.cos(s.a + PI / 2) * sz * 0.35, s.y - Math.sin(s.a + PI / 2) * sz * 0.35); c.closePath(); c.fill();
+    }
+    /* tail spade */
+    var L = S[n - 1], ta = L.a + PI, sp = rr * 0.9;
+    c.beginPath(); c.moveTo(L.x, L.y);
+    c.lineTo(L.x + Math.cos(ta + 0.9) * sp * 0.6, L.y + Math.sin(ta + 0.9) * sp * 0.6); c.lineTo(L.x + Math.cos(ta) * sp * 1.4, L.y + Math.sin(ta) * sp * 1.4);
+    c.lineTo(L.x + Math.cos(ta - 0.9) * sp * 0.6, L.y + Math.sin(ta - 0.9) * sp * 0.6); c.closePath(); c.fillStyle = "#b8321f"; c.fill(); c.strokeStyle = "rgba(20,0,0,.7)"; c.stroke();
+    /* wings at the shoulders, flapping */
+    var W0 = S[Math.min(n - 1, Math.max(1, Math.round(n * 0.1)))], flap = 0.72 + 0.28 * Math.sin(t * (boost ? 9 : 4));
+    for (side = -1; side <= 1; side += 2) {
+      var Nw = nrm(W0, side), sx = W0.x + Nw[0] * rr * 0.6, sy = W0.y + Nw[1] * rr * 0.6, span = rr * 5.2 * flap;
+      var arm = W0.a + side * (PI / 2 + 0.25), ex = sx + Math.cos(arm) * span, ey = sy + Math.sin(arm) * span;
+      var tips = [], back = W0.a + PI;
+      for (var f = 0; f < 3; f++) { var fa = arm + side * (0.5 + f * 0.5), fl = span * (1.05 - f * 0.12); tips.push([ex + Math.cos(fa) * fl * 0.55, ey + Math.sin(fa) * fl * 0.55]); }
+      var rootx = W0.x + Math.cos(back) * rr * 2.6 + Nw[0] * rr * 0.4, rooty = W0.y + Math.sin(back) * rr * 2.6 + Nw[1] * rr * 0.4;
+      c.beginPath(); c.moveTo(sx, sy); c.lineTo(ex, ey);
+      for (f = 0; f < 3; f++) { var mx = (f ? tips[f - 1][0] : ex), my = (f ? tips[f - 1][1] : ey); c.quadraticCurveTo((mx + tips[f][0]) / 2 + Math.cos(back) * rr * 0.4, (my + tips[f][1]) / 2 + Math.sin(back) * rr * 0.4, tips[f][0], tips[f][1]); }
+      c.quadraticCurveTo((tips[2][0] + rootx) / 2 + Math.cos(back) * rr * 0.3, (tips[2][1] + rooty) / 2 + Math.sin(back) * rr * 0.3, rootx, rooty); c.closePath();
+      c.globalAlpha = alpha * 0.9; c.fillStyle = "#5c1212"; c.fill(); c.globalAlpha = alpha;
+      c.strokeStyle = "#2a0505"; c.lineWidth = Math.max(1, rr * 0.14); c.beginPath(); c.moveTo(sx, sy); c.lineTo(ex, ey); c.stroke();
+      c.lineWidth = Math.max(1, rr * 0.08); for (f = 0; f < 3; f++) { c.beginPath(); c.moveTo(ex, ey); c.lineTo(tips[f][0], tips[f][1]); c.stroke(); }
+    }
+    /* head */
+    var H = S[0];
+    c.save(); c.translate(H.x, H.y); c.rotate(H.a);
+    if (boost) {                                                   // fire breath
+      c.globalCompositeOperation = "lighter";
+      for (k = 0; k < 7; k++) {
+        var fl2 = (t * 9 + k * 0.37) % 1, fx2 = rr * (1.6 + fl2 * 5), fy2 = Math.sin(t * 23 + k * 2.1) * rr * fl2 * 0.9, fr = rr * (0.35 + fl2 * 1.1);
+        var fg = c.createRadialGradient(fx2, fy2, 0, fx2, fy2, fr);
+        fg.addColorStop(0, "rgba(255,240,170," + (0.9 - fl2 * 0.6) + ")"); fg.addColorStop(0.5, "rgba(255,120,30," + (0.7 - fl2 * 0.5) + ")"); fg.addColorStop(1, "rgba(200,30,0,0)");
+        c.fillStyle = fg; c.beginPath(); c.arc(fx2, fy2, fr, 0, PI * 2); c.fill();
+      }
+      c.globalCompositeOperation = "source-over";
+    }
+    for (side = -1; side <= 1; side += 2) {                        // horns
+      c.beginPath(); c.moveTo(-rr * 0.2, side * rr * 0.45); c.quadraticCurveTo(-rr * 0.9, side * rr * 1.0, -rr * 1.55, side * rr * 0.75);
+      c.strokeStyle = "#e9d8a6"; c.lineWidth = Math.max(1.2, rr * 0.2); c.stroke();
+    }
+    var hg2 = c.createLinearGradient(-rr, 0, rr * 1.4, 0); hg2.addColorStop(0, "#7d1812"); hg2.addColorStop(1, "#b52a1d");
+    c.beginPath(); c.ellipse(0, 0, rr * 0.95, rr * 0.8, 0, 0, PI * 2); c.fillStyle = hg2; c.fill();
+    c.beginPath(); c.ellipse(rr * 0.85, 0, rr * 0.7, rr * 0.45, 0, 0, PI * 2); c.fill();          // snout
+    c.lineWidth = Math.max(1, rr * 0.09); c.strokeStyle = "rgba(20,0,0,.7)"; c.stroke();
+    c.fillStyle = "#2a0505"; for (side = -1; side <= 1; side += 2) { c.beginPath(); c.arc(rr * 1.35, side * rr * 0.18, Math.max(0.8, rr * 0.07), 0, PI * 2); c.fill(); }   // nostrils
+    for (side = -1; side <= 1; side += 2) {                        // glowing eyes
+      c.beginPath(); c.ellipse(rr * 0.2, side * rr * 0.42, rr * 0.22, rr * 0.13, side * 0.3, 0, PI * 2); c.fillStyle = "#ffd23f"; c.fill();
+      c.beginPath(); c.ellipse(rr * 0.22, side * rr * 0.42, rr * 0.05, rr * 0.11, 0, 0, PI * 2); c.fillStyle = "#1a0000"; c.fill();
+    }
+    c.restore();
+  }
+
+  /* id → { name, skin (the closest normal skin by slither's colours), draw }
+     centipede → 29 (dark grey 80,80,80 + yellow 238,238,112) · dragon → 63 (red 255,64,64 + dark grey 80,80,80) */
+  var LIST = { centipede: { name: "Centipede", skin: 29, draw: centipede }, dragon: { name: "Dragon", skin: 63, draw: dragon } };
   function cur() { return (cfg.id && LIST[cfg.id]) || null; }
 
   /* ---- samples along NTL's centre line, one per body segment ---- */
@@ -1339,7 +1430,7 @@ var NTL_CR = (function () {
     for (var i = 0; i < m; i++) { var u = i / (m - 1); pts.push({ x: (W * 0.84 - u * W * 0.72) * S, y: (Hh * 0.5 + Math.sin(u * 7 - t * 2.2) * Hh * 0.16 * (0.3 + u)) * S, a: 0 }); }
     for (i = 1; i < m; i++) pts[i].a = Math.atan2(pts[i - 1].y - pts[i].y, pts[i - 1].x - pts[i].x);
     pts[0].a = pts[1].a;
-    if (id && LIST[id]) { LIST[id].draw(c, pts, rr, t, false, 1); return; }
+    if (id && LIST[id]) { LIST[id].draw(c, pts, rr, t, !!window.__crBoost, 1); return; }
     c.lineCap = "round"; c.lineJoin = "round";                     // plain snake for "Normal skin"
     c.beginPath(); for (i = m - 1; i >= 0; i--) (i === m - 1 ? c.moveTo : c.lineTo).call(c, pts[i].x, pts[i].y);
     c.strokeStyle = "#8f7bd8"; c.lineWidth = rr * 2; c.stroke();
@@ -4643,7 +4734,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
-    { v: "5.66-dev", d: "26 Sep 2026", t: "Vanced Skins: a new button in the skin editor opens creature skins for your snake \u2014 Centipede first. Other players see the normal skin closest to the creature\u2019s colours." },
+    { v: "5.66-dev", d: "26 Sep 2026", t: "Vanced Skins: a new button in the skin editor opens creature skins for your snake \u2014 Centipede and Dragon (wings, fire breath on boost). Other players see the normal skin closest to the creature\u2019s colours." },
     { v: "5.65", d: "26 Sep 2026", t: "Global chat (the SlitherControl+ room) removed — the chat box is NTL’s team chat again, with the emoji / GIF picker. Assist (and the other hold keys) now stays on while an on-screen button is held, so Assist go skinless / Assist map show on phones. Team list follows NTL’s KeyOwners in players list, Online players status (version) and the team detail toggle again. Everywhere NTL sent or showed its own version (team list, tag server, settings title) it now uses the NTL VANCED version you are running — the updated one after an in-app update; the version text left the stats line. Squeeze mode is in the build but unavailable for now." },
     { v: "5.64", d: "22 Sep 2026", t: "Lobby can be switched off in Vanced \u203a General and no longer appears when you come back from the skin editor or settings \u2014 only after a real round. Updates card shows UPDATE only when there is one." },
     { v: "5.64", d: "21 Sep 2026", t: "Backups: one .ntlvanced file holds every NTL and Vanced setting (keys, layouts, theme, arenas, skins); BACKUP / RESTORE in Vanced › Updates & About; old .ntlmod files still restore." },
