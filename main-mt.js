@@ -1179,7 +1179,7 @@ var NTL_SP = (function () {
    boost glow and death glow are never drawn. NTL_SP.noEyes() asks noEyes().
    Settings: localStorage.wy_creature = { id, prev: { rcv, want, custom } }. */
 var NTL_CR = (function () {
-  var KEY = "wy_creature", cfg = { id: "", prev: null };
+  var KEY = "wy_creature", cfg = { id: "", prev: null, share: true, see: true };
   try { var j = JSON.parse(localStorage.getItem(KEY) || "null"); if (j) for (var k in cfg) if (k in j) cfg[k] = j[k]; } catch (e) {}
   function save() { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) {} }
   var PI = Math.PI;
@@ -1745,19 +1745,21 @@ var NTL_CR = (function () {
      eel → 64 (blue 72,84,255 + dark grey) · train, zombie → 29 · robot → 44 (grey 144,144,144) ·
      ice → 49 (sky 101,200,232 + white) · caterpillar → 27 (green 60,192,72) */
   var LIST = {
-    centipede: { name: "Centipede", skin: 29, draw: centipede },
-    dragon: { name: "Dragon", skin: 63, draw: dragon },
-    skeleton: { name: "Skeleton", skin: 65, draw: skeleton },
-    chinese: { name: "Chinese Dragon", skin: 56, draw: chinese },
-    eel: { name: "Electric Eel", skin: 64, draw: eel },
-    train: { name: "Train", skin: 29, draw: train },
-    robot: { name: "Robot Snake", skin: 44, draw: robot },
-    phoenix: { name: "Phoenix", skin: 56, draw: phoenix },
-    ice: { name: "Ice Serpent", skin: 49, draw: ice },
-    caterpillar: { name: "Caterpillar", skin: 27, draw: caterpillar },
-    zombie: { name: "Zombie Snake", skin: 29, draw: zombie }
+    centipede: { num: 1, name: "Centipede", skin: 29, draw: centipede },
+    dragon: { num: 2, name: "Dragon", skin: 63, draw: dragon },
+    skeleton: { num: 3, name: "Skeleton", skin: 65, draw: skeleton },
+    chinese: { num: 4, name: "Chinese Dragon", skin: 56, draw: chinese },
+    eel: { num: 5, name: "Electric Eel", skin: 64, draw: eel },
+    train: { num: 6, name: "Train", skin: 29, draw: train },
+    robot: { num: 7, name: "Robot Snake", skin: 44, draw: robot },
+    phoenix: { num: 8, name: "Phoenix", skin: 56, draw: phoenix },
+    ice: { num: 9, name: "Ice Serpent", skin: 49, draw: ice },
+    caterpillar: { num: 10, name: "Caterpillar", skin: 27, draw: caterpillar },
+    zombie: { num: 11, name: "Zombie Snake", skin: 29, draw: zombie }
   };
   function cur() { return (cfg.id && LIST[cfg.id]) || null; }
+  /* the shared skin id (what other Vanced players receive): 1 centipede … 11 zombie — never renumber, only append */
+  var BYNUM = {}; for (var lk in LIST) BYNUM[LIST[lk].num] = LIST[lk];
 
   /* ---- samples along NTL's centre line, one per body segment ---- */
   function samples(Zw, Kw, _w, n, step, g, ox, oy) {
@@ -1775,8 +1777,8 @@ var NTL_CR = (function () {
     S[0].a = S.length > 1 ? S[1].a : 0;
     return S;
   }
-  function draw(bb, cb, Zw, Kw, _w, n, r, T) {
-    var C = cur(); if (!C || n < 2) return;
+  function draw(bb, cb, Zw, Kw, _w, n, r, T, C) {
+    C = C || cur(); if (!C || n < 2) return;
     var g = T ? T.g : gsc, ox = T ? T.ox : Xe - view_xx * g, oy = T ? T.oy : Ee - view_yy * g;
     var a = Math.max(0, Math.min(1, cb.H * (1 - cb.X))); if (a <= 0.01) return;
     var S = samples(Zw, Kw, _w, n, r * 1.05, g, ox, oy);
@@ -1790,7 +1792,16 @@ var NTL_CR = (function () {
     if (pass !== 1) { try { draw(bb, cb, Zw, Kw, _w, n, r); } catch (e) {} }
     for (var i = 0; i < n; i++) _w[i] = 0;
   }
-  function noEyes(sn) { return !!cur() && typeof snake !== "undefined" && sn === snake; }
+  /* another Vanced player's snake wearing a creature (see the sync below) */
+  function hideOther(bb, cb, Zw, Kw, qw, _w, n, r, pass) {
+    var C = remoteFor(cb); if (!C) return;
+    if (pass !== 1) { try { draw(bb, cb, Zw, Kw, _w, n, r, null, C); } catch (e) {} }
+    for (var i = 0; i < n; i++) _w[i] = 0;
+  }
+  function noEyes(sn) {
+    if (typeof snake !== "undefined" && sn === snake) return !!cur() && !(typeof NTL_SP !== "undefined" && NTL_SP.on);
+    return !!remoteFor(sn);
+  }
 
   /* ---- choosing: the normal skin nearest to the creature goes to the server ---- */
   function useSkin(id) {
@@ -1816,6 +1827,79 @@ var NTL_CR = (function () {
     render();
   }
 
+  /* ---- sync with other NTL VANCED players (Wyrm backend, /v1/vanced/skins/socket) ----
+     Like slither itself tells everyone which skin a snake wears when it appears: when you spawn with a creature your
+     client says "arena A, snake #id (nick N) wears creature k" to a room for that arena, and every Vanced player in
+     that room draws it on the snake the game already shows them. Nothing goes into a game packet. Death / Home /
+     quit clears it. A viewer only trusts a claim whose nick matches the snake it sees, and draws at most MAXREMOTE
+     creatures (the nearest ones). Settings: cfg.share (send mine), cfg.see (show others) — both on by default. */
+  var WS_URL = "wss://wyrm-api.77-245-76-86.sslip.io/v1/vanced/skins/socket", MAXREMOTE = 8;
+  var net = { ws: null, open: false, ready: false, backoff: 2000, retryAt: 0, lastUse: 0, pingT: 0, arena: "", life: "", lifeKey: "", pub: "", remote: new Map(), near: new Set(), nearAt: 0 };
+  function rid(nb) { var a = new Uint8Array(nb), s2 = ""; try { crypto.getRandomValues(a); } catch (e) { for (var q = 0; q < nb; q++) a[q] = Math.random() * 256 | 0; } for (var q2 = 0; q2 < nb; q2++) s2 += (a[q2] < 16 ? "0" : "") + a[q2].toString(16); return s2; }
+  function clientId() { var c2 = ""; try { c2 = localStorage.getItem("wy_vs_cid") || ""; } catch (e) {} if (!/^[0-9a-f]{32}$/.test(c2)) { c2 = rid(16); try { localStorage.setItem("wy_vs_cid", c2); } catch (e) {} } return c2; }
+  function inRound() { try { return !!playing && !Ce && typeof snake !== "undefined" && !!snake; } catch (e) { return false; } }
+  function arenaNow() {
+    try { if (typeof bso === "undefined" || !bso || !bso.ip || !bso.po) return ""; var ip = String(bso.ip); return (ip.indexOf(":") >= 0 ? "[" + ip.replace(/^\[|\]$/g, "") + "]" : ip) + ":" + bso.po; } catch (e) { return ""; }
+  }
+  function wsSend(m) { if (net.ws && net.open) { try { net.ws.send(JSON.stringify(m)); } catch (e) {} } }
+  function netConnect() {
+    if (net.ws || Date.now() < net.retryAt) return;
+    var ws; try { ws = new WebSocket(WS_URL); } catch (e) { net.retryAt = Date.now() + net.backoff; net.backoff = Math.min(30000, net.backoff * 2); return; }
+    net.ws = ws; net.open = false; net.ready = false;
+    ws.onopen = function () { net.open = true; wsSend({ t: "hello", cid: clientId() }); };
+    ws.onmessage = function (ev) {
+      var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+      if (m.t === "ready") { net.ready = true; net.backoff = 2000; net.arena = ""; net.pub = ""; return; }   // (re)join + (re)publish on the next tick
+      if (m.t === "snap" && m.arena === net.arena) { net.remote.clear(); (m.list || []).forEach(function (x) { net.remote.set(x.id, x); }); return; }
+      if (m.t === "add" && m.arena === net.arena && m.s) {
+        var s3 = m.s, sn = snakeById(s3.id);
+        if (sn && typeof sn.xx === "number" && Math.abs(sn.xx - s3.x) + Math.abs(sn.yy - s3.y) > 3000) return;   // claimed far from where that snake is
+        net.remote.set(s3.id, s3); return;
+      }
+      if (m.t === "del" && m.arena === net.arena) { var cur2 = net.remote.get(m.id); if (cur2 && (!m.life || cur2.life === m.life)) net.remote.delete(m.id); return; }
+    };
+    ws.onclose = function () { net.ws = null; net.open = false; net.ready = false; net.remote.clear(); net.retryAt = Date.now() + net.backoff; net.backoff = Math.min(30000, net.backoff * 2); };
+    ws.onerror = function () {};
+  }
+  function netClose() { if (net.ws) { try { net.ws.close(1000, "idle"); } catch (e) {} } net.ws = null; net.open = false; net.ready = false; net.remote.clear(); net.arena = ""; net.pub = ""; }
+  function snakeById(id) { try { var L2 = ef || []; for (var i = 0; i < L2.length; i++) if (L2[i] && L2[i].id === id) return L2[i]; } catch (e) {} return null; }
+  function netTick() {
+    var now2 = Date.now(), round = inRound();
+    if (round && (cfg.share || cfg.see)) net.lastUse = now2;
+    if (!net.lastUse || now2 - net.lastUse > 60000) { if (net.ws) netClose(); return; }   // not playing for a minute: hang up
+    netConnect(); if (!net.ready) return;
+    if (now2 - net.pingT > 25000) { net.pingT = now2; wsSend({ t: "ping" }); }
+    var arena = round ? arenaNow() : "";
+    if (arena && arena !== net.arena) { net.arena = arena; net.remote.clear(); wsSend({ t: "join", arena: arena }); }
+    /* my life: publish while alive with a creature, clear on death / quit / no creature / sharing off */
+    var C = cur(), alive = round && arena && snake.id != null && !snake.I && !snake.dead;
+    var key = alive ? arena + "|" + snake.id : "";
+    if (key && key !== net.lifeKey) { net.lifeKey = key; net.life = rid(12); net.pub = ""; }
+    var want = alive && C && cfg.share ? key + "|" + C.num : "";
+    if (want && want !== net.pub) {
+      net.pub = want;
+      wsSend({ t: "pub", arena: arena, id: snake.id, nick: String(snake.ssn || "").slice(0, 24), skin: C.num, life: net.life, x: Math.round(snake.xx), y: Math.round(snake.yy) });
+    } else if (!want && net.pub) { wsSend({ t: "clear", life: net.life }); net.pub = ""; }
+    if (!alive) net.lifeKey = "";
+  }
+  /* which remote creature (if any) to draw on this snake: nick must match, and only the MAXREMOTE nearest */
+  function remoteFor(sn) {
+    if (!cfg.see || !sn || !net.remote.size || !inRound()) return null;
+    var r2 = net.remote.get(sn.id); if (!r2) return null;
+    if (r2.nick !== String(sn.ssn || "").slice(0, 24)) return null;
+    var now2 = Date.now();
+    if (now2 - net.nearAt > 300) {                            // refresh the nearest set a few times a second
+      net.nearAt = now2; net.near.clear();
+      var list = [];
+      try { for (var i = 0; i < ef.length; i++) { var o = ef[i]; if (o && o !== snake && net.remote.has(o.id)) list.push([Math.abs(o.xx - snake.xx) + Math.abs(o.yy - snake.yy), o.id]); } } catch (e) {}
+      list.sort(function (a2, b2) { return a2[0] - b2[0]; });
+      for (var k2 = 0; k2 < list.length && k2 < MAXREMOTE; k2++) net.near.add(list[k2][1]);
+    }
+    return net.near.has(sn.id) ? (BYNUM[r2.skin] || null) : null;
+  }
+  setInterval(function () { try { netTick(); } catch (e) {} }, 500);
+  function setOpt(k3, v3) { cfg[k3] = !!v3; save(); if (k3 === "see" && !v3) net.near.clear(); }
+
   /* ---- the page ---- */
   var CSS = [
     "#wy-cr-ov{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;}",
@@ -1831,6 +1915,12 @@ var NTL_CR = (function () {
     "#wy-cr .it .nm{padding:8px 10px;font:bold 12px Arial;display:flex;justify-content:space-between;align-items:center;}",
     "#wy-cr .it .nm i{font-style:normal;font-size:10px;color:#8b93a7;font-weight:normal;}",
     "#wy-cr .it.on .nm i{color:#9be7b5;}",
+    "#wy-cr .opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:12px;}",
+    "#wy-cr .op{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);cursor:pointer;}",
+    "#wy-cr .op input{appearance:none;-webkit-appearance:none;flex:none;width:34px;height:20px;border-radius:10px;background:rgba(255,255,255,.14);position:relative;cursor:pointer;margin:1px 0 0;transition:background .2s;}",
+    "#wy-cr .op input:before{content:'';position:absolute;left:3px;top:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .2s;}",
+    "#wy-cr .op input:checked{background:linear-gradient(90deg,var(--wy-p,#9b7bff),var(--wy-b,#5ecbff));}#wy-cr .op input:checked:before{left:17px;}",
+    "#wy-cr .op span{font-size:10.5px;color:#8b93a7;line-height:1.45;}#wy-cr .op b{display:block;font-size:12px;color:#e6e9ef;margin-bottom:1px;}",
     "#wy-cr .nt{margin-top:12px;font-size:10.5px;color:#6b7385;line-height:1.5;}"
   ].join("\n");
   var ov = null, raf = 0, lastSel = -1;
@@ -1862,11 +1952,14 @@ var NTL_CR = (function () {
     var h = '<div id="wy-cr"><div class="hd"><b>VANCED SKINS</b><span>creatures for your snake</span><button class="x">CLOSE</button></div><div class="grid">';
     var ids = [""].concat(Object.keys(LIST));
     ids.forEach(function (id) { h += '<div class="it" data-id="' + id + '"><canvas></canvas><div class="nm">' + (id ? LIST[id].name : "Normal skin") + "<i></i></div></div>"; });
-    h += '</div><div class="nt">The creature is drawn on your screen. Other players see the normal skin closest to its colours — it is set for you when you pick one, and your previous skin comes back when you pick Normal skin.</div></div>';
+    h += '</div><div class="opts"><label class="op"><input type="checkbox" data-opt="share"' + (cfg.share ? " checked" : "") + '><span><b>Share my skin</b>other NTL VANCED players see your creature</span></label>' +
+      '<label class="op"><input type="checkbox" data-opt="see"' + (cfg.see ? " checked" : "") + '><span><b>See others’ skins</b>show the creatures other Vanced players picked</span></label></div>' +
+      '<div class="nt">Players without NTL VANCED see the normal skin closest to the creature’s colours — it is set for you when you pick one, and your previous skin comes back when you pick Normal skin.</div></div>';
     ov.innerHTML = h;
     ["mousedown", "mouseup", "click", "dblclick", "wheel", "touchstart", "touchmove", "touchend", "pointerdown", "pointerup", "contextmenu", "keydown", "keyup"].forEach(function (t) {
       ov.addEventListener(t, function (e) { e.stopPropagation(); }, { passive: t === "wheel" || t.indexOf("touch") === 0 });
     });
+    ov.addEventListener("change", function (e) { var o2 = e.target && e.target.getAttribute && e.target.getAttribute("data-opt"); if (o2) setOpt(o2, e.target.checked); });
     ov.addEventListener("click", function (e) {
       if (e.target === ov || (e.target.classList && e.target.classList.contains("x"))) { close(); return; }
       var it = e.target.closest && e.target.closest(".it"); if (it) pick(it.getAttribute("data-id") || "");
@@ -1915,7 +2008,8 @@ var NTL_CR = (function () {
   function boot() { if (!document.body) { setTimeout(boot, 50); return; } setInterval(tick, 400); }
   boot();
 
-  return { hide: hide, noEyes: noEyes, open: open, close: close, pick: pick, cfg: cfg, LIST: LIST, get id() { return cur() ? cfg.id : ""; } };
+  return { hide: hide, hideOther: hideOther, other: remoteFor, noEyes: noEyes, open: open, close: close, pick: pick, cfg: cfg, LIST: LIST, setOpt: setOpt,
+    get sync() { return { connected: net.ready, arena: net.arena, published: !!net.pub, remote: net.remote.size }; }, get id() { return cur() ? cfg.id : ""; } };
 })();
 /* ========================== END VANCED SKINS =============================== */
 /* ========================== PRO GUARD ====================================== */
@@ -5157,7 +5251,7 @@ var NTL_VS = (function () {
   var ov = null;
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
-    { v: "5.66-dev", d: "26 Sep 2026", t: "Vanced Skins: a new button in the skin editor opens creature skins for your snake \u2014 Centipede, Dragon, Skeleton, Chinese Dragon, Electric Eel, Train, Robot Snake, Phoenix, Ice Serpent, Caterpillar and Zombie Snake, each with its own boost effect. Other players see the normal skin closest to the creature\u2019s colours." },
+    { v: "5.66-dev", d: "26 Sep 2026", t: "Vanced Skins: a new button in the skin editor opens creature skins for your snake \u2014 Centipede, Dragon, Skeleton, Chinese Dragon, Electric Eel, Train, Robot Snake, Phoenix, Ice Serpent, Caterpillar and Zombie Snake, each with its own boost effect. Other NTL VANCED players in your arena see your creature and you see theirs (Share my skin / See others\u2019 skins on the page, both on). Other players see the normal skin closest to the creature\u2019s colours." },
     { v: "5.65", d: "26 Sep 2026", t: "Global chat (the SlitherControl+ room) removed — the chat box is NTL’s team chat again, with the emoji / GIF picker. Assist (and the other hold keys) now stays on while an on-screen button is held, so Assist go skinless / Assist map show on phones. Team list follows NTL’s KeyOwners in players list, Online players status (version) and the team detail toggle again. Everywhere NTL sent or showed its own version (team list, tag server, settings title) it now uses the NTL VANCED version you are running — the updated one after an in-app update; the version text left the stats line. Squeeze mode is in the build but unavailable for now." },
     { v: "5.64", d: "22 Sep 2026", t: "Lobby can be switched off in Vanced \u203a General and no longer appears when you come back from the skin editor or settings \u2014 only after a real round. Updates card shows UPDATE only when there is one." },
     { v: "5.64", d: "21 Sep 2026", t: "Backups: one .ntlvanced file holds every NTL and Vanced setting (keys, layouts, theme, arenas, skins); BACKUP / RESTORE in Vanced › Updates & About; old .ntlmod files still restore." },
@@ -7368,7 +7462,7 @@ fj=Dh.yy+Dh.fy;Sh=zb+.5*(fh-zb);Th=Db+.5*(Zb-Db);gj=fh+.5*(kj-fh);Eh=Zb+.5*(fj-Z
 yy:Xh},Wb.push(Lb));dh++;zh<=Oh&&(Mb=Math.sqrt((Lb.xx-vh.xx)*(Lb.xx-vh.xx)+(Lb.yy-vh.yy)*(Lb.yy-vh.yy)),Lb.d=Mb,vh=Lb,zh++);if(1==Yb){Yb=2;Sb=-9999;break}Ub-=Xb;0>=Ub?(Yb=1,$b+=Xb+Ub):$b+=Xb}$b-=ph;Ph=$b/Xb;Ub+=$b;Vh=!0}Vh&&(Ub-=$b)}if(1>=Yb&&(-1E-4<=Ub&&0>=Ub&&(Ub=0),0<=Ub||1==Yb)&&(Tb=cb.B[Ah-1],ah=cb.B[Ah-2],Tb&&(zb=Tb.xx+Tb.fx,Db=Tb.yy+Tb.fy),ah))for(fh=ah.xx+ah.fx,Zb=ah.yy+ah.fy;0<=Ub||1==Yb;){Jh=fh-(zb-fh)*($b-.5);Xh=Zb-(Db-Zb)*($b-.5);dh<Wb.length?(Lb=Wb[dh],Lb.xx=Jh,Lb.yy=Xh):(Lb={xx:Jh,yy:Xh},
 Wb.push(Lb));dh++;zh<=Oh&&(Mb=Math.sqrt((Lb.xx-vh.xx)*(Lb.xx-vh.xx)+(Lb.yy-vh.yy)*(Lb.yy-vh.yy)),Lb.d=Mb,vh=Lb,zh++);if(1==Yb){Yb=2;break}Ub-=Xb;0>=Ub?(Yb=1,$b+=Xb+Ub):$b+=Xb;-1E-4<=Ub&&0>=Ub&&(Ub=0)}}var Fh=zh-1;Fh>Wb.length&&(Fh=Wb.length);Ce&&(Fh=0);if(3<=Fh){for(Sb=Ih=0;Sb<Fh-1;Sb++)Ih+=Wb[Sb].d;var Gh=Wb[0];ph=Ih/(Fh-2);var Nh=1;var Hh=ph;for(Sb=0;Sb<Fh;Sb++)Wb[Sb].ox=Wb[Sb].xx,Wb[Sb].oy=Wb[Sb].yy;for(Sb=1;Sb<Fh;Sb++)for(Lb=Wb[Sb];;){var Bh=Wb[Nh];if(Hh<Bh.d){Lb.xx=Gh.ox+(Bh.ox-Gh.ox)*Hh/Bh.d;
 Lb.yy=Gh.oy+(Bh.oy-Gh.oy)*Hh/Bh.d;var Qh=Math.pow(Sb/Fh,2);Lb.xx+=(Lb.ox-Lb.xx)*Qh;Lb.yy+=(Lb.oy-Lb.yy)*Qh;Hh+=ph;break}else if(Hh-=Bh.d,Gh=Bh,Nh++,Nh>=Fh){Sb=Fh+1;break}}}var nj=Bb=0;for(Sb=0;Sb<dh;Sb++){zb=Wb[Sb].xx;Db=Wb[Sb].yy;Zw[Bb]=zb;Kw[Bb]=Db;qw[Bb]=0;lb&&(nj--,0>=nj&&(nj=3));_w[Bb]=zb>=xc&&Db>=Oc&&zb<=Cc&&Db<=Hc?lb&&3!=nj?1:2:0;1<=Bb&&(wh=zb-wj,xh=Db-xj,qw[Bb]=-4<=wh&&-4<=xh&&4>wh&&4>xh?Vu[32*xh+128<<8|32*wh+128]:-8<=wh&&-8<=xh&&8>wh&&8>xh?Vu[16*xh+128<<8|16*wh+128]:-16<=wh&&-16<=xh&&16>
-wh&&16>xh?Vu[8*xh+128<<8|8*wh+128]:-127<=wh&&-127<=xh&&127>wh&&127>xh?Vu[xh+128<<8|wh+128]:Math.atan2(xh,wh));var wj=zb;var xj=Db;Bb++}2<=dh&&(qw[0]=qw[1],cb.OA=qw[1]+Math.PI)}cb===snake&&(NTL_SP.on?NTL_SP.hide(bb,cb,Zw,Kw,qw,_w,Bb,eb,jb):NTL_CR.id&&NTL_CR.hide(bb,cb,Zw,Kw,qw,_w,Bb,eb,jb));bb.save();bb.translate(Xe,Ee);pb=gsc*eb*52/32;hb=gsc*eb*62/32;Pb=cb.H*(1-cb.X);Pb*=Pb;Vb=1;if(2!==jb){var ij=Oe&&Cg&&Eg&&Oe.available(bb)&&(3===(mg|0)?!!k7:!!F0);ij&&=Oe.bindAtlas(3===(mg|0)?"kmcsnews":"kmcss",3===(mg|0)?k7:F0);if(ij&&pg!==z4.length){pg=z4.length;Mg=new Float32Array(3*pg);for(var Uh=0;Uh<pg;Uh++){var nh=z4[Uh];
+wh&&16>xh?Vu[8*xh+128<<8|8*wh+128]:-127<=wh&&-127<=xh&&127>wh&&127>xh?Vu[xh+128<<8|wh+128]:Math.atan2(xh,wh));var wj=zb;var xj=Db;Bb++}2<=dh&&(qw[0]=qw[1],cb.OA=qw[1]+Math.PI)}cb===snake?NTL_SP.on?NTL_SP.hide(bb,cb,Zw,Kw,qw,_w,Bb,eb,jb):NTL_CR.id&&NTL_CR.hide(bb,cb,Zw,Kw,qw,_w,Bb,eb,jb):NTL_CR.other(cb)&&NTL_CR.hideOther(bb,cb,Zw,Kw,qw,_w,Bb,eb,jb);bb.save();bb.translate(Xe,Ee);pb=gsc*eb*52/32;hb=gsc*eb*62/32;Pb=cb.H*(1-cb.X);Pb*=Pb;Vb=1;if(2!==jb){var ij=Oe&&Cg&&Eg&&Oe.available(bb)&&(3===(mg|0)?!!k7:!!F0);ij&&=Oe.bindAtlas(3===(mg|0)?"kmcsnews":"kmcss",3===(mg|0)?k7:F0);if(ij&&pg!==z4.length){pg=z4.length;Mg=new Float32Array(3*pg);for(var Uh=0;Uh<pg;Uh++){var nh=z4[Uh];
 Mg[3*Uh]=parseInt(nh.substr(1,2),16)/255;Mg[3*Uh+1]=parseInt(nh.substr(3,2),16)/255;Mg[3*Uh+2]=parseInt(nh.substr(5,2),16)/255}}if(!NTL_PF.on&&cb.BA>cb.C&&(s5&&cb.skb_boost||!Me&&mb||pe&&!mb)){Vb=cb.H*(1-cb.X)*Math.max(0,Math.min(1,(cb.BA-cb.M)/(cb.p-cb.M)));.6<Vb&&(Vb=.6);jh=Math.pow(Vb,.5);Qb=1.5*gsc*eb*(1+.9375*jh);ch=4;lb&&(ch=12);var Zh=ij&&L7&&S7&&Oe.pushSpriteAdd&&Oe.bindSpriteAtlasAdd;Zh&&(Wv!==L7&&Oe.updateSpriteAtlas&&(Oe.updateSpriteAtlas("pci_kfmc",L7),Wv=L7),Oe.bindSpriteAtlasAdd("pci_kfmc",L7)||
 (Zh=!1));if(Zh){var jj=1/(L7.width||1),yj=1/(L7.height||1),rj=cb.sA&&cb.sA.length?cb.sA:null,tj=rj?rj.length:0,tb=S7.length;for(nb=Bb-1;0<=nb;nb--)if(2==_w[nb]){var wb=rj?rj[nb%tj]|0:fb;if(0>wb||wb>=tb)wb=fb<tb?fb:0;var Ab=S7[wb]|0,xb=G7[wb]|0,yb=Pb*jh*.38*(.6+.4*Math.cos(nb/ch-1.15*cb.DA));if(!(0>=yb)){var Gb=4>nb?Qb*(1+(4-nb)*qb):Qb;Oe.pushSpriteAdd(Xe+(Zw[nb]-view_xx)*gsc,Ee+(Kw[nb]-view_yy)*gsc,0,Gb,Gb,yb,Ab*jj,xb*yj,(Ab+62)*jj,(xb+62)*yj)}}}else{Kb=M7[fb];bb.save();bb.globalCompositeOperation=
 "lighter";if(cb.sA&&cb.sA.length){var Cb=cb.sA;bh=Cb.length;for(nb=Bb-1;0<=nb;nb--)2==_w[nb]&&(Eb=Zw[nb],Jb=Kw[nb],Kb=Cb[nb%bh]|0,Kb=M7[Kb],ob=(Eb-view_xx)*gsc,sb=(Jb-view_yy)*gsc,bb.globalAlpha=Pb*jh*.38*(.6+.4*Math.cos(nb/ch-1.15*cb.DA)),bb.translate(ob,sb),4>nb?(Ib=Qb*(1+(4-nb)*qb),bb.drawImage(Kb,-Ib,-Ib,2*Ib,2*Ib)):bb.drawImage(Kb,-Qb,-Qb,2*Qb,2*Qb),bb.translate(-ob,-sb))}else for(nb=Bb-1;0<=nb;nb--)2==_w[nb]&&(Eb=Zw[nb],Jb=Kw[nb],ob=(Eb-view_xx)*gsc,sb=(Jb-view_yy)*gsc,bb.globalAlpha=Pb*jh*
