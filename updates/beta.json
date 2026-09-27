@@ -1,12 +1,12 @@
 {
-  "version": "5.65",
+  "version": "5.66",
   "channel": "stable",
-  "date": "2026-09-26",
-  "size": 7958194,
-  "sha256": "a97786bd3aea522dd3c8007fcdf766241fea98107028a40f3b68303136fb7c3b",
+  "date": "2026-09-27",
+  "size": 8029897,
+  "sha256": "f153243eaf49f4f7a3d52629c712dfeaef40ec6bb7d90feadd15c205dc11e21a",
   "minLoader": 3,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.65/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.65/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.65/NTL-VANCED-v5.65.zip",
-  "notes": "## Chat\n- Global chat removed: the chat box is NTL's team chat again\n- The emoji / GIF / sticker picker stays\n\n## Assist on phones\n- On-screen **Assist** now stays on while the button is held, so **Assist go skinless** and **Assist map** work on mobile\n- Set Assist to **TOGGLE** in Revamp Keys and a tap turns it on, the next tap turns it off\n- The same fix applies to the front laser (Tab) and skin peek (W) buttons\n\n## Team list\n- **KeyOwners in players list** works again: the key owner is shown as the main name, also while peeking (W)\n- **Online players status** shows each member's version\n- The team detail list toggle (A) hides the list again\n\n## Version\n- NTL VANCED reports its own version everywhere: team list, tag server and settings title\n- After an in-app update the new version is reported, not the one from the installed folder\n- The version text was removed from the stats line (bottom right), to make it cleaner.\n\n## Fixes\n- All NTL settings checked one by one against the original NTL: every setting works the same.\n\n# NTL VANCED BY OM RAJPUT.\n"
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.66/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.66/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.66/NTL-VANCED-v5.66.zip",
+  "notes": "## Vanced Skins\n- New **Vanced Skins** button in the skin editor, next to Select Cosmetic\n- 11 creature skins for your snake: **Centipede, Dragon, Skeleton, Chinese Dragon, Electric Eel, Train, Robot Snake, Phoenix, Ice Serpent, Caterpillar and Zombie Snake**\n- Every creature has its own boost effect: fire breath, lightning, glowing eyes, thrusters, frost breath and more\n- Players without NTL VANCED see the normal skin closest to your creature's colours; pick **Normal skin** to get your previous skin back\n- Only the creature in use animates on the page, so it stays smooth on phones\n\n## See each other's creatures\n- NTL VANCED players in the same arena now see each other's creature skins\n- Works on slither.io and slither.com, over IPv4 and IPv6\n- **Share my skin** and **See others' skins** switches on the Vanced Skins page, both on by default\n- Game packets are untouched; only the skin you picked is shared, and it is cleared when you die or leave\n\n# NTL VANCED BY OM RAJPUT.\n"
 }
