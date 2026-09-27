@@ -255,8 +255,18 @@ var NTL_EDT = (function () {
    decision is written as it happens: GUARD (Pro Guard dodges), BOT (pilot mode
    and targets), AI (coach calls, latency, plan) and SYS. Same translucent
    look as the chat, respects --wy-bg-a, no border. */
+/* 5.67: the lobby, the thinking log and the bot's thinking lines start OFF — for new players and, once, for players who
+   update (wy_defaults marks it done); after that only the player's own switches count. Runs before any module reads them. */
+try {
+  if (localStorage.getItem("wy_defaults") !== "1") {
+    localStorage.setItem("wy_lobby", "0");
+    var wyLg = null; try { wyLg = JSON.parse(localStorage.getItem("wy_log") || "null"); } catch (e) {} wyLg = wyLg || {}; wyLg.on = false; localStorage.setItem("wy_log", JSON.stringify(wyLg));
+    var wyBt = null; try { wyBt = JSON.parse(localStorage.getItem("wy_bot") || "null"); } catch (e) {} wyBt = wyBt || {}; wyBt.show = false; localStorage.setItem("wy_bot", JSON.stringify(wyBt));
+    localStorage.setItem("wy_defaults", "1");
+  }
+} catch (e) {}
 var NTL_LG = (function () {
-  var KEY = "wy_log", cfg = { on: true, max: 90 };
+  var KEY = "wy_log", cfg = { on: false, max: 90 };
   try { var j = JSON.parse(localStorage.getItem(KEY) || "null"); if (j) for (var k in cfg) if (k in j) cfg[k] = j[k]; } catch (e) {}
   function save() { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) {} }
   function g(n) { try { return window[n]; } catch (e) { return undefined; } }
@@ -2245,7 +2255,7 @@ var NTL_PB = (function () {
    length vs the circle threshold, boost, the snakes near it — as lines in
    the arena and as entries in the Thinking log. Settings: localStorage.wy_bot. */
 var NTL_BT = (function () {
-  var KEY = "wy_bot", cfg = { show: true };
+  var KEY = "wy_bot", cfg = { show: false };
   try { var j = JSON.parse(localStorage.getItem(KEY) || "null"); if (j && "show" in j) cfg.show = !!j.show; } catch (e) {}
   function save() { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) {} }
   function g(n) { try { return window[n]; } catch (e) { return undefined; } }
@@ -5165,7 +5175,7 @@ var NTL_LB = (function () {
   /* a real round = NTL is playing AND not in its cosmetic preview (the skin editor runs the game loop with Ce = true,
      so "playing" alone also goes true/false when you visit Skin or Settings) */
   function inRound() { return !!g("playing") && !g("Ce"); }
-  function enabled() { try { return localStorage.getItem("wy_lobby") !== "0"; } catch (e) { return true; } }
+  function enabled() { try { return localStorage.getItem("wy_lobby") === "1"; } catch (e) { return false; } }
   try { allBest = +localStorage.getItem("wy_lb_best") || 0; } catch (e) {}
   function css() { if (document.getElementById("lb-css")) return; var st = document.createElement("style"); st.id = "lb-css"; st.textContent = CSS; (document.head || document.documentElement).appendChild(st); }
   var IC = {
@@ -5272,7 +5282,7 @@ var NTL_VS = (function () {
   var ov = null, secsRef = null, navsRef = null;   // the open popup's sections / nav items (for the tour)
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
-    { v: "5.67-dev", d: "27 Sep 2026", t: "Welcome tour: after this update a welcome screen and a guided tour walk you through Vanced settings and Vanced Skins. Every settings page has a bulb \u2014 View demo \u2014 for that page, and View full Vanced demo at the bottom of the sidebar replays everything. Themes: your wallpaper now comes back after an update (it used to fall back to the default while the colours stayed), and Spidey is the default theme." },
+    { v: "5.67-dev", d: "27 Sep 2026", t: "Welcome tour: after this update a welcome screen and a guided tour walk you through Vanced settings and Vanced Skins. Every settings page has a bulb \u2014 View demo \u2014 for that page, and View full Vanced demo at the bottom of the sidebar replays everything. Themes: your wallpaper now comes back after an update (it used to fall back to the default while the colours stayed), and Spidey is the default theme. The lobby, the thinking log and the bot\u2019s thinking lines now start off (switched off once on this update) \u2014 turn them on in Vanced settings." },
     { v: "5.66", d: "27 Sep 2026", t: "Vanced Skins: a new button in the skin editor opens creature skins for your snake \u2014 Centipede, Dragon, Skeleton, Chinese Dragon, Electric Eel, Train, Robot Snake, Phoenix, Ice Serpent, Caterpillar and Zombie Snake, each with its own boost effect. Other NTL VANCED players in your arena see your creature and you see theirs (Share my skin / See others\u2019 skins on the page, both on). Other players see the normal skin closest to the creature\u2019s colours." },
     { v: "5.65", d: "26 Sep 2026", t: "Global chat (the SlitherControl+ room) removed — the chat box is NTL’s team chat again, with the emoji / GIF picker. Assist (and the other hold keys) now stays on while an on-screen button is held, so Assist go skinless / Assist map show on phones. Team list follows NTL’s KeyOwners in players list, Online players status (version) and the team detail toggle again. Everywhere NTL sent or showed its own version (team list, tag server, settings title) it now uses the NTL VANCED version you are running — the updated one after an in-app update; the version text left the stats line. Squeeze mode is in the build but unavailable for now." },
     { v: "5.64", d: "22 Sep 2026", t: "Lobby can be switched off in Vanced \u203a General and no longer appears when you come back from the skin editor or settings \u2014 only after a real round. Updates card shows UPDATE only when there is one." },
@@ -5591,7 +5601,7 @@ var NTL_VS = (function () {
       dvRow.appendChild(seg); c1.appendChild(dvRow);
     }
     if (typeof NTL_LB !== "undefined") {
-      var lbOn = true; try { lbOn = localStorage.getItem("wy_lobby") !== "0"; } catch (e) {}
+      var lbOn = false; try { lbOn = localStorage.getItem("wy_lobby") === "1"; } catch (e) {}
       c1.appendChild(vsRow("Lobby after a round", "a fast-restart screen instead of the home page when a round ends \u2014 final length, your best and PLAY. Quick settings will live there too. Off: you land on the home screen as before.", vsSwitch(lbOn, function (v) { try { localStorage.setItem("wy_lobby", v ? "1" : "0"); } catch (e) {} if (!v && typeof NTL_LB !== "undefined") NTL_LB.close(); })));
     }
     c1.appendChild(vsStepper("UI size", "scale the whole interface — the mod’s panels, popups and NTL’s own; tap the value to reset", 0.7, 1.6, 0.05, sc0, function (v) { return Math.round(v * 100) + "%"; }, function (v) { applyScale(v); }));
@@ -5900,110 +5910,166 @@ var NTL_VS = (function () {
   }, true);
   function go(id) { if (!ov) open(); if (navsRef && navsRef[id]) navsRef[id].onclick(); }
   return { open: open, close: close, toggle: function () { if (ov) close(); else open(); }, go: go,
-    sec: function (id) { return secsRef && secsRef[id] || null; }, get isOpen() { return !!ov; } };
+    sec: function (id) { return secsRef && secsRef[id] || null; }, navEl: function (id) { return navsRef && navsRef[id] || null; }, get isOpen() { return !!ov; } };
 })();
 /* ========================== END VANCED SETTINGS ============================ */
 /* ========================== VANCED TOUR ==================================== */
 /* The welcome + guided tour of NTL VANCED. Runs once after an install / update
    that carries a new tour (TOUR), on the home screen, before What's new (which
    waits while the tour is pending or running). Also started by hand: the bulb
-   "View demo" in every Vanced settings section header plays that section only,
-   and "View full Vanced demo" at the bottom of the settings sidebar replays all.
-   A step is { at: () => element | null, t: title, d: text, go: () => void } —
-   `go` prepares the screen (open Vanced settings on a section, open the Vanced
-   Skins page…), `at` finds what to spotlight; no element = a centred card.
-   Nothing is clicked for the user and nothing is changed: the tour only opens
-   pages and points at things. localStorage.wy_tour = the last TOUR finished. */
+   "View demo" in every Vanced settings page plays that page only, and "View
+   full Vanced demo" at the bottom of the settings sidebar replays everything.
+
+   The settings part is generated from the popup itself, in order: each sidebar
+   button, then that page — its headers, every card and every setting row (the
+   row's own label and description) — then the next sidebar button. New settings
+   join the tour on their own. Steps point at things by position (section id +
+   index), so they survive the popup being closed and opened again.
+
+   Motion: the card fades out, the page switches, the page scrolls smoothly until
+   the next thing is in view, then the spotlight glides onto it and the card
+   slides in beside it. Nothing is clicked for the user and nothing is changed.
+   localStorage.wy_tour = the last TOUR finished. */
 var NTL_TR = (function () {
   var TOUR = "1", KEY = "wy_tour";
-  var run = null;                 // { steps, i, kind } while a tour is on screen
-  function g(n) { try { return window[n]; } catch (e) { return undefined; } }
+  var ORDER = ["general", "controls", "spine", "guard", "bot", "about", "changelog"];
+  var run = null;                 // { steps, i, kind, busy, token } while a tour is on screen
   function done() { try { return localStorage.getItem(KEY) === TOUR; } catch (e) { return true; } }
   function markDone() { try { localStorage.setItem(KEY, TOUR); } catch (e) {} }
   function VS() { return typeof NTL_VS !== "undefined" ? NTL_VS : null; }
   function CR() { return typeof NTL_CR !== "undefined" ? NTL_CR : null; }
   function ver() { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } }
-
-  /* ---- where things are ---- */
   function q(s) { return document.querySelector(s); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  /* ---- the settings popup ---- */
   function secEl(id) { var v = VS(); return v && v.sec ? v.sec(id) : null; }
-  function cardIn(id, title) {
-    var s = secEl(id); if (!s) return null;
-    var cs = s.querySelectorAll(".vs-card");
-    for (var i = 0; i < cs.length; i++) { var h = cs[i].querySelector(".vs-ct"); if (h && h.textContent.trim().toLowerCase() === title.toLowerCase()) return cs[i]; }
-    return null;
-  }
-  function firstCard(id, n) { var s = secEl(id); if (!s) return null; var cs = s.querySelectorAll(".vs-card"); return cs[n || 0] || null; }
-  function goSec(id) { return function () { var v = VS(); if (v && v.go) v.go(id); closeSkins(); }; }
+  function navEl(id) { var v = VS(); return v && v.navEl ? v.navEl(id) : null; }
+  function curSec() { var s = q("#vs-body .vs-sec.on"); return s ? s.getAttribute("data-sec") : ""; }
+  function openSec(id) { var v = VS(); if (!v) return; closeSkins(); if (!v.isOpen || curSec() !== id) v.go(id); }
   function closeSkins() { var c = CR(); if (c && document.getElementById("wy-cr-ov")) c.close(); }
   function closeAll() { closeSkins(); var v = VS(); if (v && v.isOpen) v.close(); }
+  function secName(id) { var n = navEl(id); return n ? (n.querySelector("span") || n).textContent.trim() : id; }
 
-  /* ---- the steps ---- */
-  var SEC = {
-    general: [
-      { go: goSec("general"), at: function () { return cardIn("general", "Appearance"); }, t: "Make it yours", d: "Panel and text transparency, UI size, the device mode (Auto, Desktop or Mobile) and the lobby after a round." },
-      { go: goSec("general"), at: function () { return cardIn("general", "Performance"); }, t: "More frames", d: "Performance mode (key <b>=</b>) and render scale take load off the GPU — made for phones and older laptops." },
-      { go: goSec("general"), at: function () { return cardIn("general", "Panels"); }, t: "Your panels", d: "The thinking log, the chat picker and where every panel sits. Move them in NTL settings, reset them here." }
-    ],
-    controls: [
-      { go: goSec("controls"), at: function () { return cardIn("controls", "Arrow control"); }, t: "Steer with one finger", d: "Arrow control: drag anywhere and a virtual cursor aims for you. Pick an arrow skin, its size and colours." },
-      { go: goSec("controls"), at: function () { return cardIn("controls", "Eyes"); }, t: "Eyes where you want them", d: "Eyes Back and Center Eyes. Center Eyes even shows to every player on the server." },
-      { go: goSec("controls"), at: function () { return cardIn("controls", "Aim cursor"); }, t: "See your aim", d: "An aim cursor at the exact point you steer to, with its own skins." }
-    ],
-    spine: [
-      { go: goSec("spine"), at: function () { return firstCard("spine"); }, t: "Spine mode", d: "Key <b>P</b>. Hides your body and draws only its spine and the collision point — perfect for tight coils. Only you see it." }
-    ],
-    guard: [
-      { go: goSec("guard"), at: function () { return firstCard("guard"); }, t: "Pro Guard", d: "Auto-dodge that predicts cuts and head-ons with the game’s own physics. It is resting in this build and will come back in a future update." }
-    ],
-    bot: [
-      { go: goSec("bot"), at: function () { return cardIn("bot", "NTL bot"); }, t: "NTL’s bot, with a window", d: "NTL’s own bot does the driving. Vanced shows what it is thinking: its lines, its target and a live log." }
-    ],
-    about: [
-      { go: goSec("about"), at: function () { return firstCard("about", 0); }, t: "Updates by themselves", d: "New versions install over the air — no reinstall. Turn on Beta to get builds before everyone else." },
-      { go: goSec("about"), at: function () { var s = secEl("about"); if (!s) return null; var rs = s.querySelectorAll(".vs-row .l"); for (var i = 0; i < rs.length; i++) if (/^Backup/.test(rs[i].textContent.trim())) return rs[i].closest(".vs-row").parentElement; return null; }, t: "Backup and what’s new", d: "One <b>.ntlvanced</b> file keeps every NTL and Vanced setting, keys, layouts and skins. Restore it anytime." }
-    ]
+  /* friendlier words for the cards (rows speak for themselves with their own descriptions) */
+  var CARD = {
+    "appearance": "Make it yours — transparency, UI size, the device mode and the lobby after a round.",
+    "performance": "More frames: performance mode (key <b>=</b>) and render scale take load off the GPU.",
+    "panels": "The thinking log, the chat picker and where every panel sits.",
+    "squeeze mode": "Squeeze mode — resting in this build, it comes back in a future update.",
+    "eyes": "Eyes Back and Center Eyes — Center Eyes even shows to every player on the server.",
+    "arrow control": "Steer with one finger: drag anywhere and a virtual cursor aims for you.",
+    "aim cursor": "A cursor at the exact point you steer to, with its own skins.",
+    "ntl bot": "NTL’s own bot does the driving; Vanced shows what it is thinking.",
+    "ai coach": "The AI coach — resting in this build."
   };
+  var SEC_TXT = { changelog: "Every change, newest first — and every entry says what it means for you." };
+
+  /* every step of one settings page, in the order it reads */
+  function collect(id) {
+    var S = secEl(id); if (!S) return [];
+    var name = secName(id), out = [];
+    var head = S.querySelector(".vs-h small"), headTxt = head ? head.innerHTML : (SEC_TXT[id] || "");
+    out.push({ sec: id, grp: "SIDEBAR", at: function () { return navEl(id); }, t: esc(name), d: headTxt || "Open this page from the sidebar." });
+    var rows = S.querySelectorAll(".vs-row"), ci = -1, hi = -1;
+    function rowIdx(r) { for (var k = 0; k < rows.length; k++) if (rows[k] === r) return k; return -1; }
+    function addRows(container, grp) {
+      var rs = container.querySelectorAll(".vs-row");
+      for (var k = 0; k < rs.length; k++) {
+        var l = rs[k].querySelector(".l"); if (!l) continue;
+        var c2 = l.cloneNode(true), sm = c2.querySelector("small"); if (sm) sm.remove();
+        var title = c2.textContent.trim(); if (!title) continue;
+        var desc = sm ? sm.innerHTML : "";
+        (function (ix, title, desc) { out.push({ sec: id, grp: grp, at: function () { var s2 = secEl(id); return s2 ? s2.querySelectorAll(".vs-row")[ix] : null; }, t: esc(title), d: desc }); })(rowIdx(rs[k]), title, desc);
+      }
+    }
+    for (var n = S.firstElementChild; n; n = n.nextElementSibling) {
+      if (n.classList.contains("vs-h")) {
+        hi++; if (hi === 0) continue;                                         // the first header is the sidebar step
+        (function (ix, b, sm) {
+          out.push({ sec: id, grp: name.toUpperCase(), at: function () { var s2 = secEl(id); return s2 ? s2.querySelectorAll(".vs-h")[ix] : null; }, t: esc(b ? b.textContent : name), d: sm ? sm.innerHTML : "" });
+        })(hi, n.querySelector("b"), n.querySelector("small"));
+        continue;
+      }
+      if (n.classList.contains("vs-card")) {
+        ci++;
+        var ct = n.querySelector(".vs-ct"), title = ct ? ct.textContent.trim() : "", grp = (name + (title ? " · " + title : "")).toUpperCase();
+        var locked = n.classList.contains("vs-locked");
+        if (title || locked) {
+          var lk = n.querySelector(".vs-lock");
+          (function (ix, title, locked, lkTxt) {
+            out.push({ sec: id, grp: name.toUpperCase(), at: function () { var s2 = secEl(id); return s2 ? s2.querySelectorAll(".vs-card")[ix] : null; },
+              t: esc(title || name), d: CARD[title.toLowerCase()] || (locked ? (lkTxt ? esc(lkTxt.charAt(0) + lkTxt.slice(1).toLowerCase()) + "." : "Not available in this build.") : "Everything about " + esc(title.toLowerCase()) + ", setting by setting.") });
+          })(ci, title, locked, lk ? lk.textContent.trim() : "");
+        }
+        if (!locked) addRows(n, grp);
+        continue;
+      }
+      if (n.classList.contains("vs-cl-item")) {                              // changelog: the newest entry stands for the list
+        if (!out.some(function (s3) { return s3.cl; })) out.push({ sec: id, grp: "CHANGELOG", cl: true, at: function () { return q('#vs-body .vs-sec[data-sec="changelog"] .vs-cl-item'); }, t: "What changed", d: SEC_TXT.changelog });
+        continue;
+      }
+      if (n.querySelector && n.querySelector(".vs-row")) addRows(n, name.toUpperCase());
+    }
+    out.forEach(function (s4) { s4.go = function () { openSec(id); }; });
+    return out;
+  }
+  /* the popup builds every page when it opens: open it for a moment to read them (behind the welcome screen) */
+  function collectAll(ids) {
+    var v = VS(); if (!v) return [];
+    var was = v.isOpen; if (!was) v.open();
+    var all = []; ids.forEach(function (id) { all = all.concat(collect(id)); });
+    if (!was) v.close();
+    return all;
+  }
+
+  function opt(k) { var i = q('#wy-cr .op input[data-opt="' + k + '"]'); return i ? i.closest(".op") : null; }
   var SKINS = [
-    { go: function () { var v = VS(); if (v && v.isOpen) v.close(); var c = CR(); if (c && !document.getElementById("wy-cr-ov")) c.open(); }, at: function () { return q("#wy-cr .grid"); }, t: "Vanced Skins", d: "Eleven creatures for your snake — dragon, phoenix, robot, train and more, each with its own boost effect. In the skin editor: <b>Vanced Skins</b>." },
-    { at: function () { return q('#wy-cr .it[data-id="dragon"]') || q("#wy-cr .it"); }, t: "Tap to wear it", d: "The one you pick comes alive. Players without Vanced see the normal skin closest to its colours." },
-    { at: function () { return q("#wy-cr .opts"); }, t: "Play together", d: "NTL VANCED players in the same arena see each other’s creatures. Both switches are on — turn them off anytime." }
+    { grp: "VANCED SKINS", go: function () { var v = VS(); if (v && v.isOpen) v.close(); var c = CR(); if (c && !document.getElementById("wy-cr-ov")) c.open(); }, at: function () { return q("#wy-cr .grid"); }, t: "Vanced Skins", d: "Eleven creatures for your snake — dragon, phoenix, robot, train and more, each with its own boost effect. In the skin editor: <b>Vanced Skins</b>." },
+    { grp: "VANCED SKINS", at: function () { return q('#wy-cr .it[data-id="dragon"]') || q("#wy-cr .it"); }, t: "Tap to wear it", d: "The one you pick comes alive. Players without Vanced see the normal skin closest to its colours." },
+    { grp: "VANCED SKINS", at: function () { return opt("share"); }, t: "Share my skin", d: "NTL VANCED players in your arena see the creature you picked." },
+    { grp: "VANCED SKINS", at: function () { return opt("see"); }, t: "See others’ skins", d: "And you see theirs. Both switches are on — turn them off anytime." }
   ];
   function full() {
-    var s = [
-      { hero: "welcome" },
-      { go: closeAll, at: function () { return q("#wy-vanced-btn"); }, t: "Everything Vanced", d: "All of NTL VANCED lives behind this button. Key <b>O</b> opens it anywhere — even mid-round." },
-      { go: goSec("general"), at: function () { var v = VS(); return v && v.isOpen ? q("#vs-nav") : null; }, t: "One page per feature", d: "Every part of the mod has its own page. Tap to switch." }
-    ];
-    ["general", "controls", "spine", "bot", "about"].forEach(function (k) { s = s.concat(SEC[k]); });
-    s.push({ go: goSec("general"), at: function () { var e = secEl("general"); return e && e.querySelector(".vs-demo"); }, t: "Lost? Tap the bulb", d: "Every page has <b>View demo</b> — it replays just that page." });
-    s.push({ go: goSec("general"), at: function () { return q("#vs-nav .vs-fulldemo"); }, t: "The whole tour, again", d: "This button plays everything you just saw." });
+    var s = [{ hero: "welcome" },
+      { grp: "HOME", go: closeAll, at: function () { return q("#wy-vanced-btn"); }, t: "Everything Vanced", d: "All of NTL VANCED lives behind this button. Key <b>O</b> opens it anywhere — even mid-round." },
+      { grp: "VANCED SETTINGS", go: function () { openSec("general"); }, at: function () { var v = VS(); return v && v.isOpen ? q("#vs-nav") : null; }, t: "The sidebar", d: "One page per part of the mod. We’ll go through them top to bottom — <b>Skip section</b> jumps ahead." }];
+    s = s.concat(collectAll(ORDER));
+    s.push({ grp: "VANCED SETTINGS", go: function () { openSec("general"); }, at: function () { var e = secEl("general"); return e && e.querySelector(".vs-demo"); }, t: "Lost? Tap the bulb", d: "Every page has <b>View demo</b> — it replays just that page." });
+    s.push({ grp: "VANCED SETTINGS", go: function () { openSec("general"); }, at: function () { return q("#vs-nav .vs-fulldemo"); }, t: "The whole tour, again", d: "This button plays everything you just saw." });
     s = s.concat(SKINS);
     s.push({ hero: "finish", go: closeAll });
     return s;
   }
 
   /* ---- look ---- */
+  var EASE = "cubic-bezier(.65,0,.35,1)";
   var CSS = [
     "#wy-tour{position:fixed;inset:0;z-index:2147483500;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;color:#e6e9ef;pointer-events:auto;}",
-    "#wy-tour .tr-shade{position:fixed;left:0;top:0;width:0;height:0;border-radius:14px;box-shadow:0 0 0 200vmax rgba(3,5,10,.66);transition:left .38s cubic-bezier(.2,.8,.2,1),top .38s cubic-bezier(.2,.8,.2,1),width .38s cubic-bezier(.2,.8,.2,1),height .38s cubic-bezier(.2,.8,.2,1),opacity .3s;pointer-events:none;}",
-    "#wy-tour .tr-shade:after{content:'';position:absolute;inset:-4px;border-radius:17px;border:2px solid rgba(var(--wy-p-rgb,155,123,255),.9);box-shadow:0 0 22px rgba(var(--wy-p-rgb,155,123,255),.55);animation:trPulse 1.8s ease-in-out infinite;}",
-    "#wy-tour .tr-shade.none{left:50%!important;top:50%!important;width:0!important;height:0!important;}#wy-tour .tr-shade.none:after{display:none;}",
-    "@keyframes trPulse{0%,100%{opacity:.55;transform:scale(1)}50%{opacity:1;transform:scale(1.015)}}",
-    "#wy-tour .tr-card{position:fixed;width:min(340px,calc(100vw - 32px));padding:16px 18px 14px;border-radius:16px;background:linear-gradient(165deg,rgba(24,22,40,.97),rgba(12,13,22,.97));border:1px solid rgba(255,255,255,.1);box-shadow:0 24px 60px rgba(0,0,0,.6);transition:left .38s cubic-bezier(.2,.8,.2,1),top .38s cubic-bezier(.2,.8,.2,1),opacity .25s,transform .25s;}",
-    "#wy-tour .tr-card.in{animation:trIn .32s ease both;}@keyframes trIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}",
-    "#wy-tour .tr-k{font:bold 9.5px Arial;letter-spacing:1.6px;color:var(--wy-l,#c9b6ff);margin-bottom:6px;display:flex;justify-content:space-between;}",
+    "#wy-tour .tr-shade{position:fixed;left:50%;top:50%;width:0;height:0;border-radius:14px;box-shadow:0 0 0 200vmax rgba(3,5,10,.68);transition:left .62s " + EASE + ",top .62s " + EASE + ",width .62s " + EASE + ",height .62s " + EASE + ";pointer-events:none;}",
+    "@property --tra{syntax:'<angle>';inherits:false;initial-value:0deg;}",
+    "#wy-tour .tr-shade:before{content:'';position:absolute;inset:-3px;border-radius:17px;padding:2px;background:conic-gradient(from var(--tra),rgba(var(--wy-p-rgb,155,123,255),.15) 0deg,rgba(var(--wy-p-rgb,155,123,255),1) 90deg,rgba(var(--wy-b-rgb,94,203,255),1) 180deg,rgba(var(--wy-p-rgb,155,123,255),.15) 270deg,rgba(var(--wy-p-rgb,155,123,255),.15) 360deg);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:trSpin 2.6s linear infinite;}",
+    "#wy-tour .tr-shade:after{content:'';position:absolute;inset:-4px;border-radius:18px;box-shadow:0 0 26px rgba(var(--wy-p-rgb,155,123,255),.55),inset 0 0 18px rgba(var(--wy-p-rgb,155,123,255),.18);animation:trPulse 1.8s ease-in-out infinite;}",
+    "@keyframes trSpin{to{--tra:360deg}}",
+    "@keyframes trPulse{0%,100%{opacity:.55}50%{opacity:1}}",
+    "#wy-tour .tr-shade.none{left:50%!important;top:50%!important;width:0!important;height:0!important;}#wy-tour .tr-shade.none:before,#wy-tour .tr-shade.none:after{display:none;}",
+    "#wy-tour .tr-shade.moving:after{animation:none;opacity:.3;}",
+    "#wy-tour .tr-card{position:fixed;left:50%;top:50%;width:min(350px,calc(100vw - 32px));padding:16px 18px 14px;border-radius:16px;background:linear-gradient(165deg,rgba(24,22,40,.97),rgba(12,13,22,.97));border:1px solid rgba(255,255,255,.1);box-shadow:0 24px 60px rgba(0,0,0,.6);opacity:0;transform:translateY(10px) scale(.97);transition:opacity .32s ease,transform .38s cubic-bezier(.2,.8,.2,1);}",
+    "#wy-tour .tr-card.in{opacity:1;transform:none;}#wy-tour .tr-card.out{opacity:0;transform:translateY(-6px) scale(.98);transition:opacity .16s ease,transform .16s ease;}",
+    "#wy-tour .tr-k{font:bold 9.5px Arial;letter-spacing:1.4px;color:var(--wy-l,#c9b6ff);margin-bottom:7px;display:flex;justify-content:space-between;gap:10px;}#wy-tour .tr-k span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
     "#wy-tour .tr-t{font-size:16px;font-weight:bold;letter-spacing:.3px;color:#fff;margin-bottom:6px;}",
-    "#wy-tour .tr-d{font-size:12.5px;line-height:1.55;color:#aab2c5;}#wy-tour .tr-d b{color:#fff;}",
-    "#wy-tour .tr-bar{height:3px;border-radius:3px;background:rgba(255,255,255,.08);margin:14px 0 12px;overflow:hidden;}#wy-tour .tr-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--wy-p,#9b7bff),var(--wy-b,#5ecbff));transition:width .35s;}",
-    "#wy-tour .tr-row{display:flex;gap:8px;align-items:center;}#wy-tour .tr-row .sp{flex:1;}",
-    "#wy-tour button{height:32px;padding:0 14px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#e6e9ef;font:bold 11px Arial;letter-spacing:.8px;cursor:pointer;}",
+    "#wy-tour .tr-d{font-size:12.5px;line-height:1.55;color:#aab2c5;max-height:40vh;overflow:auto;}#wy-tour .tr-d b{color:#fff;}",
+    "#wy-tour .tr-bar{height:3px;border-radius:3px;background:rgba(255,255,255,.08);margin:14px 0 12px;overflow:hidden;}#wy-tour .tr-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--wy-p,#9b7bff),var(--wy-b,#5ecbff));transition:width .5s " + EASE + ";}",
+    "#wy-tour .tr-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}#wy-tour .tr-row .sp{flex:1;}",
+    "#wy-tour button{height:32px;padding:0 13px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#e6e9ef;font:bold 10.5px Arial;letter-spacing:.8px;cursor:pointer;}",
     "#wy-tour button:hover{background:rgba(255,255,255,.12);}",
     "#wy-tour button.pri{border-color:rgba(255,255,255,.28);background:linear-gradient(90deg,var(--wy-p,#9b7bff),var(--wy-b,#5ecbff));color:#fff;box-shadow:0 6px 18px rgba(var(--wy-p-rgb,155,123,255),.35);}",
-    "#wy-tour button.ghost{border-color:transparent;background:transparent;color:#8b93a7;padding:0 8px;}",
+    "#wy-tour button.ghost{border-color:transparent;background:transparent;color:#8b93a7;padding:0 6px;}",
+    /* page switches fade in while the tour runs */
+    "html.wy-touring #vs-body .vs-sec.on{animation:trSec .34s ease both;}@keyframes trSec{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}",
     /* hero screens (welcome / finish) */
     "#wy-tour .tr-hero{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 40%,rgba(22,18,40,.94),rgba(3,4,9,.97) 70%);overflow:hidden;animation:trFade .5s ease both;}",
-    "@keyframes trFade{from{opacity:0}to{opacity:1}}",
+    "#wy-tour .tr-hero.out{animation:trFadeOut .35s ease both;}@keyframes trFade{from{opacity:0}to{opacity:1}}@keyframes trFadeOut{to{opacity:0}}",
     "#wy-tour .tr-orb{position:absolute;border-radius:50%;filter:blur(40px);opacity:.55;animation:trFloat 9s ease-in-out infinite;}",
     "#wy-tour .tr-orb.a{width:46vmin;height:46vmin;left:8%;top:10%;background:radial-gradient(circle,var(--wy-p,#9b7bff),transparent 70%);}",
     "#wy-tour .tr-orb.b{width:52vmin;height:52vmin;right:6%;bottom:6%;background:radial-gradient(circle,var(--wy-b,#5ecbff),transparent 70%);animation-delay:-3s;}",
@@ -6025,9 +6091,8 @@ var NTL_TR = (function () {
   ].join("\n");
   function css() { if (!document.getElementById("tr-css")) { var s = document.createElement("style"); s.id = "tr-css"; s.textContent = CSS; (document.head || document.documentElement).appendChild(s); } }
 
-  var root = null, shade = null, cardEl = null, raf = 0, target = null;
+  var root = null, shade = null, cardEl = null, raf = 0, target = null, hold = false;
   function mk(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
-  function stopAll(e) { e.stopPropagation(); }
   function build() {
     css(); if (root) return;
     root = mk("div"); root.id = "wy-tour";
@@ -6036,13 +6101,15 @@ var NTL_TR = (function () {
     });
     shade = mk("div", "tr-shade none"); root.appendChild(shade);
     document.body.appendChild(root);
+    document.documentElement.classList.add("wy-touring");
     window.addEventListener("keydown", keys, true);
     raf = requestAnimationFrame(follow);
   }
   function teardown() {
     if (raf) cancelAnimationFrame(raf); raf = 0;
     window.removeEventListener("keydown", keys, true);
-    if (root) root.remove(); root = shade = cardEl = null; target = null;
+    document.documentElement.classList.remove("wy-touring");
+    if (root) root.remove(); root = shade = cardEl = null; target = null; hold = false;
   }
   function keys(e) {
     if (!run) return;
@@ -6052,43 +6119,67 @@ var NTL_TR = (function () {
     else if (e.key === "ArrowLeft") back();
   }
 
-  /* the spotlight and the card follow the target every frame (panels scroll and animate) */
+  /* spotlight + card follow the target every frame; while the page scrolls the spotlight holds still */
   function place() {
-    if (!shade || !cardEl) return;
+    if (!shade || hold) return;
     var W = window.innerWidth, H = window.innerHeight, pad = 8, r = target && target.isConnected ? target.getBoundingClientRect() : null;
     if (!r || r.width < 2 || r.height < 2) {
       shade.classList.add("none");
-      cardEl.style.left = Math.max(16, (W - cardEl.offsetWidth) / 2) + "px"; cardEl.style.top = Math.max(16, (H - cardEl.offsetHeight) / 2) + "px";
+      if (cardEl && W > 640) { cardEl.style.left = Math.max(16, (W - cardEl.offsetWidth) / 2) + "px"; cardEl.style.top = Math.max(16, (H - cardEl.offsetHeight) / 2) + "px"; }
       return;
     }
     shade.classList.remove("none");
     var x = Math.max(4, r.left - pad), y = Math.max(4, r.top - pad), w = Math.min(W - 8, r.right + pad) - x, h = Math.min(H - 8, r.bottom + pad) - y;
     shade.style.left = x + "px"; shade.style.top = y + "px"; shade.style.width = w + "px"; shade.style.height = h + "px";
-    if (W <= 640) return;                                         // phones: the card is a bottom sheet (CSS)
-    var cw = cardEl.offsetWidth, ch = cardEl.offsetHeight, gap = 16, cx, cy;
+    if (!cardEl || W <= 640) return;                                // phones: the card is a bottom sheet (CSS)
+    var cw = cardEl.offsetWidth, ch = cardEl.offsetHeight, gap = 18, cx, cy;
     if (x + w + gap + cw <= W - 12) { cx = x + w + gap; cy = y + h / 2 - ch / 2; }           // right
     else if (x - gap - cw >= 12) { cx = x - gap - cw; cy = y + h / 2 - ch / 2; }             // left
     else if (y + h + gap + ch <= H - 12) { cx = x + w / 2 - cw / 2; cy = y + h + gap; }      // below
-    else { cx = x + w / 2 - cw / 2; cy = y - gap - ch; }                                   // above
+    else if (y - gap - ch >= 12) { cx = x + w / 2 - cw / 2; cy = y - gap - ch; }            // above
+    else { cx = W - cw - 16; cy = H - ch - 16; }                                            // over it, bottom right
     cardEl.style.left = Math.max(12, Math.min(W - cw - 12, cx)) + "px";
     cardEl.style.top = Math.max(12, Math.min(H - ch - 12, cy)) + "px";
   }
   function follow() { if (!root) return; try { place(); } catch (e) {} raf = requestAnimationFrame(follow); }
 
+  /* the nearest scrolling box around el, scrolled smoothly so el sits in view (top part on phones, above the sheet) */
+  function scroller(el) {
+    for (var p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+      var cs = getComputedStyle(p);
+      if (/(auto|scroll)/.test(cs.overflowY) && p.scrollHeight > p.clientHeight + 4) return p;
+    }
+    return null;
+  }
+  function glideTo(el, cb) {
+    var box = scroller(el); if (!box) { cb(); return; }
+    var br = box.getBoundingClientRect(), er = el.getBoundingClientRect(), vis = br.height, phone = window.innerWidth <= 640;
+    var want = phone ? 16 : Math.max(16, (vis - er.height) / 2);
+    if (er.height > vis - 32) want = 16;                              // taller than the view: show its top
+    var from = box.scrollTop, to = Math.max(0, Math.min(box.scrollHeight - box.clientHeight, from + (er.top - br.top) - want));
+    if (Math.abs(to - from) < 4) { cb(); return; }
+    var dur = Math.min(750, 260 + Math.abs(to - from) * 0.55), t0 = performance.now();
+    (function step(now) {
+      var k = Math.min(1, (now - t0) / dur), e = k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+      box.scrollTop = from + (to - from) * e;
+      if (k < 1) requestAnimationFrame(step); else cb();
+    })(t0);
+  }
+
   function hero(kind) {
     var h = mk("div", "tr-hero");
     var orbs = '<div class="tr-orb a"></div><div class="tr-orb b"></div><div class="tr-orb c"></div>';
     if (kind === "welcome") {
-      h.innerHTML = orbs + '<div class="tr-hc"><span class="tr-kick">WELCOME' + (ver() ? " · V" + ver().toUpperCase() : "") + '</span>' +
+      h.innerHTML = orbs + '<div class="tr-hc"><span class="tr-kick">WELCOME' + (ver() ? " · V" + esc(ver().toUpperCase()) : "") + '</span>' +
         '<div class="tr-word">NTL VANCED</div>' +
-        '<div class="tr-sub">A new layer on top of NTL — your settings, your skins, your game. Take a one-minute tour of what’s inside.</div>' +
+        '<div class="tr-sub">A new layer on top of NTL — your settings, your skins, your game. Take a tour of everything inside.</div>' +
         '<div class="tr-chips"><span class="tr-chip"><i></i>Vanced settings</span><span class="tr-chip"><i></i>Vanced Skins</span><span class="tr-chip"><i></i>Play together</span></div>' +
         '<div class="tr-cta"><button class="ghost" data-a="skip">SKIP</button><button class="pri" data-a="next">START THE TOUR</button></div>' +
         '<div class="tr-by">BY OM RAJPUT</div></div>';
     } else {
       h.innerHTML = orbs + '<div class="tr-hc"><span class="tr-kick">TOUR COMPLETE</span>' +
         '<div class="tr-word">YOU’RE SET</div>' +
-        '<div class="tr-sub">That’s NTL VANCED. Press <b style="color:#fff">O</b> anytime for Vanced settings, and look for the bulb on any page to see its demo again.</div>' +
+        '<div class="tr-sub">That’s NTL VANCED. Press <b style="color:#fff">O</b> anytime for Vanced settings, and tap the bulb on any page to see its demo again.</div>' +
         '<div class="tr-chips"><span class="tr-chip"><i></i>Key O — Vanced settings</span><span class="tr-chip"><i></i>Skin editor — Vanced Skins</span></div>' +
         '<div class="tr-cta"><button data-a="news">WHAT’S NEW</button><button class="pri" data-a="done">LET’S PLAY</button></div>' +
         '<div class="tr-by">NTL VANCED BY OM RAJPUT</div></div>';
@@ -6103,50 +6194,77 @@ var NTL_TR = (function () {
 
   function show() {
     if (!run || !root) return;
-    var st = run.steps[run.i];
-    var old = root.querySelector(".tr-hero"); if (old) old.remove();
-    if (cardEl) { cardEl.remove(); cardEl = null; }
-    target = null;
-    try { if (st.go) st.go(); } catch (e) {}
-    if (st.hero) { shade.classList.add("none"); root.appendChild(hero(st.hero)); return; }
-    /* the page may need a moment to build (settings sections, the skins page) */
-    var tries = 0;
-    (function find() {
-      if (!run || run.steps[run.i] !== st) return;
-      var el = null; try { el = st.at ? st.at() : null; } catch (e) {}
-      if (!el && st.at && tries++ < 12) { setTimeout(find, 60); return; }
-      if (el && el.scrollIntoView) { try { el.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) { el.scrollIntoView(); } }
-      target = el;
-      var real = run.steps.filter(function (s) { return !s.hero; }), n = real.indexOf(st) + 1;
-      cardEl = mk("div", "tr-card in",
-        '<div class="tr-k"><span>' + (run.kind === "full" ? "NTL VANCED TOUR" : "DEMO") + "</span><span>" + n + " / " + real.length + "</span></div>" +
-        '<div class="tr-t">' + st.t + '</div><div class="tr-d">' + st.d + "</div>" +
-        '<div class="tr-bar"><i style="width:' + Math.round(n / real.length * 100) + '%"></i></div>' +
-        '<div class="tr-row"><button class="ghost" data-a="skip">' + (run.kind === "full" ? "SKIP TOUR" : "CLOSE") + '</button><span class="sp"></span>' +
-        (run.i > 0 && !run.steps[run.i - 1].hero ? '<button data-a="back">BACK</button>' : "") +
-        '<button class="pri" data-a="next">' + (run.i === run.steps.length - 1 ? "DONE" : "NEXT") + "</button></div>");
-      cardEl.addEventListener("click", function (e) {
-        var a = e.target && e.target.getAttribute && e.target.getAttribute("data-a");
-        if (a === "next") next(); else if (a === "back") back(); else if (a === "skip") end(true);
-      });
-      root.appendChild(cardEl); place();
-    })();
+    var st = run.steps[run.i], token = {}; run.token = token; run.busy = true;
+    var live = function () { return run && run.token === token; };
+    /* 1. what is on screen leaves */
+    var oldHero = root.querySelector(".tr-hero"), oldCard = cardEl; cardEl = null;
+    if (oldCard) { oldCard.classList.remove("in"); oldCard.classList.add("out"); setTimeout(function () { oldCard.remove(); }, 170); }
+    if (oldHero && !st.hero) { oldHero.classList.add("out"); setTimeout(function () { oldHero.remove(); }, 340); }
+    else if (oldHero) oldHero.remove();
+    if (st.hero) { try { if (st.go) st.go(); } catch (e) {} target = null; hold = false; shade.classList.add("none"); root.appendChild(hero(st.hero)); run.busy = false; return; }
+    hold = true; shade.classList.add("moving");
+    setTimeout(function () {
+      if (!live()) return;
+      /* 2. the page it lives on */
+      try { if (st.go) st.go(); } catch (e) {}
+      var tries = 0;
+      (function find() {
+        if (!live()) return;
+        var el = null; try { el = st.at ? st.at() : null; } catch (e) {}
+        if (!el && st.at && tries++ < 14) { setTimeout(find, 60); return; }
+        /* 3. scroll it into view, 4. the spotlight glides onto it, 5. the card arrives */
+        var arrive = function () {
+          if (!live()) return;
+          target = el; hold = false; place(); shade.classList.remove("moving");
+          setTimeout(function () { if (live()) { card(st); run.busy = false; } }, el ? 420 : 120);
+        };
+        if (el) glideTo(el, arrive); else arrive();
+      })();
+    }, oldCard || oldHero ? 180 : 0);
   }
-  function next() { if (!run) return; if (run.i >= run.steps.length - 1) return end(false); run.i++; show(); }
-  function back() { if (!run || run.i === 0) return; run.i--; if (run.steps[run.i].hero && run.i > 0) run.i--; show(); }
+  function card(st) {
+    var real = run.steps.filter(function (s) { return !s.hero; }), n = real.indexOf(st) + 1;
+    var inSettings = !!st.sec && run.kind === "full", prev = run.steps[run.i - 1];
+    cardEl = mk("div", "tr-card",
+      '<div class="tr-k"><span>' + esc(st.grp || (run.kind === "full" ? "NTL VANCED TOUR" : "DEMO")) + "</span><span>" + n + " / " + real.length + "</span></div>" +
+      '<div class="tr-t">' + st.t + '</div><div class="tr-d">' + (st.d || "") + "</div>" +
+      '<div class="tr-bar"><i style="width:' + Math.round((n - 1) / real.length * 100) + '%"></i></div>' +
+      '<div class="tr-row"><button class="ghost" data-a="skip">' + (run.kind === "full" ? "SKIP TOUR" : "CLOSE") + "</button>" +
+      (inSettings ? '<button class="ghost" data-a="sec">SKIP SECTION</button>' : "") + '<span class="sp"></span>' +
+      (prev && !prev.hero ? '<button data-a="back">BACK</button>' : "") +
+      '<button class="pri" data-a="next">' + (run.i === run.steps.length - 1 ? "DONE" : "NEXT") + "</button></div>");
+    cardEl.addEventListener("click", function (e) {
+      var a = e.target && e.target.getAttribute && e.target.getAttribute("data-a");
+      if (a === "next") next(); else if (a === "back") back(); else if (a === "skip") end(true); else if (a === "sec") skipSection();
+    });
+    root.appendChild(cardEl); place();
+    requestAnimationFrame(function () { requestAnimationFrame(function () { if (cardEl) { cardEl.classList.add("in"); var b = cardEl.querySelector(".tr-bar i"); if (b) b.style.width = Math.round(n / real.length * 100) + "%"; } }); });
+  }
+  function next() { if (!run || run.busy) return; if (run.i >= run.steps.length - 1) return end(false); run.i++; show(); }
+  function back() { if (!run || run.busy || run.i === 0) return; run.i--; if (run.steps[run.i].hero && run.i > 0) run.i--; show(); }
+  function skipSection() {
+    if (!run || run.busy) return;
+    var sec = run.steps[run.i].sec, j = run.i + 1;
+    while (j < run.steps.length && run.steps[j].sec === sec) j++;
+    if (j >= run.steps.length) return end(false);
+    run.i = j; show();
+  }
   function end(skipped) {
     var kind = run && run.kind; run = null; teardown();
     if (kind === "full") { markDone(); closeAll(); }
     else if (kind === "skins") closeSkins();
   }
-  function start(kind, steps) {
-    if (run) return;
-    run = { kind: kind, steps: steps, i: 0 }; build(); show();
-  }
+  function start(kind, steps) { if (run || !steps.length) return; run = { kind: kind, steps: steps, i: 0, busy: false }; build(); show(); }
 
   /* ---- public ---- */
   function fullTour() { start("full", full()); }
-  function section(id) { if (SEC[id]) start("section", SEC[id]); else if (id === "skins") start("skins", SKINS); }
+  function section(id) {
+    if (id === "skins") return start("skins", SKINS);
+    var v = VS(); if (!v) return;
+    if (!v.isOpen) v.go(id);
+    start("section", collect(id));
+  }
+  var SECTIONS = {}; ORDER.forEach(function (k) { SECTIONS[k] = true; });
 
   /* ---- the first run after an update: home screen, nothing else open, not in a round ---- */
   function homeVisible() { var b = document.getElementById("mybox"), l = document.getElementById("login"); return !!(b && l && getComputedStyle(l).display !== "none" && b.getClientRects().length); }
@@ -6159,7 +6277,7 @@ var NTL_TR = (function () {
     if (Date.now() - autoAt > 1200) fullTour();                  // home has been settled for a moment
   }, 400);
 
-  return { full: fullTour, section: section, SECTIONS: SEC, get running() { return !!run; }, pending: function () { return !done() || !!run; } };
+  return { full: fullTour, section: section, SECTIONS: SECTIONS, get running() { return !!run; }, pending: function () { return !done() || !!run; } };
 })();
 /* ========================== END VANCED TOUR ================================ */
 /* ============================================================================
