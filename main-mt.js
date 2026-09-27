@@ -1998,12 +1998,12 @@ var NTL_CR = (function () {
     if (!holder || !holder.isConnected) {
       holder = document.createElement("div"); holder.id = "wy-crh";
       holder.innerHTML = '<a class="btn btnt" draggable="false" id="wy-crb" style="width:119px;height:87px;" href="#"><img class="nsi" border="0" draggable="false" width="119" height="87" src="' + iconURL() + '"></a>';
-      holder.querySelector("a").addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); open(); });
+      holder.querySelector("a").addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); open(); if (ov) ov.__fromEditor = true; });
       (ref.parentNode || document.body).appendChild(holder);
     }
     var cs = getComputedStyle(ref), shown = cs.display !== "none" && cs.visibility !== "hidden";
     holder.style.cssText = "position:fixed;z-index:50;display:" + (shown ? "block" : "none") + ";bottom:" + cs.bottom + ";transform:" + (ref.style.transform || "none") + ";transform-origin:" + cs.transformOrigin + ";opacity:" + cs.opacity + ";left:" + ((parseFloat(ref.style.left) || ref.getBoundingClientRect().left) + 110) + "px;";
-    if (!shown && ov) close();
+    if (!shown && ov && ov.__fromEditor) close();   // opened from the skin editor: leaving it closes the page
   }
   function boot() { if (!document.body) { setTimeout(boot, 50); return; } setInterval(tick, 400); }
   boot();
@@ -4742,6 +4742,7 @@ var NTL_WN = (function () {
     if (seen === V) { shown = true; return; }
     if (typeof playing !== "undefined" && playing) return;
     if (!homeVisible()) return;
+    if (typeof NTL_TR !== "undefined" && NTL_TR.pending()) return;   // the welcome tour goes first
     shown = true; setTimeout(show, 900);   // after the launcher skeleton has settled
   }
   function boot() { if (!document.body) { setTimeout(boot, 50); return; } setInterval(check, 800); }
@@ -4946,6 +4947,23 @@ var NTL_TH = (function () {
     st.backgroundImage = "url(" + (url || ((g("Gs") || "") + "bdemo.webp")) + ")"; st.backgroundSize = "cover"; st.backgroundPosition = "center"; st.backgroundRepeat = "no-repeat";
   }
   function store(url) { try { if (url) { if (typeof ff === "function") ff("menuimg", url); } else if (typeof cf === "function") cf(["menuimg"]); } catch (e) {} }
+  /* a copy of the custom image in IndexedDB (slither.io's own origin): the extension's storage starts empty when the
+     extension id changes (a new unpacked folder), this does not */
+  function idb(cb) { try { var rq = indexedDB.open("wy_theme", 1); rq.onupgradeneeded = function () { rq.result.createObjectStore("img"); }; rq.onsuccess = function () { cb(rq.result); }; rq.onerror = function () { cb(null); }; } catch (e) { cb(null); } }
+  function idbPut(v) { idb(function (db) { if (!db) return; try { db.transaction("img", "readwrite").objectStore("img").put(v, "custom"); } catch (e) {} }); }
+  function idbGet(cb) { idb(function (db) { if (!db) return cb(null); try { var rq = db.transaction("img").objectStore("img").get("custom"); rq.onsuccess = function () { cb(rq.result || null); }; rq.onerror = function () { cb(null); }; } catch (e) { cb(null); } }); }
+  /* the saved theme's wallpaper must be the one on screen and in NTL's menuimg — after an update it can be gone */
+  function ensureWall() {
+    if (!cur || cur.id === "default" || !document.body) return;
+    var bg = document.body.style.backgroundImage || "";
+    if (cur.id === "custom") {
+      if (/url\(["']?data:/.test(bg)) return;
+      idbGet(function (img) { if (img && cur.id === "custom") { paintBody(img); store(img); } });
+      return;
+    }
+    var t = cur;
+    resolve(t, function (url) { if (!url || cur !== t) return; if ((document.body.style.backgroundImage || "").indexOf(url) >= 0) return; paintBody(url); store(url); });
+  }
   /* ---- wallpaper blur ---- */
   var blurEl = null;
   function blurPx() { var v = 20; try { var r = localStorage.getItem("wy_bg_blur"); if (r !== null && r !== "" && !isNaN(+r)) v = +r; } catch (e) {} return Math.max(0, Math.min(40, v)); }   /* default 20px until the slider is touched */
@@ -4960,7 +4978,7 @@ var NTL_TH = (function () {
   function apply(t, img) {
     cur = t; setVars(t); save(t); paint();
     if (t.id === "default") { paintBody(null); store(null); return; }
-    if (t.id === "custom") { if (img) { paintBody(img); store(img); } return; }   // custom: the image is already NTL's menuimg
+    if (t.id === "custom") { if (img) { paintBody(img); store(img); idbPut(img); } return; }   // custom: NTL's menuimg + a copy in IndexedDB
     busy = true; paint();
     resolve(t, function (url) { busy = false; if (cur !== t) return; paintBody(url); store(url); paint(); });
   }
@@ -4997,6 +5015,7 @@ var NTL_TH = (function () {
     ".wy-sk-lines{display:flex;flex-direction:column;gap:10px;padding:6px 0 10px;}.wy-sk-lines .wy-sk{height:12px;}.wy-sk-lines .wy-sk.h{height:22px;width:60%;margin-bottom:6px;}.wy-sk-lines .wy-sk.w1{width:92%;}.wy-sk-lines .wy-sk.w2{width:78%;}.wy-sk-lines .wy-sk.w3{width:84%;}.wy-sk-lines .wy-sk.w4{width:55%;}",
     ".wy-ios{position:relative;width:20px;height:20px;flex:none;}.wy-ios i{position:absolute;left:50%;top:0;width:2.2px;height:5.5px;margin-left:-1.1px;border-radius:2px;background:var(--wy-l);transform-origin:50% 10px;animation:wyIosF 1s linear infinite;}@keyframes wyIosF{0%{opacity:1}100%{opacity:.15}}",
     "#wy-th .tile .nm{padding:7px 8px 6px;font:bold 10.5px Arial;letter-spacing:.8px;color:#c3cad9;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}",
+    "#wy-th .tile .nm .dflt{font:bold 8px Arial;letter-spacing:1px;padding:2px 5px;border-radius:5px;background:linear-gradient(90deg,var(--wy-p),var(--wy-b));color:#fff;margin-left:4px;flex:none;}",
     "#wy-th .tile .dots{display:flex;gap:3px;margin-left:auto;flex:none;}#wy-th .tile .dots i{width:8px;height:8px;border-radius:50%;border:1px solid rgba(0,0,0,.4);}",
     "#wy-th .tile .chk{position:absolute;right:6px;top:6px;width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,var(--wy-p),var(--wy-b));color:#fff;font:bold 11px Arial;display:none;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5);}#wy-th .tile.on .chk{display:flex;}",
     "#wy-th .tile.busy .im:after{content:'';width:18px;height:18px;border-radius:50%;border:2px solid rgba(255,255,255,.2);border-top-color:#fff;animation:wnSpin .8s linear infinite;position:absolute;}",
@@ -5027,9 +5046,11 @@ var NTL_TH = (function () {
   function paint() {
     if (!grid || !box || !box.classList.contains("open")) return;   // lazy: nothing is fetched until the panel opens
     grid.innerHTML = "";
+    var id = extId(), th = function (t) { return tile(t, [id ? "chrome-extension://" + id + "/themes/" + t.file : null, cdnUrl(t)]); };
+    var sp = byId("spidey");
+    if (sp) { var st0 = th(sp); st0.classList.add("def"); st0.querySelector(".nm span").insertAdjacentHTML("afterend", '<b class="dflt">DEFAULT</b>'); grid.appendChild(st0); }
     grid.appendChild(tile(DEF, (g("Gs") || "") + "bdemo.webp"));
-    var id = extId();
-    THEMES.forEach(function (t) { grid.appendChild(tile(t, [id ? "chrome-extension://" + id + "/themes/" + t.file : null, cdnUrl(t)])); });
+    THEMES.forEach(function (t) { if (t.id !== "spidey") grid.appendChild(th(t)); });
     var custom = cur.id === "custom" ? cur : { id: "custom", name: "Custom image", p: "#8b93a7", b: "#6b7385", l: "#c3cad9", s: "#aab2c5" };
     var ct = tile(custom, null, '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>');
     grid.appendChild(ct);
@@ -5086,7 +5107,7 @@ var NTL_TH = (function () {
   function homeVisible() { var b = document.getElementById("mybox"), l = document.getElementById("login"); return !!(b && l && getComputedStyle(l).display !== "none" && b.getClientRects().length); }
   function tick() { build(); var h = homeVisible() && !g("playing"); btn.classList.toggle("show", h); if (!h && box.classList.contains("open")) toggle(false); if (blurEl) blurEl.classList.toggle("on", blurPx() > 0 && !g("playing")); }
   css();
-  function boot() { if (!document.body) { setTimeout(boot, 50); return; } build(); applyBlur(); if (firstRun && cur.id !== "default") { firstRun = false; apply(cur); } setInterval(tick, 500); }
+  function boot() { if (!document.body) { setTimeout(boot, 50); return; } build(); applyBlur(); if (firstRun && cur.id !== "default") { firstRun = false; apply(cur); } else { setTimeout(ensureWall, 1500); setTimeout(ensureWall, 5000); } setInterval(tick, 500); }
   boot();
   /* iOS spinner markup for other modules */
   function ios() { var h = ""; for (var i = 0; i < 12; i++) h += '<i style="transform:rotate(' + (i * 30) + 'deg);animation-delay:' + (-(11 - i) / 12) + 's"></i>'; return '<span class="wy-ios">' + h + "</span>"; }
@@ -5248,9 +5269,10 @@ var NTL_LB = (function () {
    they fade back on release.
    ============================================================================ */
 var NTL_VS = (function () {
-  var ov = null;
+  var ov = null, secsRef = null, navsRef = null;   // the open popup's sections / nav items (for the tour)
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
+    { v: "5.67-dev", d: "27 Sep 2026", t: "Welcome tour: after this update a welcome screen and a guided tour walk you through Vanced settings and Vanced Skins. Every settings page has a bulb \u2014 View demo \u2014 for that page, and View full Vanced demo at the bottom of the sidebar replays everything. Themes: your wallpaper now comes back after an update (it used to fall back to the default while the colours stayed), and Spidey is the default theme." },
     { v: "5.66", d: "27 Sep 2026", t: "Vanced Skins: a new button in the skin editor opens creature skins for your snake \u2014 Centipede, Dragon, Skeleton, Chinese Dragon, Electric Eel, Train, Robot Snake, Phoenix, Ice Serpent, Caterpillar and Zombie Snake, each with its own boost effect. Other NTL VANCED players in your arena see your creature and you see theirs (Share my skin / See others\u2019 skins on the page, both on). Other players see the normal skin closest to the creature\u2019s colours." },
     { v: "5.65", d: "26 Sep 2026", t: "Global chat (the SlitherControl+ room) removed — the chat box is NTL’s team chat again, with the emoji / GIF picker. Assist (and the other hold keys) now stays on while an on-screen button is held, so Assist go skinless / Assist map show on phones. Team list follows NTL’s KeyOwners in players list, Online players status (version) and the team detail toggle again. Everywhere NTL sent or showed its own version (team list, tag server, settings title) it now uses the NTL VANCED version you are running — the updated one after an in-app update; the version text left the stats line. Squeeze mode is in the build but unavailable for now." },
     { v: "5.64", d: "22 Sep 2026", t: "Lobby can be switched off in Vanced \u203a General and no longer appears when you come back from the skin editor or settings \u2014 only after a real round. Updates card shows UPDATE only when there is one." },
@@ -5378,6 +5400,13 @@ var NTL_VS = (function () {
     "#vs-body::-webkit-scrollbar{width:7px}#vs-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:7px}",
     ".vs-sec{display:none;}.vs-sec.on{display:block;animation:svFade .2s ease;}",
     ".vs-h{margin:2px 0 8px;}.vs-h b{display:block;font-size:16px;letter-spacing:.6px;color:#fff;}.vs-h small{display:block;color:#8b93a7;font-size:11.5px;margin-top:3px;line-height:1.5;}",
+    ".vs-h.has-demo{position:relative;padding-right:130px;}",
+    ".vs-demo{position:absolute;right:0;top:0;display:flex;align-items:center;gap:6px;height:30px;padding:0 12px 0 10px;border-radius:99px;border:1px solid rgba(255,214,102,.35);background:linear-gradient(90deg,rgba(255,214,102,.14),rgba(255,214,102,.05));color:#ffe08a;font:bold 10.5px Arial;letter-spacing:.6px;cursor:pointer;white-space:nowrap;transition:background .15s,box-shadow .15s;}",
+    ".vs-demo:hover{background:rgba(255,214,102,.22);box-shadow:0 0 16px rgba(255,214,102,.3);}.vs-demo svg,.vs-fulldemo svg{width:15px;height:15px;flex:none;}",
+    "#vs-nav{display:flex;flex-direction:column;}",
+    ".vs-fulldemo{margin-top:auto;display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:11px;border:1px solid rgba(255,214,102,.28);background:linear-gradient(135deg,rgba(255,214,102,.12),rgba(var(--wy-p-rgb),.1));color:#ffe08a;font:bold 11px Arial;letter-spacing:.3px;text-align:left;cursor:pointer;flex:none;}",
+    ".vs-fulldemo:hover{background:linear-gradient(135deg,rgba(255,214,102,.2),rgba(var(--wy-p-rgb),.16));}",
+    "@media (max-width:640px){#vs-nav{flex-direction:row;}.vs-fulldemo{margin-top:0;white-space:nowrap;}.vs-h.has-demo{padding-right:0;padding-top:38px;}.vs-demo{top:0;left:0;right:auto;}}",
     ".vs-card{padding:4px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.025);margin-bottom:12px;}",
     ".vs-card > .vs-ct{padding:10px 0 2px;font:bold 9.5px Arial;letter-spacing:1.5px;color:#7b84a0;text-transform:uppercase;}",
     ".vs-sw{width:44px;height:25px;flex:none;border-radius:99px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);position:relative;cursor:pointer;transition:background .16s,border-color .16s;}",
@@ -5525,14 +5554,23 @@ var NTL_VS = (function () {
     var head = el("div"); head.id = "vs-head"; head.innerHTML = '<div><div class="t">NTL VANCED</div><div class="s">by Om Rajput · omrajput.in</div></div><span class="ver">v' + VER + '</span>';
     var x = el("button", null, "×"); x.id = "vs-close"; x.onclick = close; head.appendChild(x); box.appendChild(head);
     var main = el("div"); main.id = "vs-main"; var nav = el("div"); nav.id = "vs-nav"; var body = el("div"); body.id = "vs-body";
-    var secs = {}, navs = {};
+    var secs = {}, navs = {}; secsRef = secs; navsRef = navs;
     function section(id, label, badge) {
       var n = el("div", "vs-ni", ICONS[id] + "<span>" + label + "</span>" + (badge ? '<span class="b">' + badge + "</span>" : ""));
       n.onclick = function () { for (var k in secs) { secs[k].classList.toggle("on", k === id); navs[k].classList.toggle("on", k === id); } body.scrollTop = 0; try { localStorage.setItem("wy_vs_sec", id); } catch (e) {} };
       nav.appendChild(n); navs[id] = n;
-      var s = el("div", "vs-sec"); body.appendChild(s); secs[id] = s; return s;
+      var s = el("div", "vs-sec"); s.setAttribute("data-sec", id); body.appendChild(s); secs[id] = s; return s;
     }
-    function h(sec, title, sub) { sec.appendChild(el("div", "vs-h", "<b>" + title + "</b><small>" + sub + "</small>")); }
+    var BULB = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg>';
+    function h(sec, title, sub) {
+      var hd = el("div", "vs-h", "<b>" + title + "</b><small>" + sub + "</small>"), id = sec.getAttribute("data-sec");
+      if (!sec.__demo && typeof NTL_TR !== "undefined" && NTL_TR.SECTIONS[id]) {       // one bulb per page, top right
+        sec.__demo = true; hd.classList.add("has-demo");
+        var db = el("button", "vs-demo", BULB + "<span>View demo</span>"); db.type = "button"; db.title = "replay the demo of this page";
+        db.onclick = function () { NTL_TR.section(id); }; hd.appendChild(db);
+      }
+      sec.appendChild(hd);
+    }
 
     /* ================= GENERAL ================= */
     var S = section("general", "General");
@@ -5831,6 +5869,10 @@ var NTL_VS = (function () {
     for (var i = 0; i < CHANGELOG.length; i++) { var c = CHANGELOG[i]; cl += '<div class="vs-cl-item"><div class="vs-cl-head"><span class="vs-cl-v' + (i === 0 ? " new" : "") + '">v' + c.v + '</span><span class="vs-cl-date">' + c.d + '</span></div><p>' + c.t + '</p></div>'; }
     S.innerHTML = cl;
 
+    if (typeof NTL_TR !== "undefined") {                        // bottom of the sidebar: the whole tour again
+      var fdb = el("button", "vs-fulldemo", BULB + "<span>View full Vanced demo</span>"); fdb.type = "button";
+      fdb.onclick = function () { NTL_TR.full(); }; nav.appendChild(fdb);
+    }
     main.appendChild(nav); main.appendChild(body); box.appendChild(main);
     ov.appendChild(box); document.body.appendChild(ov);
     var first = "general"; try { var rem = localStorage.getItem("wy_vs_sec"); if (rem && secs[rem]) first = rem; } catch (e) {}
@@ -5844,7 +5886,7 @@ var NTL_VS = (function () {
     if (p) { if (!p.classList.contains("out")) { p.classList.add("out"); setTimeout(function () { if (p.parentNode) p.remove(); }, 200); } return; }
     close();
   }
-  function close() { if (!ov) return; window.removeEventListener("keydown", esc, true); ov.remove(); ov = null; }
+  function close() { if (!ov) return; window.removeEventListener("keydown", esc, true); ov.remove(); ov = null; secsRef = navsRef = null; }
   try { var s0 = parseFloat(localStorage.getItem("wy_bg_a")); if (!isNaN(s0)) document.documentElement.style.setProperty("--wy-bg-a", s0); var f1 = parseFloat(localStorage.getItem("wy_fg_a")); if (!isNaN(f1)) document.documentElement.style.setProperty("--wy-fg-a", f1); } catch (e) {}
   try { var sc9 = parseFloat(localStorage.getItem("wy_ui_scale")); if (!isNaN(sc9)) document.documentElement.style.setProperty("--wy-scale", sc9); } catch (e) {}
   (function b() { if (!document.head) { setTimeout(b, 50); return; } css(); })();   // stylesheet at load: it also themes NTL's iframe popups (.popup-data)
@@ -5856,9 +5898,270 @@ var NTL_VS = (function () {
     var el_ = document.activeElement, t = el_ ? (el_.tagName || "").toUpperCase() : ""; if (t === "INPUT" || t === "TEXTAREA" || (el_ && el_.isContentEditable)) return;
     if (ov) close(); else open();
   }, true);
-  return { open: open, close: close, toggle: function () { if (ov) close(); else open(); } };
+  function go(id) { if (!ov) open(); if (navsRef && navsRef[id]) navsRef[id].onclick(); }
+  return { open: open, close: close, toggle: function () { if (ov) close(); else open(); }, go: go,
+    sec: function (id) { return secsRef && secsRef[id] || null; }, get isOpen() { return !!ov; } };
 })();
 /* ========================== END VANCED SETTINGS ============================ */
+/* ========================== VANCED TOUR ==================================== */
+/* The welcome + guided tour of NTL VANCED. Runs once after an install / update
+   that carries a new tour (TOUR), on the home screen, before What's new (which
+   waits while the tour is pending or running). Also started by hand: the bulb
+   "View demo" in every Vanced settings section header plays that section only,
+   and "View full Vanced demo" at the bottom of the settings sidebar replays all.
+   A step is { at: () => element | null, t: title, d: text, go: () => void } —
+   `go` prepares the screen (open Vanced settings on a section, open the Vanced
+   Skins page…), `at` finds what to spotlight; no element = a centred card.
+   Nothing is clicked for the user and nothing is changed: the tour only opens
+   pages and points at things. localStorage.wy_tour = the last TOUR finished. */
+var NTL_TR = (function () {
+  var TOUR = "1", KEY = "wy_tour";
+  var run = null;                 // { steps, i, kind } while a tour is on screen
+  function g(n) { try { return window[n]; } catch (e) { return undefined; } }
+  function done() { try { return localStorage.getItem(KEY) === TOUR; } catch (e) { return true; } }
+  function markDone() { try { localStorage.setItem(KEY, TOUR); } catch (e) {} }
+  function VS() { return typeof NTL_VS !== "undefined" ? NTL_VS : null; }
+  function CR() { return typeof NTL_CR !== "undefined" ? NTL_CR : null; }
+  function ver() { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } }
+
+  /* ---- where things are ---- */
+  function q(s) { return document.querySelector(s); }
+  function secEl(id) { var v = VS(); return v && v.sec ? v.sec(id) : null; }
+  function cardIn(id, title) {
+    var s = secEl(id); if (!s) return null;
+    var cs = s.querySelectorAll(".vs-card");
+    for (var i = 0; i < cs.length; i++) { var h = cs[i].querySelector(".vs-ct"); if (h && h.textContent.trim().toLowerCase() === title.toLowerCase()) return cs[i]; }
+    return null;
+  }
+  function firstCard(id, n) { var s = secEl(id); if (!s) return null; var cs = s.querySelectorAll(".vs-card"); return cs[n || 0] || null; }
+  function goSec(id) { return function () { var v = VS(); if (v && v.go) v.go(id); closeSkins(); }; }
+  function closeSkins() { var c = CR(); if (c && document.getElementById("wy-cr-ov")) c.close(); }
+  function closeAll() { closeSkins(); var v = VS(); if (v && v.isOpen) v.close(); }
+
+  /* ---- the steps ---- */
+  var SEC = {
+    general: [
+      { go: goSec("general"), at: function () { return cardIn("general", "Appearance"); }, t: "Make it yours", d: "Panel and text transparency, UI size, the device mode (Auto, Desktop or Mobile) and the lobby after a round." },
+      { go: goSec("general"), at: function () { return cardIn("general", "Performance"); }, t: "More frames", d: "Performance mode (key <b>=</b>) and render scale take load off the GPU — made for phones and older laptops." },
+      { go: goSec("general"), at: function () { return cardIn("general", "Panels"); }, t: "Your panels", d: "The thinking log, the chat picker and where every panel sits. Move them in NTL settings, reset them here." }
+    ],
+    controls: [
+      { go: goSec("controls"), at: function () { return cardIn("controls", "Arrow control"); }, t: "Steer with one finger", d: "Arrow control: drag anywhere and a virtual cursor aims for you. Pick an arrow skin, its size and colours." },
+      { go: goSec("controls"), at: function () { return cardIn("controls", "Eyes"); }, t: "Eyes where you want them", d: "Eyes Back and Center Eyes. Center Eyes even shows to every player on the server." },
+      { go: goSec("controls"), at: function () { return cardIn("controls", "Aim cursor"); }, t: "See your aim", d: "An aim cursor at the exact point you steer to, with its own skins." }
+    ],
+    spine: [
+      { go: goSec("spine"), at: function () { return firstCard("spine"); }, t: "Spine mode", d: "Key <b>P</b>. Hides your body and draws only its spine and the collision point — perfect for tight coils. Only you see it." }
+    ],
+    guard: [
+      { go: goSec("guard"), at: function () { return firstCard("guard"); }, t: "Pro Guard", d: "Auto-dodge that predicts cuts and head-ons with the game’s own physics. It is resting in this build and will come back in a future update." }
+    ],
+    bot: [
+      { go: goSec("bot"), at: function () { return cardIn("bot", "NTL bot"); }, t: "NTL’s bot, with a window", d: "NTL’s own bot does the driving. Vanced shows what it is thinking: its lines, its target and a live log." }
+    ],
+    about: [
+      { go: goSec("about"), at: function () { return firstCard("about", 0); }, t: "Updates by themselves", d: "New versions install over the air — no reinstall. Turn on Beta to get builds before everyone else." },
+      { go: goSec("about"), at: function () { var s = secEl("about"); if (!s) return null; var rs = s.querySelectorAll(".vs-row .l"); for (var i = 0; i < rs.length; i++) if (/^Backup/.test(rs[i].textContent.trim())) return rs[i].closest(".vs-row").parentElement; return null; }, t: "Backup and what’s new", d: "One <b>.ntlvanced</b> file keeps every NTL and Vanced setting, keys, layouts and skins. Restore it anytime." }
+    ]
+  };
+  var SKINS = [
+    { go: function () { var v = VS(); if (v && v.isOpen) v.close(); var c = CR(); if (c && !document.getElementById("wy-cr-ov")) c.open(); }, at: function () { return q("#wy-cr .grid"); }, t: "Vanced Skins", d: "Eleven creatures for your snake — dragon, phoenix, robot, train and more, each with its own boost effect. In the skin editor: <b>Vanced Skins</b>." },
+    { at: function () { return q('#wy-cr .it[data-id="dragon"]') || q("#wy-cr .it"); }, t: "Tap to wear it", d: "The one you pick comes alive. Players without Vanced see the normal skin closest to its colours." },
+    { at: function () { return q("#wy-cr .opts"); }, t: "Play together", d: "NTL VANCED players in the same arena see each other’s creatures. Both switches are on — turn them off anytime." }
+  ];
+  function full() {
+    var s = [
+      { hero: "welcome" },
+      { go: closeAll, at: function () { return q("#wy-vanced-btn"); }, t: "Everything Vanced", d: "All of NTL VANCED lives behind this button. Key <b>O</b> opens it anywhere — even mid-round." },
+      { go: goSec("general"), at: function () { var v = VS(); return v && v.isOpen ? q("#vs-nav") : null; }, t: "One page per feature", d: "Every part of the mod has its own page. Tap to switch." }
+    ];
+    ["general", "controls", "spine", "bot", "about"].forEach(function (k) { s = s.concat(SEC[k]); });
+    s.push({ go: goSec("general"), at: function () { var e = secEl("general"); return e && e.querySelector(".vs-demo"); }, t: "Lost? Tap the bulb", d: "Every page has <b>View demo</b> — it replays just that page." });
+    s.push({ go: goSec("general"), at: function () { return q("#vs-nav .vs-fulldemo"); }, t: "The whole tour, again", d: "This button plays everything you just saw." });
+    s = s.concat(SKINS);
+    s.push({ hero: "finish", go: closeAll });
+    return s;
+  }
+
+  /* ---- look ---- */
+  var CSS = [
+    "#wy-tour{position:fixed;inset:0;z-index:2147483500;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;color:#e6e9ef;pointer-events:auto;}",
+    "#wy-tour .tr-shade{position:fixed;left:0;top:0;width:0;height:0;border-radius:14px;box-shadow:0 0 0 200vmax rgba(3,5,10,.66);transition:left .38s cubic-bezier(.2,.8,.2,1),top .38s cubic-bezier(.2,.8,.2,1),width .38s cubic-bezier(.2,.8,.2,1),height .38s cubic-bezier(.2,.8,.2,1),opacity .3s;pointer-events:none;}",
+    "#wy-tour .tr-shade:after{content:'';position:absolute;inset:-4px;border-radius:17px;border:2px solid rgba(var(--wy-p-rgb,155,123,255),.9);box-shadow:0 0 22px rgba(var(--wy-p-rgb,155,123,255),.55);animation:trPulse 1.8s ease-in-out infinite;}",
+    "#wy-tour .tr-shade.none{left:50%!important;top:50%!important;width:0!important;height:0!important;}#wy-tour .tr-shade.none:after{display:none;}",
+    "@keyframes trPulse{0%,100%{opacity:.55;transform:scale(1)}50%{opacity:1;transform:scale(1.015)}}",
+    "#wy-tour .tr-card{position:fixed;width:min(340px,calc(100vw - 32px));padding:16px 18px 14px;border-radius:16px;background:linear-gradient(165deg,rgba(24,22,40,.97),rgba(12,13,22,.97));border:1px solid rgba(255,255,255,.1);box-shadow:0 24px 60px rgba(0,0,0,.6);transition:left .38s cubic-bezier(.2,.8,.2,1),top .38s cubic-bezier(.2,.8,.2,1),opacity .25s,transform .25s;}",
+    "#wy-tour .tr-card.in{animation:trIn .32s ease both;}@keyframes trIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}",
+    "#wy-tour .tr-k{font:bold 9.5px Arial;letter-spacing:1.6px;color:var(--wy-l,#c9b6ff);margin-bottom:6px;display:flex;justify-content:space-between;}",
+    "#wy-tour .tr-t{font-size:16px;font-weight:bold;letter-spacing:.3px;color:#fff;margin-bottom:6px;}",
+    "#wy-tour .tr-d{font-size:12.5px;line-height:1.55;color:#aab2c5;}#wy-tour .tr-d b{color:#fff;}",
+    "#wy-tour .tr-bar{height:3px;border-radius:3px;background:rgba(255,255,255,.08);margin:14px 0 12px;overflow:hidden;}#wy-tour .tr-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--wy-p,#9b7bff),var(--wy-b,#5ecbff));transition:width .35s;}",
+    "#wy-tour .tr-row{display:flex;gap:8px;align-items:center;}#wy-tour .tr-row .sp{flex:1;}",
+    "#wy-tour button{height:32px;padding:0 14px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#e6e9ef;font:bold 11px Arial;letter-spacing:.8px;cursor:pointer;}",
+    "#wy-tour button:hover{background:rgba(255,255,255,.12);}",
+    "#wy-tour button.pri{border-color:rgba(255,255,255,.28);background:linear-gradient(90deg,var(--wy-p,#9b7bff),var(--wy-b,#5ecbff));color:#fff;box-shadow:0 6px 18px rgba(var(--wy-p-rgb,155,123,255),.35);}",
+    "#wy-tour button.ghost{border-color:transparent;background:transparent;color:#8b93a7;padding:0 8px;}",
+    /* hero screens (welcome / finish) */
+    "#wy-tour .tr-hero{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 40%,rgba(22,18,40,.94),rgba(3,4,9,.97) 70%);overflow:hidden;animation:trFade .5s ease both;}",
+    "@keyframes trFade{from{opacity:0}to{opacity:1}}",
+    "#wy-tour .tr-orb{position:absolute;border-radius:50%;filter:blur(40px);opacity:.55;animation:trFloat 9s ease-in-out infinite;}",
+    "#wy-tour .tr-orb.a{width:46vmin;height:46vmin;left:8%;top:10%;background:radial-gradient(circle,var(--wy-p,#9b7bff),transparent 70%);}",
+    "#wy-tour .tr-orb.b{width:52vmin;height:52vmin;right:6%;bottom:6%;background:radial-gradient(circle,var(--wy-b,#5ecbff),transparent 70%);animation-delay:-3s;}",
+    "#wy-tour .tr-orb.c{width:30vmin;height:30vmin;left:48%;top:62%;background:radial-gradient(circle,var(--wy-s,#ff8ad8),transparent 70%);animation-delay:-6s;}",
+    "@keyframes trFloat{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(4vmin,-3vmin) scale(1.08)}66%{transform:translate(-3vmin,3vmin) scale(.94)}}",
+    "#wy-tour .tr-hc{position:relative;text-align:center;padding:24px;max-width:620px;}",
+    "#wy-tour .tr-kick{display:inline-block;font:bold 10px Arial;letter-spacing:2.4px;color:var(--wy-l,#c9b6ff);padding:6px 12px;border-radius:99px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);animation:trUp .6s .1s ease both;}",
+    "#wy-tour .tr-word{margin:18px 0 10px;font-size:clamp(38px,9vw,78px);font-weight:900;letter-spacing:clamp(3px,1.2vw,9px);line-height:1;background:linear-gradient(90deg,var(--wy-l,#c9b6ff),var(--wy-s,#5ecbff),var(--wy-l,#c9b6ff));background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:trUp .7s .2s ease both,trShine 6s linear infinite;}",
+    "@keyframes trShine{to{background-position:200% 0}}",
+    "@keyframes trUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}",
+    "#wy-tour .tr-sub{font-size:14px;line-height:1.6;color:#aab2c5;max-width:460px;margin:0 auto;animation:trUp .7s .35s ease both;}",
+    "#wy-tour .tr-chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:22px 0 26px;animation:trUp .7s .5s ease both;}",
+    "#wy-tour .tr-chip{display:flex;align-items:center;gap:8px;padding:9px 13px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);font-size:12px;color:#dfe3ec;}",
+    "#wy-tour .tr-chip i{width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,var(--wy-p,#9b7bff),var(--wy-b,#5ecbff));box-shadow:0 0 10px rgba(var(--wy-p-rgb,155,123,255),.8);}",
+    "#wy-tour .tr-cta{display:flex;gap:10px;justify-content:center;animation:trUp .7s .65s ease both;}",
+    "#wy-tour .tr-cta button{height:42px;padding:0 22px;font-size:12px;border-radius:12px;}",
+    "#wy-tour .tr-by{margin-top:18px;font-size:10.5px;letter-spacing:1.2px;color:#5f6778;animation:trUp .7s .8s ease both;}",
+    "@media (max-width:640px){#wy-tour .tr-card{left:16px!important;right:16px;width:auto;top:auto!important;bottom:calc(16px + env(safe-area-inset-bottom,0px));}}"
+  ].join("\n");
+  function css() { if (!document.getElementById("tr-css")) { var s = document.createElement("style"); s.id = "tr-css"; s.textContent = CSS; (document.head || document.documentElement).appendChild(s); } }
+
+  var root = null, shade = null, cardEl = null, raf = 0, target = null;
+  function mk(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+  function stopAll(e) { e.stopPropagation(); }
+  function build() {
+    css(); if (root) return;
+    root = mk("div"); root.id = "wy-tour";
+    ["mousedown", "mouseup", "click", "dblclick", "contextmenu", "wheel", "touchstart", "touchmove", "touchend", "pointerdown", "pointerup"].forEach(function (t) {
+      root.addEventListener(t, function (e) { e.stopPropagation(); if (t === "wheel" || t === "touchmove") e.preventDefault(); }, { passive: false });
+    });
+    shade = mk("div", "tr-shade none"); root.appendChild(shade);
+    document.body.appendChild(root);
+    window.addEventListener("keydown", keys, true);
+    raf = requestAnimationFrame(follow);
+  }
+  function teardown() {
+    if (raf) cancelAnimationFrame(raf); raf = 0;
+    window.removeEventListener("keydown", keys, true);
+    if (root) root.remove(); root = shade = cardEl = null; target = null;
+  }
+  function keys(e) {
+    if (!run) return;
+    e.stopPropagation(); e.preventDefault();
+    if (e.key === "Escape") end(true);
+    else if (e.key === "ArrowRight" || e.key === "Enter" || e.key === " ") next();
+    else if (e.key === "ArrowLeft") back();
+  }
+
+  /* the spotlight and the card follow the target every frame (panels scroll and animate) */
+  function place() {
+    if (!shade || !cardEl) return;
+    var W = window.innerWidth, H = window.innerHeight, pad = 8, r = target && target.isConnected ? target.getBoundingClientRect() : null;
+    if (!r || r.width < 2 || r.height < 2) {
+      shade.classList.add("none");
+      cardEl.style.left = Math.max(16, (W - cardEl.offsetWidth) / 2) + "px"; cardEl.style.top = Math.max(16, (H - cardEl.offsetHeight) / 2) + "px";
+      return;
+    }
+    shade.classList.remove("none");
+    var x = Math.max(4, r.left - pad), y = Math.max(4, r.top - pad), w = Math.min(W - 8, r.right + pad) - x, h = Math.min(H - 8, r.bottom + pad) - y;
+    shade.style.left = x + "px"; shade.style.top = y + "px"; shade.style.width = w + "px"; shade.style.height = h + "px";
+    if (W <= 640) return;                                         // phones: the card is a bottom sheet (CSS)
+    var cw = cardEl.offsetWidth, ch = cardEl.offsetHeight, gap = 16, cx, cy;
+    if (x + w + gap + cw <= W - 12) { cx = x + w + gap; cy = y + h / 2 - ch / 2; }           // right
+    else if (x - gap - cw >= 12) { cx = x - gap - cw; cy = y + h / 2 - ch / 2; }             // left
+    else if (y + h + gap + ch <= H - 12) { cx = x + w / 2 - cw / 2; cy = y + h + gap; }      // below
+    else { cx = x + w / 2 - cw / 2; cy = y - gap - ch; }                                   // above
+    cardEl.style.left = Math.max(12, Math.min(W - cw - 12, cx)) + "px";
+    cardEl.style.top = Math.max(12, Math.min(H - ch - 12, cy)) + "px";
+  }
+  function follow() { if (!root) return; try { place(); } catch (e) {} raf = requestAnimationFrame(follow); }
+
+  function hero(kind) {
+    var h = mk("div", "tr-hero");
+    var orbs = '<div class="tr-orb a"></div><div class="tr-orb b"></div><div class="tr-orb c"></div>';
+    if (kind === "welcome") {
+      h.innerHTML = orbs + '<div class="tr-hc"><span class="tr-kick">WELCOME' + (ver() ? " · V" + ver().toUpperCase() : "") + '</span>' +
+        '<div class="tr-word">NTL VANCED</div>' +
+        '<div class="tr-sub">A new layer on top of NTL — your settings, your skins, your game. Take a one-minute tour of what’s inside.</div>' +
+        '<div class="tr-chips"><span class="tr-chip"><i></i>Vanced settings</span><span class="tr-chip"><i></i>Vanced Skins</span><span class="tr-chip"><i></i>Play together</span></div>' +
+        '<div class="tr-cta"><button class="ghost" data-a="skip">SKIP</button><button class="pri" data-a="next">START THE TOUR</button></div>' +
+        '<div class="tr-by">BY OM RAJPUT</div></div>';
+    } else {
+      h.innerHTML = orbs + '<div class="tr-hc"><span class="tr-kick">TOUR COMPLETE</span>' +
+        '<div class="tr-word">YOU’RE SET</div>' +
+        '<div class="tr-sub">That’s NTL VANCED. Press <b style="color:#fff">O</b> anytime for Vanced settings, and look for the bulb on any page to see its demo again.</div>' +
+        '<div class="tr-chips"><span class="tr-chip"><i></i>Key O — Vanced settings</span><span class="tr-chip"><i></i>Skin editor — Vanced Skins</span></div>' +
+        '<div class="tr-cta"><button data-a="news">WHAT’S NEW</button><button class="pri" data-a="done">LET’S PLAY</button></div>' +
+        '<div class="tr-by">NTL VANCED BY OM RAJPUT</div></div>';
+    }
+    h.addEventListener("click", function (e) {
+      var a = e.target && e.target.getAttribute && e.target.getAttribute("data-a"); if (!a) return;
+      if (a === "next") next(); else if (a === "skip") end(true); else if (a === "done") end(false);
+      else if (a === "news") { end(false); try { if (typeof NTL_WN !== "undefined") NTL_WN.show(); } catch (x) {} }
+    });
+    return h;
+  }
+
+  function show() {
+    if (!run || !root) return;
+    var st = run.steps[run.i];
+    var old = root.querySelector(".tr-hero"); if (old) old.remove();
+    if (cardEl) { cardEl.remove(); cardEl = null; }
+    target = null;
+    try { if (st.go) st.go(); } catch (e) {}
+    if (st.hero) { shade.classList.add("none"); root.appendChild(hero(st.hero)); return; }
+    /* the page may need a moment to build (settings sections, the skins page) */
+    var tries = 0;
+    (function find() {
+      if (!run || run.steps[run.i] !== st) return;
+      var el = null; try { el = st.at ? st.at() : null; } catch (e) {}
+      if (!el && st.at && tries++ < 12) { setTimeout(find, 60); return; }
+      if (el && el.scrollIntoView) { try { el.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) { el.scrollIntoView(); } }
+      target = el;
+      var real = run.steps.filter(function (s) { return !s.hero; }), n = real.indexOf(st) + 1;
+      cardEl = mk("div", "tr-card in",
+        '<div class="tr-k"><span>' + (run.kind === "full" ? "NTL VANCED TOUR" : "DEMO") + "</span><span>" + n + " / " + real.length + "</span></div>" +
+        '<div class="tr-t">' + st.t + '</div><div class="tr-d">' + st.d + "</div>" +
+        '<div class="tr-bar"><i style="width:' + Math.round(n / real.length * 100) + '%"></i></div>' +
+        '<div class="tr-row"><button class="ghost" data-a="skip">' + (run.kind === "full" ? "SKIP TOUR" : "CLOSE") + '</button><span class="sp"></span>' +
+        (run.i > 0 && !run.steps[run.i - 1].hero ? '<button data-a="back">BACK</button>' : "") +
+        '<button class="pri" data-a="next">' + (run.i === run.steps.length - 1 ? "DONE" : "NEXT") + "</button></div>");
+      cardEl.addEventListener("click", function (e) {
+        var a = e.target && e.target.getAttribute && e.target.getAttribute("data-a");
+        if (a === "next") next(); else if (a === "back") back(); else if (a === "skip") end(true);
+      });
+      root.appendChild(cardEl); place();
+    })();
+  }
+  function next() { if (!run) return; if (run.i >= run.steps.length - 1) return end(false); run.i++; show(); }
+  function back() { if (!run || run.i === 0) return; run.i--; if (run.steps[run.i].hero && run.i > 0) run.i--; show(); }
+  function end(skipped) {
+    var kind = run && run.kind; run = null; teardown();
+    if (kind === "full") { markDone(); closeAll(); }
+    else if (kind === "skins") closeSkins();
+  }
+  function start(kind, steps) {
+    if (run) return;
+    run = { kind: kind, steps: steps, i: 0 }; build(); show();
+  }
+
+  /* ---- public ---- */
+  function fullTour() { start("full", full()); }
+  function section(id) { if (SEC[id]) start("section", SEC[id]); else if (id === "skins") start("skins", SKINS); }
+
+  /* ---- the first run after an update: home screen, nothing else open, not in a round ---- */
+  function homeVisible() { var b = document.getElementById("mybox"), l = document.getElementById("login"); return !!(b && l && getComputedStyle(l).display !== "none" && b.getClientRects().length); }
+  var autoAt = 0;
+  setInterval(function () {
+    if (run || done()) return;
+    if (typeof playing !== "undefined" && playing) { autoAt = 0; return; }
+    if (!homeVisible() || document.getElementById("vs-overlay") || document.getElementById("wy-cr-ov") || document.getElementById("wn-ov") || !document.getElementById("wy-vanced-btn")) { autoAt = 0; return; }
+    if (!autoAt) { autoAt = Date.now(); return; }
+    if (Date.now() - autoAt > 1200) fullTour();                  // home has been settled for a moment
+  }, 400);
+
+  return { full: fullTour, section: section, SECTIONS: SEC, get running() { return !!run; }, pending: function () { return !done() || !!run; } };
+})();
+/* ========================== END VANCED TOUR ================================ */
 /* ============================================================================
    MOBILE  (responsive layout + kill hover on touch)
    ----------------------------------------------------------------------------
