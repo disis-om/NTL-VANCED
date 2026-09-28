@@ -15,6 +15,170 @@ Code contains bot function (disabled everything else) based on Slither.io Bot Ch
                  while the server-side target angle (= what everyone sees as
                  the eyes) stays pointed backwards.
    ============================================================================ */
+/* ========================== LANGUAGE ======================================= */
+/* NTL VANCED in the player's language. English is built in; every other language is one JSON dictionary
+   (English text → translation) in the repo folder i18n/, fetched once from jsDelivr (raw GitHub as the fallback)
+   and kept in localStorage, so it works offline after the first pick and a new release brings new words.
+   The translator works on the page itself: every NTL VANCED surface (Vanced settings, Vanced Skins, the tour, the
+   theme picker, the home launcher, the shortcuts menu, What's new's buttons, the lobby) is watched and its text
+   swapped as it appears — the modules keep writing English. A "leaf" element (text with only inline b/i/em/strong/
+   br/code) is looked up by its whole normalised innerHTML, anything else text node by text node; title and
+   placeholder attributes too. The English original stays on the node, so switching language (or back to English)
+   works without a reload. Code that builds strings itself asks NTL_I18N.T("…") (never a global T: NTL owns that name).
+   State: localStorage.wy_lang = language code ("en" default); wy_i18n_<code> = { v, d } cached dictionary. */
+var NTL_I18N = (function () {
+  var REPO = "disis-om/NTL-VANCED", KEY = "wy_lang", DV = "1";
+  var LANGS = [
+    { c: "en", n: "English" }, { c: "hi", n: "हिन्दी" }, { c: "bn", n: "বাংলা" }, { c: "ur", n: "اردو", rtl: true },
+    { c: "ta", n: "தமிழ்" }, { c: "te", n: "తెలుగు" }, { c: "mr", n: "मराठी" }, { c: "gu", n: "ગુજરાતી" },
+    { c: "pa", n: "ਪੰਜਾਬੀ" }, { c: "es", n: "Español" }, { c: "pt", n: "Português" }, { c: "fr", n: "Français" },
+    { c: "de", n: "Deutsch" }, { c: "it", n: "Italiano" }, { c: "ru", n: "Русский" }, { c: "tr", n: "Türkçe" },
+    { c: "ar", n: "العربية", rtl: true }, { c: "id", n: "Bahasa Indonesia" }, { c: "vi", n: "Tiếng Việt" }, { c: "th", n: "ไทย" },
+    { c: "zh", n: "中文" }, { c: "ja", n: "日本語" }, { c: "ko", n: "한국어" }, { c: "pl", n: "Polski" }
+  ];
+  var ROOTS = "#vs-overlay,#wy-cr-ov,#wy-tour,#wy-th,#mybox,#eemenu,#wn-ov,#wy-lb,#wy-crh,#tc-pop,#tc-pop2,#rk-box,#sv-box";
+  var INLINE = { B: 1, I: 1, EM: 1, STRONG: 1, BR: 1, CODE: 1 };
+  var cur = "en", dict = null, listeners = [];
+  try { cur = localStorage.getItem(KEY) || "en"; } catch (e) {}
+  if (!byCode(cur)) cur = "en";
+  function byCode(c) { for (var i = 0; i < LANGS.length; i++) if (LANGS[i].c === c) return LANGS[i]; return null; }
+  function norm(s) { return String(s).replace(/\s+/g, " ").trim(); }
+
+  /* ---- dictionaries ---- */
+  function cached(c) { try { var j = JSON.parse(localStorage.getItem("wy_i18n_" + c) || "null"); return j && j.d ? j : null; } catch (e) { return null; } }
+  function load(c, cb) {
+    if (c === "en") { cb({}); return; }
+    var have = cached(c);
+    if (have) cb(have.d);                                           // instant from cache, refreshed below
+    var urls = ["https://cdn.jsdelivr.net/gh/" + REPO + "@main/i18n/" + c + ".json", "https://raw.githubusercontent.com/" + REPO + "/main/i18n/" + c + ".json"];
+    (function tryUrl(i) {
+      if (i >= urls.length) { if (!have) cb({}); return; }
+      var x = new XMLHttpRequest(); x.open("GET", urls[i] + "?v=" + DV + "-" + Math.floor(Date.now() / 36e5), true); x.timeout = 8000;
+      x.onload = function () {
+        if (x.status !== 200) return tryUrl(i + 1);
+        var d = null; try { d = JSON.parse(x.responseText); } catch (e) {}
+        if (!d || typeof d !== "object") return tryUrl(i + 1);
+        try { localStorage.setItem("wy_i18n_" + c, JSON.stringify({ v: DV, d: d })); } catch (e) {}
+        if (!have || JSON.stringify(have.d) !== JSON.stringify(d)) cb(d);
+      };
+      x.onerror = x.ontimeout = function () { tryUrl(i + 1); };
+      try { x.send(); } catch (e) { tryUrl(i + 1); }
+    })(0);
+  }
+  function T(s) { if (!dict || s == null) return s; var k = norm(s), v = dict[k]; return v == null ? s : v; }
+
+  /* ---- the page ---- */
+  function isLeaf(el) {
+    var hasT = false;
+    for (var n = el.firstChild; n; n = n.nextSibling) { if (n.nodeType === 3) { if (n.nodeValue.trim()) hasT = true; } else if (n.nodeType === 1) { if (!INLINE[n.tagName]) return false; } }
+    return hasT;
+  }
+  function attr(el, a) {
+    var own = "__i18n_" + a, v = el.getAttribute(a);
+    if (v == null) return;
+    if (el[own] === undefined || (v !== el[own + "_out"])) el[own] = v;                  // someone wrote new English
+    var out = cur === "en" ? el[own] : T(el[own]);
+    if (out !== v) el.setAttribute(a, out);
+    el[own + "_out"] = out;
+  }
+  function walk(el) {
+    if (el.nodeType !== 1) return;
+    var tg = el.tagName; if (tg === "SCRIPT" || tg === "STYLE" || tg === "svg" || tg === "SVG" || tg === "CANVAS" || tg === "INPUT" || tg === "TEXTAREA" || el.isContentEditable) return;
+    if (el.hasAttribute("title")) attr(el, "title");
+    if (el.hasAttribute("placeholder")) attr(el, "placeholder");
+    if (isLeaf(el) && el.firstElementChild) {                        // text with inline tags: one unit
+      var h = el.innerHTML;
+      if (el.__i18n === undefined || h !== el.__i18n_out) el.__i18n = norm(h);
+      var outH = cur === "en" ? el.__i18n : T(el.__i18n);
+      if (outH !== el.__i18n || h !== el.__i18n_out) { if (norm(h) !== norm(outH)) el.innerHTML = outH; el.__i18n_out = el.innerHTML; }
+      return;
+    }
+    for (var n = el.firstChild; n; n = n.nextSibling) {
+      if (n.nodeType === 3) {
+        var v = n.nodeValue; if (!v || !v.trim()) continue;
+        if (n.__i18n === undefined || v !== n.__i18n_out) n.__i18n = v;
+        var src = n.__i18n, k = norm(src), tr = cur === "en" ? null : (dict && dict[k]);
+        var out = tr == null ? src : src.replace(k, tr);
+        if (out !== v) n.nodeValue = out;
+        n.__i18n_out = out;
+      } else if (n.nodeType === 1) walk(n);
+    }
+  }
+  function sweep() { var rs = document.querySelectorAll(ROOTS); for (var i = 0; i < rs.length; i++) walk(rs[i]); }
+  var pend = [], sched = false, obs = null;
+  function queue(n) { pend.push(n); if (!sched) { sched = true; requestAnimationFrame(flush); } }
+  function flush() {
+    sched = false; var list = pend; pend = [];
+    if (cur === "en" && !everSwitched) return;
+    for (var i = 0; i < list.length; i++) {
+      var n = list[i], el = n.nodeType === 1 ? n : n.parentElement;
+      if (!el || !el.isConnected || !el.closest) continue;
+      var root = el.closest(ROOTS); if (!root) continue;
+      walk(n.nodeType === 1 ? el : el);
+    }
+  }
+  var everSwitched = false;
+  function watch() {
+    if (obs || !document.body) return;
+    obs = new MutationObserver(function (ms) {
+      for (var i = 0; i < ms.length; i++) {
+        var m = ms[i];
+        if (m.type === "childList") { for (var j = 0; j < m.addedNodes.length; j++) queue(m.addedNodes[j]); if (m.addedNodes.length === 0 && m.target) queue(m.target); }
+        else if (m.type === "characterData") queue(m.target);
+        else if (m.type === "attributes") queue(m.target);
+      }
+    });
+    obs.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["title", "placeholder"] });
+  }
+  function applyDir() { var L = byCode(cur); document.documentElement.classList.toggle("wy-rtl", !!(L && L.rtl)); }
+  function set(c, done) {
+    if (!byCode(c)) c = "en";
+    cur = c; try { localStorage.setItem(KEY, c); } catch (e) {}
+    everSwitched = true; applyDir();
+    load(c, function (d) { if (cur !== c) return; dict = c === "en" ? null : d; sweep(); listeners.forEach(function (f) { try { f(c); } catch (e) {} }); if (done) { var f2 = done; done = null; f2(c); } });
+  }
+  function onChange(f) { listeners.push(f); }
+
+  /* the picker: a sheet of languages, each written in itself */
+  var CSS = [
+    "#wy-lang{position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;background:rgba(3,5,10,.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;animation:lgIn .25s ease both;}",
+    "@keyframes lgIn{from{opacity:0}to{opacity:1}}",
+    "#wy-lang .lg-box{width:min(560px,94vw);max-height:84vh;overflow:auto;padding:18px;border-radius:18px;background:linear-gradient(165deg,var(--wy-bg1,#181b24),var(--wy-bg2,#0f1117));border:1px solid rgba(255,255,255,.1);box-shadow:0 30px 80px rgba(0,0,0,.7);animation:lgUp .3s cubic-bezier(.2,.8,.2,1) both;}",
+    "@keyframes lgUp{from{transform:translateY(12px) scale(.98)}to{transform:none}}",
+    "#wy-lang .lg-h{display:flex;align-items:center;gap:10px;margin-bottom:14px;}#wy-lang .lg-h b{flex:1;font-size:15px;letter-spacing:1px;background:linear-gradient(90deg,var(--wy-l,#c9b6ff),var(--wy-s,#5ecbff));-webkit-background-clip:text;background-clip:text;color:transparent;}",
+    "#wy-lang .lg-x{height:30px;padding:0 12px;border-radius:9px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#e6e9ef;font:bold 11px Arial;cursor:pointer;}",
+    "#wy-lang .lg-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;}",
+    "#wy-lang .lg-i{padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#e6e9ef;font-size:14px;cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px;transition:background .15s,border-color .15s,transform .15s;}",
+    "#wy-lang .lg-i:hover{background:rgba(255,255,255,.09);transform:translateY(-1px);}#wy-lang .lg-i small{font:bold 9px Arial;letter-spacing:1px;color:#6b7385;}",
+    "#wy-lang .lg-i.on{border-color:var(--wy-p,#9b7bff);background:rgba(var(--wy-p-rgb,155,123,255),.16);box-shadow:0 0 0 2px rgba(var(--wy-p-rgb,155,123,255),.3);}",
+    "html.wy-rtl #vs-body,html.wy-rtl #wy-tour .tr-card,html.wy-rtl #wy-tour .tr-hc,html.wy-rtl #wy-cr{direction:rtl;}"
+  ].join("\n");
+  function css() { if (!document.getElementById("lg-css")) { var s = document.createElement("style"); s.id = "lg-css"; s.textContent = CSS; (document.head || document.documentElement).appendChild(s); } }
+  var GLOBE = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20z"/></svg>';
+  function pick(done) {
+    css(); var old = document.getElementById("wy-lang"); if (old) old.remove();
+    var ov = document.createElement("div"); ov.id = "wy-lang";
+    var h = '<div class="lg-box"><div class="lg-h">' + GLOBE + '<b>' + T("LANGUAGE") + '</b><button class="lg-x">' + T("CLOSE") + '</button></div><div class="lg-g">';
+    LANGS.forEach(function (L) { h += '<button class="lg-i' + (L.c === cur ? " on" : "") + '" data-c="' + L.c + '" dir="auto"><span>' + L.n + "</span><small>" + L.c.toUpperCase() + "</small></button>"; });
+    ov.innerHTML = h + "</div></div>";
+    ["mousedown", "mouseup", "click", "wheel", "touchstart", "touchend", "pointerdown", "pointerup", "keydown"].forEach(function (t) { ov.addEventListener(t, function (e) { e.stopPropagation(); }, { passive: true }); });
+    ov.addEventListener("click", function (e) {
+      if (e.target === ov || (e.target.classList && e.target.classList.contains("lg-x"))) { ov.remove(); return; }
+      var b = e.target.closest && e.target.closest(".lg-i"); if (!b) return;
+      ov.remove(); set(b.getAttribute("data-c"), done);
+    });
+    document.body.appendChild(ov);
+  }
+  function label() { var L = byCode(cur); return L ? L.n : "English"; }
+
+  (function boot() {
+    if (!document.body) { setTimeout(boot, 50); return; }
+    watch(); applyDir();
+    if (cur !== "en") set(cur);
+  })();
+  return { T: T, set: set, pick: pick, onChange: onChange, label: label, LANGS: LANGS, GLOBE: GLOBE, sweep: sweep, get lang() { return cur; } };
+})();
+/* ========================== END LANGUAGE =================================== */
 /* ========================== DIAGNOSTICS (NTL VANCED) ======================= */
 /* Settings / Skin / Play are the ONLY three NTL entry points gated on D7() --
    the sprite-atlas readiness check (sA / O7 / u9, plus the boot path R0).
@@ -1196,7 +1360,7 @@ var NTL_CR = (function () {
 
   /* ---- centipede ---- */
   /* S: samples head→tail, each {x, y, a} in screen px (a = direction towards the head), rr = body radius in px */
-  function centipede(c, S, rr, t, boost, alpha) {
+  function centipede(c, S, rr, t, boost, alpha, look) {
     var n = S.length; if (n < 2) return;
     var legW = Math.max(1, rr * 0.13), ph = t * (boost ? 15 : 8), i, s, side;
     c.lineCap = "round"; c.lineJoin = "round";
@@ -1237,26 +1401,52 @@ var NTL_CR = (function () {
       c.strokeStyle = "rgba(235,235,235,.8)"; c.lineWidth = Math.max(1, rr * 0.12); c.stroke();
       c.restore();
     }
-    /* head: red plate, jaws, antennae */
-    var H = S[0];
+    /* head: a glossy head shield, beaded antennae, venom claws (forcipules) and slither-style eyes that look where
+       you steer. look = where the pupils point relative to the head (radians, 0 = straight ahead) */
+    var H = S[0], lk = typeof look === "number" ? Math.max(-1.1, Math.min(1.1, look)) : 0;
     c.save(); c.translate(H.x, H.y); c.rotate(H.a);
-    for (side = -1; side <= 1; side += 2) {                        // antennae
-      var wig = Math.sin(t * 3.1 + side * 1.7) * 0.18;
-      c.beginPath(); c.moveTo(rr * 0.7, side * rr * 0.3);
-      c.bezierCurveTo(rr * 2.2, side * rr * (0.9 + wig), rr * 3.4, side * rr * (1.6 + wig * 2), rr * 4.6, side * rr * (2.4 + wig * 3));
-      c.strokeStyle = "#c53a1b"; c.lineWidth = Math.max(1, rr * 0.08); c.stroke();
+    for (side = -1; side <= 1; side += 2) {                        // antennae: a string of beads that thins out
+      var wig = Math.sin(t * 3.1 + side * 1.7) * 0.2 + Math.sin(t * 7.3 + side) * 0.05, beads = 16;
+      for (var bq = 0; bq <= beads; bq++) {
+        var u = bq / beads, iu = 1 - u;
+        var ax = iu * iu * iu * rr * 0.75 + 3 * iu * iu * u * rr * 2.3 + 3 * iu * u * u * rr * 3.6 + u * u * u * rr * 5;
+        var ay = side * (iu * iu * iu * rr * 0.32 + 3 * iu * iu * u * rr * (0.95 + wig) + 3 * iu * u * u * rr * (1.8 + wig * 2) + u * u * u * rr * (2.7 + wig * 3.2));
+        c.beginPath(); c.arc(ax, ay, Math.max(0.6, rr * (0.13 - u * 0.08)), 0, PI * 2);
+        c.fillStyle = bq % 2 ? "#e0935c" : "#a8391a"; c.fill();
+      }
     }
-    for (side = -1; side <= 1; side += 2) {                        // jaws
-      c.beginPath(); c.moveTo(rr * 0.55, side * rr * 0.45);
-      c.quadraticCurveTo(rr * 1.35, side * rr * 0.55, rr * 1.25, side * rr * 0.08);
-      c.strokeStyle = "#4a0d05"; c.lineWidth = Math.max(1.2, rr * 0.2); c.stroke();
+    var snap = boost ? Math.abs(Math.sin(t * 9)) : 0.25 + Math.sin(t * 1.6) * 0.08;   // claws open and close (fast on boost)
+    for (side = -1; side <= 1; side += 2) {                        // forcipules: thick at the base, black glossy tips
+      var open = side * (0.25 + snap * 0.45);
+      c.save(); c.translate(rr * 0.55, side * rr * 0.55); c.rotate(-open * 0.6);
+      c.beginPath(); c.moveTo(0, -side * rr * 0.18); c.quadraticCurveTo(rr * 1.05, side * rr * 0.1, rr * 0.95, -side * rr * 0.5);
+      c.quadraticCurveTo(rr * 0.75, side * rr * 0.05, 0, side * rr * 0.18); c.closePath();
+      var fg = c.createLinearGradient(0, 0, rr, 0); fg.addColorStop(0, "#6b1407"); fg.addColorStop(0.7, "#2a0603"); fg.addColorStop(1, "#050101");
+      c.fillStyle = fg; c.fill(); c.lineWidth = Math.max(0.8, rr * 0.05); c.strokeStyle = "rgba(0,0,0,.6)"; c.stroke();
+      c.beginPath(); c.arc(rr * 0.78, -side * rr * 0.28, Math.max(0.6, rr * 0.05), 0, PI * 2); c.fillStyle = "rgba(255,220,200,.55)"; c.fill();   // shine on the tip
+      c.restore();
     }
-    var gr = c.createRadialGradient(rr * 0.2, -rr * 0.2, rr * 0.1, 0, 0, rr);
-    gr.addColorStop(0, "#f06a3a"); gr.addColorStop(0.6, "#c7361a"); gr.addColorStop(1, "#7d1a0b");
-    c.beginPath(); c.ellipse(0, 0, rr * 1.15, rr * 1.02, 0, 0, PI * 2); c.fillStyle = gr; c.fill();
-    c.lineWidth = Math.max(1, rr * 0.08); c.strokeStyle = "rgba(0,0,0,.5)"; c.stroke();
-    c.beginPath(); c.moveTo(-rr * 0.2, -rr * 0.5); c.lineTo(rr * 0.35, 0); c.lineTo(-rr * 0.2, rr * 0.5);   // plate ridge
-    c.strokeStyle = "rgba(255,190,150,.35)"; c.lineWidth = Math.max(1, rr * 0.08); c.stroke();
+    /* the head shield: wider at the back, rounded snout, glossy */
+    c.beginPath();
+    c.moveTo(-rr * 0.75, -rr * 0.98); c.quadraticCurveTo(rr * 0.35, -rr * 1.12, rr * 1.05, -rr * 0.55);
+    c.quadraticCurveTo(rr * 1.35, 0, rr * 1.05, rr * 0.55); c.quadraticCurveTo(rr * 0.35, rr * 1.12, -rr * 0.75, rr * 0.98);
+    c.quadraticCurveTo(-rr * 1.02, 0, -rr * 0.75, -rr * 0.98); c.closePath();
+    var gr = c.createLinearGradient(-rr, -rr, rr, rr);
+    gr.addColorStop(0, "#7a1d0c"); gr.addColorStop(0.45, "#c2381a"); gr.addColorStop(1, "#5a1206");
+    c.fillStyle = gr; c.fill(); c.lineWidth = Math.max(1, rr * 0.08); c.strokeStyle = "rgba(20,0,0,.7)"; c.stroke();
+    c.beginPath(); c.moveTo(-rr * 0.7, 0); c.lineTo(rr * 0.95, 0);                                     // centre seam
+    c.strokeStyle = "rgba(40,5,0,.55)"; c.lineWidth = Math.max(0.8, rr * 0.06); c.stroke();
+    c.beginPath(); c.ellipse(rr * 0.1, -rr * 0.42, rr * 0.55, rr * 0.16, -0.12, 0, PI * 2);           // gloss
+    c.fillStyle = "rgba(255,200,170,.28)"; c.fill();
+    for (side = -1; side <= 1; side += 2) {                        // eyes: white, dark rim, pupil that follows your aim
+      var ex = rr * 0.45, ey = side * rr * 0.5, er = rr * 0.3;
+      c.beginPath(); c.arc(ex, ey, er, 0, PI * 2); c.fillStyle = "#fff"; c.fill();
+      c.lineWidth = Math.max(0.8, rr * 0.06); c.strokeStyle = "#1a0503"; c.stroke();
+      var pr = er * 0.55, pd = er - pr - Math.max(0.3, rr * 0.02);
+      var px = ex + Math.cos(lk) * pd, py = ey + Math.sin(lk) * pd;
+      c.beginPath(); c.arc(px, py, pr, 0, PI * 2); c.fillStyle = "#0b0b0e"; c.fill();
+      c.beginPath(); c.arc(px - pr * 0.35, py - pr * 0.35, pr * 0.3, 0, PI * 2); c.fillStyle = "rgba(255,255,255,.85)"; c.fill();
+    }
     c.restore();
   }
 
@@ -1794,7 +1984,11 @@ var NTL_CR = (function () {
     var S = samples(Zw, Kw, _w, n, r * 1.05, g, ox, oy);
     if (typeof cb.ang === "number") S[0].a = cb.ang;
     bb.save(); bb.setTransform(1, 0, 0, 1, 0, 0); bb.globalCompositeOperation = "source-over"; bb.globalAlpha = a;
-    C.draw(bb, S, r * g, performance.now() / 1000, cb.BA > cb.C, a);
+    /* where the eyes look: the angle this snake is turning towards (NTL keeps it in J), eased so the pupils glide like slither's own */
+    var want = typeof cb.J === "number" ? cb.J : (typeof cb.ang === "number" ? cb.ang : 0), head = S[0].a;
+    var rel = Math.atan2(Math.sin(want - head), Math.cos(want - head)), prevLook = typeof cb.__crLook === "number" ? cb.__crLook : rel;
+    cb.__crLook = prevLook + (rel - prevLook) * 0.18;
+    C.draw(bb, S, r * g, performance.now() / 1000, cb.BA > cb.C, a, cb.__crLook);
     bb.restore();
   }
   /* called from ag(); pass 1 = GL sprite pass, 0/2 = 2D pass */
@@ -1944,7 +2138,7 @@ var NTL_CR = (function () {
     for (var i = 0; i < m; i++) { var u = i / (m - 1); pts.push({ x: (W * 0.84 - u * W * 0.72) * S, y: (Hh * 0.5 + Math.sin(u * 7 - t * 2.2) * Hh * 0.16 * (0.3 + u)) * S, a: 0 }); }
     for (i = 1; i < m; i++) pts[i].a = Math.atan2(pts[i - 1].y - pts[i].y, pts[i - 1].x - pts[i].x);
     pts[0].a = pts[1].a;
-    if (id && LIST[id]) { LIST[id].draw(c, pts, rr, t, !!window.__crBoost, 1); return; }
+    if (id && LIST[id]) { LIST[id].draw(c, pts, rr, t, !!window.__crBoost, 1, Math.sin(t * 1.3) * 0.9); return; }
     c.lineCap = "round"; c.lineJoin = "round";                     // plain snake for "Normal skin"
     c.beginPath(); for (i = m - 1; i >= 0; i--) (i === m - 1 ? c.moveTo : c.lineTo).call(c, pts[i].x, pts[i].y);
     c.strokeStyle = "#8f7bd8"; c.lineWidth = rr * 2; c.stroke();
@@ -1961,7 +2155,7 @@ var NTL_CR = (function () {
     ov = document.createElement("div"); ov.id = "wy-cr-ov";
     var h = '<div id="wy-cr"><div class="hd"><b>VANCED SKINS</b><span>creatures for your snake</span><button class="x">CLOSE</button></div><div class="grid">';
     var ids = [""].concat(Object.keys(LIST));
-    ids.forEach(function (id) { h += '<div class="it" data-id="' + id + '"><canvas></canvas><div class="nm">' + (id ? LIST[id].name : "Normal skin") + "<i></i></div></div>"; });
+    ids.forEach(function (id) { h += '<div class="it" data-id="' + id + '"><canvas></canvas><div class="nm"><span>' + (id ? LIST[id].name : "Normal skin") + "</span><i></i></div></div>"; });
     h += '</div><div class="opts"><label class="op"><input type="checkbox" data-opt="share"' + (cfg.share ? " checked" : "") + '><span><b>Share my skin</b>other NTL VANCED players see your creature</span></label>' +
       '<label class="op"><input type="checkbox" data-opt="see"' + (cfg.see ? " checked" : "") + '><span><b>See others’ skins</b>show the creatures other Vanced players picked</span></label></div>' +
       '<div class="nt">Players without NTL VANCED see the normal skin closest to the creature’s colours — it is set for you when you pick one, and your previous skin comes back when you pick Normal skin.</div></div>';
@@ -5282,7 +5476,7 @@ var NTL_VS = (function () {
   var ov = null, secsRef = null, navsRef = null;   // the open popup's sections / nav items (for the tour)
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
-    { v: "5.67-dev", d: "27 Sep 2026", t: "Welcome tour: after this update a welcome screen and a guided tour walk you through Vanced settings and Vanced Skins. Every settings page has a bulb \u2014 View demo \u2014 for that page, and View full Vanced demo at the bottom of the sidebar replays everything. Themes: your wallpaper now comes back after an update (it used to fall back to the default while the colours stayed), and Spidey is the default theme. The lobby, the thinking log and the bot\u2019s thinking lines now start off (switched off once on this update) \u2014 turn them on in Vanced settings." },
+    { v: "5.67-dev", d: "27 Sep 2026", t: "Welcome tour: after this update a welcome screen and a guided tour walk you through Vanced settings and Vanced Skins. Every settings page has a bulb \u2014 View demo \u2014 for that page, and View full Vanced demo at the bottom of the sidebar replays everything. Themes: your wallpaper now comes back after an update (it used to fall back to the default while the colours stayed), and Spidey is the default theme. The lobby, the thinking log and the bot\u2019s thinking lines now start off (switched off once on this update) \u2014 turn them on in Vanced settings. Languages: pick yours on the tour\u2019s welcome screen or in Vanced \u203a General \u2014 24 languages, each named in itself. The tour now goes group by group, and the Centipede got a real head: beaded antennae, venom claws and eyes that look where you steer." },
     { v: "5.66", d: "27 Sep 2026", t: "Vanced Skins: a new button in the skin editor opens creature skins for your snake \u2014 Centipede, Dragon, Skeleton, Chinese Dragon, Electric Eel, Train, Robot Snake, Phoenix, Ice Serpent, Caterpillar and Zombie Snake, each with its own boost effect. Other NTL VANCED players in your arena see your creature and you see theirs (Share my skin / See others\u2019 skins on the page, both on). Other players see the normal skin closest to the creature\u2019s colours." },
     { v: "5.65", d: "26 Sep 2026", t: "Global chat (the SlitherControl+ room) removed — the chat box is NTL’s team chat again, with the emoji / GIF picker. Assist (and the other hold keys) now stays on while an on-screen button is held, so Assist go skinless / Assist map show on phones. Team list follows NTL’s KeyOwners in players list, Online players status (version) and the team detail toggle again. Everywhere NTL sent or showed its own version (team list, tag server, settings title) it now uses the NTL VANCED version you are running — the updated one after an in-app update; the version text left the stats line. Squeeze mode is in the build but unavailable for now." },
     { v: "5.64", d: "22 Sep 2026", t: "Lobby can be switched off in Vanced \u203a General and no longer appears when you come back from the skin editor or settings \u2014 only after a real round. Updates card shows UPDATE only when there is one." },
@@ -5411,6 +5605,7 @@ var NTL_VS = (function () {
     ".vs-sec{display:none;}.vs-sec.on{display:block;animation:svFade .2s ease;}",
     ".vs-h{margin:2px 0 8px;}.vs-h b{display:block;font-size:16px;letter-spacing:.6px;color:#fff;}.vs-h small{display:block;color:#8b93a7;font-size:11.5px;margin-top:3px;line-height:1.5;}",
     ".vs-h.has-demo{position:relative;padding-right:130px;}",
+    ".vs-langb{display:flex;align-items:center;gap:8px;white-space:nowrap;}.vs-langb svg{flex:none;}",
     ".vs-demo{position:absolute;right:0;top:0;display:flex;align-items:center;gap:6px;height:30px;padding:0 12px 0 10px;border-radius:99px;border:1px solid rgba(255,214,102,.35);background:linear-gradient(90deg,rgba(255,214,102,.14),rgba(255,214,102,.05));color:#ffe08a;font:bold 10.5px Arial;letter-spacing:.6px;cursor:pointer;white-space:nowrap;transition:background .15s,box-shadow .15s;}",
     ".vs-demo:hover{background:rgba(255,214,102,.22);box-shadow:0 0 16px rgba(255,214,102,.3);}.vs-demo svg,.vs-fulldemo svg{width:15px;height:15px;flex:none;}",
     "#vs-nav{display:flex;flex-direction:column;}",
@@ -5585,6 +5780,11 @@ var NTL_VS = (function () {
     /* ================= GENERAL ================= */
     var S = section("general", "General");
     h(S, "General", "Look, size and the panels of the mod.");
+    if (typeof NTL_I18N !== "undefined") {                        // language of the whole mod (also picked on the tour's welcome)
+      var cl0 = card("Language"), lgB = el("button", "vs-btn vs-langb", NTL_I18N.GLOBE + "<span>" + NTL_I18N.label() + "</span>"); lgB.type = "button";
+      lgB.onclick = function () { NTL_I18N.pick(function () { var sp = lgB.querySelector("span"); if (sp) sp.textContent = NTL_I18N.label(); }); };
+      cl0.appendChild(vsRow("Language", "menus, settings, the tour and Vanced Skins in your language", lgB)); S.appendChild(cl0);
+    }
     var c1 = card("Appearance");
     var a0 = parseFloat(localStorage.getItem("wy_bg_a")); if (isNaN(a0)) a0 = .28;
     c1.appendChild(vsSlider("Panel transparency", "background of HUD, chat, lists, menus — the panel fades while you drag so you can judge it live", 0, 0.9, 0.01, a0, function (v) { return Math.round(v * 100) + "%"; }, function (v) { applyAlpha(v); }, true));
@@ -5921,16 +6121,19 @@ var NTL_VS = (function () {
    full Vanced demo" at the bottom of the settings sidebar replays everything.
 
    The settings part is generated from the popup itself, in order: each sidebar
-   button, then that page — its headers, every card and every setting row (the
-   row's own label and description) — then the next sidebar button. New settings
-   join the tour on their own. Steps point at things by position (section id +
-   index), so they survive the popup being closed and opened again.
+   button, then that page one group at a time — every card (and every loose group
+   of rows) is one step that names the settings inside it — then the next sidebar
+   button. New settings join the tour on their own. Steps point at things by
+   position (section id + index), so they survive the popup being closed and
+   opened again. All text goes through NTL_I18N when shown.
 
    Motion: the card fades out, the page switches, the page scrolls smoothly until
    the next thing is in view, then the spotlight glides onto it and the card
    slides in beside it. Nothing is clicked for the user and nothing is changed.
    localStorage.wy_tour = the last TOUR finished. */
 var NTL_TR = (function () {
+  /* translations (NTL_I18N); a local name — the global T belongs to NTL */
+  function T(x) { return typeof NTL_I18N !== "undefined" ? NTL_I18N.T(x) : x; }
   var TOUR = "1", KEY = "wy_tour";
   var ORDER = ["general", "controls", "spine", "guard", "bot", "about", "changelog"];
   var run = null;                 // { steps, i, kind, busy, token } while a tour is on screen
@@ -5965,51 +6168,40 @@ var NTL_TR = (function () {
   };
   var SEC_TXT = { changelog: "Every change, newest first — and every entry says what it means for you." };
 
-  /* every step of one settings page, in the order it reads */
+  /* one settings page as steps: its sidebar button, then one step per group (a card, or loose rows under a header) */
+  function labelOf(row) { var l = row.querySelector(".l"); if (!l) return ""; var c2 = l.cloneNode(true), sm = c2.querySelector("small"); if (sm) sm.remove(); return c2.textContent.trim(); }
   function collect(id) {
     var S = secEl(id); if (!S) return [];
     var name = secName(id), out = [];
-    var head = S.querySelector(".vs-h small"), headTxt = head ? head.innerHTML : (SEC_TXT[id] || "");
-    out.push({ sec: id, grp: "SIDEBAR", at: function () { return navEl(id); }, t: esc(name), d: headTxt || "Open this page from the sidebar." });
-    var rows = S.querySelectorAll(".vs-row"), ci = -1, hi = -1;
-    function rowIdx(r) { for (var k = 0; k < rows.length; k++) if (rows[k] === r) return k; return -1; }
-    function addRows(container, grp) {
-      var rs = container.querySelectorAll(".vs-row");
-      for (var k = 0; k < rs.length; k++) {
-        var l = rs[k].querySelector(".l"); if (!l) continue;
-        var c2 = l.cloneNode(true), sm = c2.querySelector("small"); if (sm) sm.remove();
-        var title = c2.textContent.trim(); if (!title) continue;
-        var desc = sm ? sm.innerHTML : "";
-        (function (ix, title, desc) { out.push({ sec: id, grp: grp, at: function () { var s2 = secEl(id); return s2 ? s2.querySelectorAll(".vs-row")[ix] : null; }, t: esc(title), d: desc }); })(rowIdx(rs[k]), title, desc);
-      }
-    }
+    var head = S.querySelector(".vs-h small"), headTxt = head ? head.innerHTML.replace(/\s+/g, " ").trim() : (SEC_TXT[id] || "");
+    out.push({ sec: id, gp: ["SIDEBAR"], at: function () { return navEl(id); }, t: name, d: headTxt || "Open this page from the sidebar." });
+    var ci = -1, hi = -1, gi = -1, lastHead = null;
     for (var n = S.firstElementChild; n; n = n.nextElementSibling) {
-      if (n.classList.contains("vs-h")) {
-        hi++; if (hi === 0) continue;                                         // the first header is the sidebar step
-        (function (ix, b, sm) {
-          out.push({ sec: id, grp: name.toUpperCase(), at: function () { var s2 = secEl(id); return s2 ? s2.querySelectorAll(".vs-h")[ix] : null; }, t: esc(b ? b.textContent : name), d: sm ? sm.innerHTML : "" });
-        })(hi, n.querySelector("b"), n.querySelector("small"));
-        continue;
-      }
+      if (n.classList.contains("vs-h")) { hi++; if (hi > 0) { var hb = n.querySelector("b"), hs = n.querySelector("small"); lastHead = { t: hb ? hb.textContent.trim() : name, d: hs ? hs.innerHTML.replace(/\s+/g, " ").trim() : "" }; } continue; }
       if (n.classList.contains("vs-card")) {
         ci++;
-        var ct = n.querySelector(".vs-ct"), title = ct ? ct.textContent.trim() : "", grp = (name + (title ? " · " + title : "")).toUpperCase();
-        var locked = n.classList.contains("vs-locked");
-        if (title || locked) {
-          var lk = n.querySelector(".vs-lock");
-          (function (ix, title, locked, lkTxt) {
-            out.push({ sec: id, grp: name.toUpperCase(), at: function () { var s2 = secEl(id); return s2 ? s2.querySelectorAll(".vs-card")[ix] : null; },
-              t: esc(title || name), d: CARD[title.toLowerCase()] || (locked ? (lkTxt ? esc(lkTxt.charAt(0) + lkTxt.slice(1).toLowerCase()) + "." : "Not available in this build.") : "Everything about " + esc(title.toLowerCase()) + ", setting by setting.") });
-          })(ci, title, locked, lk ? lk.textContent.trim() : "");
-        }
-        if (!locked) addRows(n, grp);
+        var ct = n.querySelector(".vs-ct"), title = ct ? ct.textContent.trim() : "", locked = n.classList.contains("vs-locked"), lk = n.querySelector(".vs-lock");
+        var items = []; if (!locked) Array.prototype.forEach.call(n.querySelectorAll(".vs-row"), function (r) { var L = labelOf(r); if (L && items.indexOf(L) < 0) items.push(L); });
+        var tt = title || (lastHead && lastHead.t) || name, dd = CARD[title.toLowerCase()] || (!title && lastHead && lastHead.d) || "";
+        (function (ix, tt, dd, items, lock) {
+          out.push({ sec: id, gp: [name], at: function () { var s2 = secEl(id); return s2 ? s2.querySelectorAll(".vs-card")[ix] : null; }, t: tt, d: dd, items: items, lock: lock });
+        })(ci, tt, dd, items, locked ? (lk ? lk.textContent.trim() : "Not available in this build.") : "");
+        lastHead = null; continue;
+      }
+      if (n.classList.contains("vs-cl-item")) {
+        if (!out.some(function (s3) { return s3.cl; })) out.push({ sec: id, gp: [name], cl: true, at: function () { return q('#vs-body .vs-sec[data-sec="changelog"] .vs-cl-item'); }, t: "What changed", d: SEC_TXT.changelog });
         continue;
       }
-      if (n.classList.contains("vs-cl-item")) {                              // changelog: the newest entry stands for the list
-        if (!out.some(function (s3) { return s3.cl; })) out.push({ sec: id, grp: "CHANGELOG", cl: true, at: function () { return q('#vs-body .vs-sec[data-sec="changelog"] .vs-cl-item'); }, t: "What changed", d: SEC_TXT.changelog });
-        continue;
+      var rs = n.querySelectorAll ? n.querySelectorAll(".vs-row") : [];
+      if (rs.length) {                                                          // loose rows (e.g. About): one group
+        gi++;
+        var its = []; Array.prototype.forEach.call(rs, function (r) { var L = labelOf(r); if (L && its.indexOf(L) < 0) its.push(L); });
+        var klass = n.className, idx = Array.prototype.indexOf.call(S.querySelectorAll("." + String(klass).split(" ")[0]), n);
+        (function (sel, idx, tt, dd, its) {
+          out.push({ sec: id, gp: [name], at: function () { var s2 = secEl(id); return s2 ? s2.querySelectorAll(sel)[idx] : null; }, t: tt, d: dd, items: its });
+        })("." + String(klass).split(" ")[0], idx, (lastHead && lastHead.t) || name, (lastHead && lastHead.d) || "", its);
+        lastHead = null;
       }
-      if (n.querySelector && n.querySelector(".vs-row")) addRows(n, name.toUpperCase());
     }
     out.forEach(function (s4) { s4.go = function () { openSec(id); }; });
     return out;
@@ -6076,6 +6268,10 @@ var NTL_TR = (function () {
     "#wy-tour .tr-orb.c{width:30vmin;height:30vmin;left:48%;top:62%;background:radial-gradient(circle,var(--wy-s,#ff8ad8),transparent 70%);animation-delay:-6s;}",
     "@keyframes trFloat{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(4vmin,-3vmin) scale(1.08)}66%{transform:translate(-3vmin,3vmin) scale(.94)}}",
     "#wy-tour .tr-hc{position:relative;text-align:center;padding:24px;max-width:620px;}",
+    "#wy-tour .tr-lang{position:absolute;top:calc(18px + env(safe-area-inset-top,0px));right:18px;display:flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:99px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.07);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#fff;font:bold 12px Arial;letter-spacing:.3px;cursor:pointer;z-index:2;animation:trUp .6s .3s ease both;}",
+    "#wy-tour .tr-lang:hover{background:rgba(255,255,255,.14);}#wy-tour .tr-lang svg{flex:none;}",
+    "#wy-tour .tr-in{margin:10px 0 6px;font:bold 9px Arial;letter-spacing:1.4px;color:#6b7385;text-transform:uppercase;}#wy-tour .tr-in.first{margin-top:0;}",
+    "#wy-tour .tr-items{display:flex;flex-wrap:wrap;gap:5px;}#wy-tour .tr-items span{padding:4px 9px;border-radius:99px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);color:#dfe3ec;font-size:11px;line-height:1.3;}",
     "#wy-tour .tr-kick{display:inline-block;font:bold 10px Arial;letter-spacing:2.4px;color:var(--wy-l,#c9b6ff);padding:6px 12px;border-radius:99px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);animation:trUp .6s .1s ease both;}",
     "#wy-tour .tr-word{margin:18px 0 10px;font-size:clamp(38px,9vw,78px);font-weight:900;letter-spacing:clamp(3px,1.2vw,9px);line-height:1;background:linear-gradient(90deg,var(--wy-l,#c9b6ff),var(--wy-s,#5ecbff),var(--wy-l,#c9b6ff));background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:trUp .7s .2s ease both,trShine 6s linear infinite;}",
     "@keyframes trShine{to{background-position:200% 0}}",
@@ -6167,25 +6363,27 @@ var NTL_TR = (function () {
   }
 
   function hero(kind) {
-    var h = mk("div", "tr-hero");
+    var h = mk("div", "tr-hero"), I = typeof NTL_I18N !== "undefined" ? NTL_I18N : null;
     var orbs = '<div class="tr-orb a"></div><div class="tr-orb b"></div><div class="tr-orb c"></div>';
     if (kind === "welcome") {
-      h.innerHTML = orbs + '<div class="tr-hc"><span class="tr-kick">WELCOME' + (ver() ? " · V" + esc(ver().toUpperCase()) : "") + '</span>' +
+      h.innerHTML = orbs + (I ? '<button class="tr-lang" data-a="lang">' + I.GLOBE + "<span>" + I.label() + "</span></button>" : "") +
+        '<div class="tr-hc"><span class="tr-kick">' + T("WELCOME") + (ver() ? " · V" + esc(ver().toUpperCase()) : "") + "</span>" +
         '<div class="tr-word">NTL VANCED</div>' +
-        '<div class="tr-sub">A new layer on top of NTL — your settings, your skins, your game. Take a tour of everything inside.</div>' +
-        '<div class="tr-chips"><span class="tr-chip"><i></i>Vanced settings</span><span class="tr-chip"><i></i>Vanced Skins</span><span class="tr-chip"><i></i>Play together</span></div>' +
-        '<div class="tr-cta"><button class="ghost" data-a="skip">SKIP</button><button class="pri" data-a="next">START THE TOUR</button></div>' +
-        '<div class="tr-by">BY OM RAJPUT</div></div>';
+        '<div class="tr-sub">' + T("A new layer on top of NTL — your settings, your skins, your game. Take a tour of everything inside.") + "</div>" +
+        '<div class="tr-chips"><span class="tr-chip"><i></i>' + T("Vanced settings") + '</span><span class="tr-chip"><i></i>' + T("Vanced Skins") + '</span><span class="tr-chip"><i></i>' + T("Play together") + "</span></div>" +
+        '<div class="tr-cta"><button class="ghost" data-a="skip">' + T("SKIP") + '</button><button class="pri" data-a="next">' + T("START THE TOUR") + "</button></div>" +
+        '<div class="tr-by">' + T("BY OM RAJPUT") + "</div></div>";
     } else {
-      h.innerHTML = orbs + '<div class="tr-hc"><span class="tr-kick">TOUR COMPLETE</span>' +
-        '<div class="tr-word">YOU’RE SET</div>' +
-        '<div class="tr-sub">That’s NTL VANCED. Press <b style="color:#fff">O</b> anytime for Vanced settings, and tap the bulb on any page to see its demo again.</div>' +
-        '<div class="tr-chips"><span class="tr-chip"><i></i>Key O — Vanced settings</span><span class="tr-chip"><i></i>Skin editor — Vanced Skins</span></div>' +
-        '<div class="tr-cta"><button data-a="news">WHAT’S NEW</button><button class="pri" data-a="done">LET’S PLAY</button></div>' +
-        '<div class="tr-by">NTL VANCED BY OM RAJPUT</div></div>';
+      h.innerHTML = orbs + '<div class="tr-hc"><span class="tr-kick">' + T("TOUR COMPLETE") + "</span>" +
+        '<div class="tr-word">' + T("YOU’RE SET") + "</div>" +
+        '<div class="tr-sub">' + T("That’s NTL VANCED. Press <b>O</b> anytime for Vanced settings, and tap the bulb on any page to see its demo again.") + "</div>" +
+        '<div class="tr-chips"><span class="tr-chip"><i></i>' + T("Key O — Vanced settings") + '</span><span class="tr-chip"><i></i>' + T("Skin editor — Vanced Skins") + "</span></div>" +
+        '<div class="tr-cta"><button data-a="news">' + T("WHAT’S NEW") + '</button><button class="pri" data-a="done">' + T("LET’S PLAY") + "</button></div>" +
+        '<div class="tr-by">' + T("NTL VANCED BY OM RAJPUT") + "</div></div>";
     }
     h.addEventListener("click", function (e) {
-      var a = e.target && e.target.getAttribute && e.target.getAttribute("data-a"); if (!a) return;
+      var ab = e.target && e.target.closest ? e.target.closest("[data-a]") : null, a = ab && ab.getAttribute("data-a"); if (!a) return;
+      if (a === "lang") { if (I) I.pick(function () { if (run && run.steps[run.i].hero) show(); }); return; }
       if (a === "next") next(); else if (a === "skip") end(true); else if (a === "done") end(false);
       else if (a === "news") { end(false); try { if (typeof NTL_WN !== "undefined") NTL_WN.show(); } catch (x) {} }
     });
@@ -6222,17 +6420,27 @@ var NTL_TR = (function () {
       })();
     }, oldCard || oldHero ? 180 : 0);
   }
+  function grpOf(st) {
+    if (st.gp) return st.gp.map(function (x) { return T(x); }).join(" \u00b7 ").toUpperCase();
+    return T(st.grp || (run.kind === "full" ? "NTL VANCED TOUR" : "DEMO"));
+  }
+  function textOf(st) {
+    if (st.lock) { var L = T(st.lock); return L === st.lock ? esc(L.charAt(0) + L.slice(1).toLowerCase()) + (/[.!]$/.test(L) ? "" : ".") : esc(L); }
+    var d = T(st.d || "");
+    if (st.items && st.items.length) d += (d ? '<div class="tr-in">' : '<div class="tr-in first">') + T("Inside:") + "</div>" + '<div class="tr-items">' + st.items.map(function (x) { return "<span>" + esc(T(x)) + "</span>"; }).join("") + "</div>";
+    return d;
+  }
   function card(st) {
     var real = run.steps.filter(function (s) { return !s.hero; }), n = real.indexOf(st) + 1;
     var inSettings = !!st.sec && run.kind === "full", prev = run.steps[run.i - 1];
     cardEl = mk("div", "tr-card",
-      '<div class="tr-k"><span>' + esc(st.grp || (run.kind === "full" ? "NTL VANCED TOUR" : "DEMO")) + "</span><span>" + n + " / " + real.length + "</span></div>" +
-      '<div class="tr-t">' + st.t + '</div><div class="tr-d">' + (st.d || "") + "</div>" +
+      '<div class="tr-k"><span>' + esc(grpOf(st)) + "</span><span>" + n + " / " + real.length + "</span></div>" +
+      '<div class="tr-t">' + esc(T(st.t)) + '</div><div class="tr-d">' + textOf(st) + "</div>" +
       '<div class="tr-bar"><i style="width:' + Math.round((n - 1) / real.length * 100) + '%"></i></div>' +
-      '<div class="tr-row"><button class="ghost" data-a="skip">' + (run.kind === "full" ? "SKIP TOUR" : "CLOSE") + "</button>" +
-      (inSettings ? '<button class="ghost" data-a="sec">SKIP SECTION</button>' : "") + '<span class="sp"></span>' +
-      (prev && !prev.hero ? '<button data-a="back">BACK</button>' : "") +
-      '<button class="pri" data-a="next">' + (run.i === run.steps.length - 1 ? "DONE" : "NEXT") + "</button></div>");
+      '<div class="tr-row"><button class="ghost" data-a="skip">' + T(run.kind === "full" ? "SKIP TOUR" : "CLOSE") + "</button>" +
+      (inSettings ? '<button class="ghost" data-a="sec">' + T("SKIP SECTION") + "</button>" : "") + '<span class="sp"></span>' +
+      (prev && !prev.hero ? '<button data-a="back">' + T("BACK") + "</button>" : "") +
+      '<button class="pri" data-a="next">' + T(run.i === run.steps.length - 1 ? "DONE" : "NEXT") + "</button></div>");
     cardEl.addEventListener("click", function (e) {
       var a = e.target && e.target.getAttribute && e.target.getAttribute("data-a");
       if (a === "next") next(); else if (a === "back") back(); else if (a === "skip") end(true); else if (a === "sec") skipSection();
