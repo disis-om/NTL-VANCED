@@ -153,7 +153,7 @@ var NTL_I18N = (function () {
     "#wy-lang .lg-i.on{border-color:var(--wy-p,#9b7bff);background:rgba(var(--wy-p-rgb,155,123,255),.16);box-shadow:0 0 0 2px rgba(var(--wy-p-rgb,155,123,255),.3);}",
     "html.wy-rtl #vs-body,html.wy-rtl #wy-tour .tr-card,html.wy-rtl #wy-tour .tr-hc,html.wy-rtl #wy-cr{direction:rtl;}"
   ].join("\n");
-  function css() { if (!document.getElementById("lg-css")) { var s = document.createElement("style"); s.id = "lg-css"; s.textContent = CSS; (document.head || document.documentElement).appendChild(s); } }
+  function css() { if (!document.getElementById("wy-lang-css")) { var s = document.createElement("style"); s.id = "wy-lang-css"; s.textContent = CSS; (document.head || document.documentElement).appendChild(s); } }
   var GLOBE = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20z"/></svg>';
   function pick(done) {
     css(); var old = document.getElementById("wy-lang"); if (old) old.remove();
