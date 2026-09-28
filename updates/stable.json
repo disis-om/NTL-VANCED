@@ -1,12 +1,12 @@
 {
-  "version": "5.67",
+  "version": "5.66",
   "channel": "stable",
-  "date": "2026-09-28",
-  "size": 8083797,
-  "sha256": "8a9dea73231a1f00f453e6dbd8e102f56564114be73d1f8ee45fb0e0e5b6e441",
+  "date": "2026-09-27",
+  "size": 8029897,
+  "sha256": "f153243eaf49f4f7a3d52629c712dfeaef40ec6bb7d90feadd15c205dc11e21a",
   "minLoader": 3,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.67/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.67/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.67/NTL-VANCED-v5.67.zip",
-  "notes": "## Welcome tour\n- New players and everyone who updates get a guided tour of NTL VANCED on the home screen\n- **SKIP SECTION** jumps ahead; **SKIP** ends it anytime\n- Every Vanced settings page has a bulb **View demo** button for that page only\n- **View full Vanced demo** at the bottom of the sidebar replays everything\n- The tour follows your theme colours\n\n## Languages\n- NTL VANCED now speaks 24 languages: English, हिन्दी, বাংলা, اردو, தமிழ், తెలుగు, मराठी, ગુજરાતી, ਪੰਜਾਬੀ, Español, Português, Français, Deutsch, Italiano, Русский, Türkçe, العربية, Bahasa Indonesia, Tiếng Việt, ไทย, 中文, 日本語, 한국어, Polski\n- Pick it on the tour's welcome page or in Vanced settings › General › **Language**\n- Menus, settings, the tour and Vanced Skins change language together\n- Urdu and Arabic read right to left\n\n## Vanced Skins\n- The Centipede got a new, more realistic head: beaded antennae, fangs that snap on boost and eyes that move like normal slither eyes\n\n## Themes\n- Your wallpaper no longer resets after an update\n\n## Cleaner defaults\n- Lobby after a round, bot thinking lines and the thinking log are now off by default\n- Applied once for everyone on this update; after that your own choice stays\n\n# NTL VANCED BY OM RAJPUT.\n"
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.66/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.66/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.66/NTL-VANCED-v5.66.zip",
+  "notes": "## Vanced Skins\n- New **Vanced Skins** button in the skin editor, next to Select Cosmetic\n- 11 creature skins for your snake: **Centipede, Dragon, Skeleton, Chinese Dragon, Electric Eel, Train, Robot Snake, Phoenix, Ice Serpent, Caterpillar and Zombie Snake**\n- Every creature has its own boost effect: fire breath, lightning, glowing eyes, thrusters, frost breath and more\n- Players without NTL VANCED see the normal skin closest to your creature's colours; pick **Normal skin** to get your previous skin back\n- Only the creature in use animates on the page, so it stays smooth on phones\n\n## See each other's creatures\n- NTL VANCED players in the same arena now see each other's creature skins\n- Works on slither.io and slither.com, over IPv4 and IPv6\n- **Share my skin** and **See others' skins** switches on the Vanced Skins page, both on by default\n- Game packets are untouched; only the skin you picked is shared, and it is cleared when you die or leave\n\n# NTL VANCED BY OM RAJPUT.\n"
 }
