@@ -6130,11 +6130,11 @@ var NTL_VS = (function () {
    Motion: the card fades out, the page switches, the page scrolls smoothly until
    the next thing is in view, then the spotlight glides onto it and the card
    slides in beside it. Nothing is clicked for the user and nothing is changed.
-   localStorage.wy_tour = the last TOUR finished. */
+   localStorage.wy_tour = the last TOUR finished (the release that brought it; bump it to show the tour again). */
 var NTL_TR = (function () {
   /* translations (NTL_I18N); a local name — the global T belongs to NTL */
   function T(x) { return typeof NTL_I18N !== "undefined" ? NTL_I18N.T(x) : x; }
-  var TOUR = "1", KEY = "wy_tour";
+  var TOUR = "5.67", KEY = "wy_tour";
   var ORDER = ["general", "controls", "spine", "guard", "bot", "about", "changelog"];
   var run = null;                 // { steps, i, kind, busy, token } while a tour is on screen
   function done() { try { return localStorage.getItem(KEY) === TOUR; } catch (e) { return true; } }
