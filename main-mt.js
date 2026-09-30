@@ -5476,6 +5476,7 @@ var NTL_VS = (function () {
   var ov = null, secsRef = null, navsRef = null;   // the open popup's sections / nav items (for the tour)
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
+    { v: "5.69-dev", d: "30 Sep 2026", t: "Tour: the highlight and its card now land on the right spot at any UI size or browser zoom \u2014 it scrolls sideways when needed, puts the card where it hides the least and re-centres when you zoom mid-tour. Restore: a backup (from NTL or NTL VANCED) no longer stops half way when the browser storage is full \u2014 team keys and settings always come back, and anything too big to fit is named at the end." },
     { v: "5.68", d: "28 Sep 2026", t: "Welcome tour: after this update a welcome screen and a guided tour walk you through Vanced settings and Vanced Skins. Every settings page has a bulb \u2014 View demo \u2014 for that page, and View full Vanced demo at the bottom of the sidebar replays everything. Themes: your wallpaper now comes back after an update (it used to fall back to the default while the colours stayed). The lobby, the thinking log and the bot\u2019s thinking lines now start off (switched off once on this update) \u2014 turn them on in Vanced settings. Languages: pick yours on the tour\u2019s welcome screen or in Vanced \u203a General \u2014 24 languages, each named in itself. The tour now goes group by group, and the Centipede got a real head: beaded antennae, venom claws and eyes that look where you steer." },
     { v: "5.66", d: "27 Sep 2026", t: "Vanced Skins: a new button in the skin editor opens creature skins for your snake \u2014 Centipede, Dragon, Skeleton, Chinese Dragon, Electric Eel, Train, Robot Snake, Phoenix, Ice Serpent, Caterpillar and Zombie Snake, each with its own boost effect. Other NTL VANCED players in your arena see your creature and you see theirs (Share my skin / See others\u2019 skins on the page, both on). Other players see the normal skin closest to the creature\u2019s colours." },
     { v: "5.65", d: "26 Sep 2026", t: "Global chat (the SlitherControl+ room) removed — the chat box is NTL’s team chat again, with the emoji / GIF picker. Assist (and the other hold keys) now stays on while an on-screen button is held, so Assist go skinless / Assist map show on phones. Team list follows NTL’s KeyOwners in players list, Online players status (version) and the team detail toggle again. Everywhere NTL sent or showed its own version (team list, tag server, settings title) it now uses the NTL VANCED version you are running — the updated one after an in-app update; the version text left the stats line. Squeeze mode is in the build but unavailable for now." },
@@ -6283,11 +6284,23 @@ var NTL_TR = (function () {
     "#wy-tour .tr-cta{display:flex;gap:10px;justify-content:center;animation:trUp .7s .65s ease both;}",
     "#wy-tour .tr-cta button{height:42px;padding:0 22px;font-size:12px;border-radius:12px;}",
     "#wy-tour .tr-by{margin-top:18px;font-size:10.5px;letter-spacing:1.2px;color:#5f6778;animation:trUp .7s .8s ease both;}",
-    "@media (max-width:640px){#wy-tour .tr-card{left:16px!important;right:16px;width:auto;top:auto!important;bottom:calc(16px + env(safe-area-inset-bottom,0px));}}"
+    "@media (max-width:640px){#wy-tour .tr-card{left:16px!important;right:16px;width:auto;top:auto!important;bottom:calc(16px + env(safe-area-inset-bottom,0px));}#wy-tour .tr-card.up{top:calc(16px + env(safe-area-inset-top,0px))!important;bottom:auto;}}"
   ].join("\n");
   function css() { if (!document.getElementById("tr-css")) { var s = document.createElement("style"); s.id = "tr-css"; s.textContent = CSS; (document.head || document.documentElement).appendChild(s); } }
 
-  var root = null, shade = null, cardEl = null, raf = 0, target = null, hold = false;
+  var root = null, shade = null, cardEl = null, raf = 0, target = null, hold = false, regl = false, rsz = 0;
+  /* UI size = CSS zoom on the popups. Rects are used in viewport px (older Chromium reports a rect inside a zoomed box
+     unzoomed — probed once); scrolling works in the scroll box's own px, so viewport distances are divided by its zoom. */
+  var legacyZoom = null;
+  function zf(el) { if (!el) return 1; if ("currentCSSZoom" in el) return el.currentCSSZoom || 1; var z = 1; for (var n = el; n && n.nodeType === 1; n = n.parentElement) { var v = parseFloat(getComputedStyle(n).zoom); if (v > 0) z *= v; } return z; }
+  function rect(el) {
+    var r = el.getBoundingClientRect();
+    if (legacyZoom === null) { legacyZoom = false; try { var a = mk("div"), b = mk("div"); a.style.cssText = "position:fixed;left:0;top:0;width:40px;height:40px;zoom:2;visibility:hidden;pointer-events:none"; b.style.cssText = "position:absolute;left:10px;top:0;width:4px;height:4px"; a.appendChild(b); document.body.appendChild(a); legacyZoom = b.getBoundingClientRect().left < 15; a.remove(); } catch (e) {} }
+    if (!legacyZoom) return r;
+    var z = zf(el); if (z === 1) return r;
+    return { left: r.left * z, top: r.top * z, right: r.right * z, bottom: r.bottom * z, width: r.width * z, height: r.height * z };
+  }
+  function onResize() { clearTimeout(rsz); rsz = setTimeout(function () { if (run && target && !hold && target.isConnected) { regl = true; glideTo(target, function () { regl = false; }); } }, 180); }
   function mk(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
   function build() {
     css(); if (root) return;
@@ -6299,11 +6312,14 @@ var NTL_TR = (function () {
     document.body.appendChild(root);
     document.documentElement.classList.add("wy-touring");
     window.addEventListener("keydown", keys, true);
+    window.addEventListener("resize", onResize);
     raf = requestAnimationFrame(follow);
   }
   function teardown() {
     if (raf) cancelAnimationFrame(raf); raf = 0;
     window.removeEventListener("keydown", keys, true);
+    window.removeEventListener("resize", onResize); clearTimeout(rsz); regl = false;
+    if (pageAt) { try { pageAt.b.scrollLeft = pageAt.x; pageAt.b.scrollTop = pageAt.y; } catch (e) {} pageAt = null; }
     document.documentElement.classList.remove("wy-touring");
     if (root) root.remove(); root = shade = cardEl = null; target = null; hold = false;
   }
@@ -6318,48 +6334,71 @@ var NTL_TR = (function () {
   /* spotlight + card follow the target every frame; while the page scrolls the spotlight holds still */
   function place() {
     if (!shade || hold) return;
-    var W = window.innerWidth, H = window.innerHeight, pad = 8, r = target && target.isConnected ? target.getBoundingClientRect() : null;
+    var W = window.innerWidth, H = window.innerHeight, pad = 8, r = target && target.isConnected ? rect(target) : null;
     if (!r || r.width < 2 || r.height < 2) {
       shade.classList.add("none");
       if (cardEl && W > 640) { cardEl.style.left = Math.max(16, (W - cardEl.offsetWidth) / 2) + "px"; cardEl.style.top = Math.max(16, (H - cardEl.offsetHeight) / 2) + "px"; }
       return;
     }
+    if (!regl && (r.bottom < 0 || r.top > H || r.right < 0 || r.left > W)) { regl = true; glideTo(target, function () { regl = false; }); }   // scrolled away (zoom, reflow): bring it back
+    var x = Math.max(4, r.left - pad), y = Math.max(4, r.top - pad), w = Math.max(0, Math.min(W - 8, r.right + pad) - x), h = Math.max(0, Math.min(H - 8, r.bottom + pad) - y);
+    if (w < 6 || h < 6) {                                            // off screen and nothing left to scroll: no spotlight, card in the middle
+      shade.classList.add("none");
+      if (cardEl && W > 640) { cardEl.style.left = Math.max(16, (W - cardEl.offsetWidth) / 2) + "px"; cardEl.style.top = Math.max(16, (H - cardEl.offsetHeight) / 2) + "px"; }
+      return;
+    }
     shade.classList.remove("none");
-    var x = Math.max(4, r.left - pad), y = Math.max(4, r.top - pad), w = Math.min(W - 8, r.right + pad) - x, h = Math.min(H - 8, r.bottom + pad) - y;
     shade.style.left = x + "px"; shade.style.top = y + "px"; shade.style.width = w + "px"; shade.style.height = h + "px";
-    if (!cardEl || W <= 640) return;                                // phones: the card is a bottom sheet (CSS)
+    if (cardEl && W <= 640) {                                         // phones: the card is a sheet (CSS) — top or bottom, whichever hides less
+      var sh = cardEl.offsetHeight, below = Math.max(0, Math.min(y + h, H) - Math.max(y, H - 16 - sh)), above = Math.max(0, Math.min(y + h, 16 + sh) - Math.max(y, 0));
+      var up = cardEl.classList.contains("up") ? above <= below + 20 : above + 20 < below;   // a little stickiness, no flip-flop
+      cardEl.classList.toggle("up", up);
+    }
+    if (!cardEl || W <= 640) return;
     var cw = cardEl.offsetWidth, ch = cardEl.offsetHeight, gap = 18, cx, cy;
     if (x + w + gap + cw <= W - 12) { cx = x + w + gap; cy = y + h / 2 - ch / 2; }           // right
     else if (x - gap - cw >= 12) { cx = x - gap - cw; cy = y + h / 2 - ch / 2; }             // left
     else if (y + h + gap + ch <= H - 12) { cx = x + w / 2 - cw / 2; cy = y + h + gap; }      // below
     else if (y - gap - ch >= 12) { cx = x + w / 2 - cw / 2; cy = y - gap - ch; }            // above
-    else { cx = W - cw - 16; cy = H - ch - 16; }                                            // over it, bottom right
+    else { cx = x + w / 2 - cw / 2; cy = H - (y + h) >= y ? H - ch - 12 : 12; }             // no room: the edge with more space, covering as little as possible
     cardEl.style.left = Math.max(12, Math.min(W - cw - 12, cx)) + "px";
     cardEl.style.top = Math.max(12, Math.min(H - ch - 12, cy)) + "px";
   }
   function follow() { if (!root) return; try { place(); } catch (e) {} raf = requestAnimationFrame(follow); }
 
-  /* the nearest scrolling box around el, scrolled smoothly so el sits in view (top part on phones, above the sheet) */
-  function scroller(el) {
-    for (var p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+  /* the nearest box that scrolls on that axis (the page itself last), scrolled smoothly so el sits in view (top part on phones, above the sheet) */
+  var pageAt = null;                                                  // page scroll before the tour moved it
+  function isPage(b) { return b === document.scrollingElement || b === document.documentElement || b === document.body; }
+  function scroller(el, ax) {
+    for (var p = el.parentElement; p && p !== document.body && p !== document.documentElement; p = p.parentElement) {
       var cs = getComputedStyle(p);
-      if (/(auto|scroll)/.test(cs.overflowY) && p.scrollHeight > p.clientHeight + 4) return p;
+      if (ax === "y" ? /(auto|scroll)/.test(cs.overflowY) && p.scrollHeight > p.clientHeight + 4 : /(auto|scroll)/.test(cs.overflowX) && p.scrollWidth > p.clientWidth + 4) return p;
     }
-    return null;
+    var d = document.scrollingElement || document.documentElement, r = rect(el);
+    var off = ax === "y" ? r.top < 0 || r.bottom > window.innerHeight : r.left < 0 || r.right > window.innerWidth;
+    return d && off && (ax === "y" ? d.scrollHeight > window.innerHeight + 4 : d.scrollWidth > window.innerWidth + 4) ? d : null;
   }
-  function glideTo(el, cb) {
-    var box = scroller(el); if (!box) { cb(); return; }
-    var br = box.getBoundingClientRect(), er = el.getBoundingClientRect(), vis = br.height, phone = window.innerWidth <= 640;
-    var want = phone ? 16 : Math.max(16, (vis - er.height) / 2);
-    if (er.height > vis - 32) want = 16;                              // taller than the view: show its top
-    var from = box.scrollTop, to = Math.max(0, Math.min(box.scrollHeight - box.clientHeight, from + (er.top - br.top) - want));
-    if (Math.abs(to - from) < 4) { cb(); return; }
+  function glide1(box, ax, el, done) {
+    var page = isPage(box), y = ax === "y", phone = window.innerWidth <= 640;
+    var br = page ? { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight } : rect(box), er = rect(el), zb = page ? 1 : (zf(box) || 1);
+    var vis = y ? br.height : br.width, sz = y ? er.height : er.width, lead = y ? er.top - br.top : er.left - br.left;
+    var want = y && phone ? 16 : Math.max(16, (vis - sz) / 2);
+    if (sz > vis - 32) want = 16;                                     // bigger than the view: show its start
+    var from = y ? box.scrollTop : box.scrollLeft, max = y ? box.scrollHeight - box.clientHeight : box.scrollWidth - box.clientWidth;
+    var to = Math.max(0, Math.min(max, from + (lead - want) / zb));
+    if (Math.abs(to - from) < 4) { done(); return; }
+    if (page && !pageAt) pageAt = { b: box, x: box.scrollLeft, y: box.scrollTop };
     var dur = Math.min(750, 260 + Math.abs(to - from) * 0.55), t0 = performance.now();
     (function step(now) {
-      var k = Math.min(1, (now - t0) / dur), e = k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
-      box.scrollTop = from + (to - from) * e;
-      if (k < 1) requestAnimationFrame(step); else cb();
+      var k = Math.min(1, (now - t0) / dur), e = k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2, v = from + (to - from) * e;
+      if (y) box.scrollTop = v; else box.scrollLeft = v;
+      if (k < 1) requestAnimationFrame(step); else done();
     })(t0);
+  }
+  function glideTo(el, cb) {
+    var by = scroller(el, "y");
+    var sideways = function () { var bx = el.isConnected ? scroller(el, "x") : null; if (bx) glide1(bx, "x", el, cb); else cb(); };
+    if (by) glide1(by, "y", el, sideways); else sideways();
   }
 
   function hero(kind) {
@@ -8124,7 +8163,7 @@ O8[nf]=ca[bb][ab];Qg?v0[nf]=0:(v0[nf]=c4[bb]*gsc*2*(.25+.75*ss[nf]/16.5)|0,0>v0[
 if(0<Du)if(0<eb._){var db=Du;db>eb._&&(db=eb._);eb._-=db;for(cb=1;cb<=db;cb++)cb==db&&(eb.fx=eb.Z[eb.F],eb.fy=eb.K[eb.F]),eb.Z[eb.F]=0,eb.K[eb.F]=0,eb.F++,eb.F>=ow&&(eb.F=0)}else 0==eb._&&(eb.fx=0,eb.fy=0,eb._=-1);if(1==eb.dir){eb.ang-=gb;if(0>eb.ang||eb.ang>=He)eb.ang%=He;0>eb.ang&&(eb.ang+=He);db=(eb.R-eb.ang)%He;0>db&&(db+=He);db>Math.PI&&(db-=He);0<db&&(eb.ang=eb.R,eb.dir=0)}else if(2==eb.dir){eb.ang+=gb;if(0>eb.ang||eb.ang>=He)eb.ang%=He;0>eb.ang&&(eb.ang+=He);db=(eb.R-eb.ang)%He;0>db&&(db+=
 He);db>Math.PI&&(db-=He);0>db&&(eb.ang=eb.R,eb.dir=0)}else eb.ang=eb.R;eb.xx+=Math.cos(eb.ang)*ib;eb.yy+=Math.sin(eb.ang)*ib;eb.gfr+=m*eb.gr;eb.eaten?(1.5!=eb.fr&&(eb.fr+=m/150,1.5<=eb.fr&&(eb.fr=1.5)),eb.eaten_fr+=m/47,eb.gfr+=m,ab=eb.eaten_by,1<=eb.eaten_fr||!ab||ab.gone||ab.I?Be.splice(bb,1):eb.rad=1-Math.pow(eb.eaten_fr,3)):1!=eb.fr&&(eb.fr+=m/150,1<=eb.fr?(eb.fr=1,eb.rad=1):(eb.rad=.5*(1-Math.cos(Math.PI*eb.fr)),eb.rad+=.66*(.5*(1-Math.cos(Math.PI*eb.rad))-eb.rad)))}},n8=[],v8=[],t8=[],a8=[],
 r8=localStorage&&"wpv"in localStorage?Number(localStorage.getItem("wpv")):12,P8=localStorage&&"scl"in localStorage?Number(localStorage.getItem("scl")):0,s8=localStorage&&"nzl"in localStorage?localStorage.getItem("nzl"):0,i8=localStorage&&"dzr"in localStorage?Number(localStorage.getItem("dzr")):1,g8=16.2/14,o8=localStorage&&"szr"in localStorage?Number(localStorage.getItem("szr")):g8,d8=localStorage&&"tag"in localStorage?Number(localStorage.getItem("tag")):-1,z8=!1,c8=function(){var bb=document.getElementById("impfile");
-if(iA)if(void 0===bb.files[0])setTimeout(c8,100);else if(/^(ntl-vanced-settings-|slither-settings-)/.test(bb.files[0].name)){var ab=new FileReader;ab.onloadend=async function(){var cb=decodeURIComponent(atob(atob(ab.result.split(",")[1])));if(a(cb)){cb=JSON.parse(cb);for(var eb in cb)ZA.includes(eb)?await ff(eb,uf(eb,cb[eb])):localStorage.setItem(eb,cb[eb]);R(J,"settings restored");location.reload(!0)}else R(J,"error decoding file content"),bb.value=""};ab.readAsDataURL(bb.files[0])}else R(J,"bad filename selected"),
+if(iA)if(void 0===bb.files[0])setTimeout(c8,100);else if(/^(ntl-vanced-settings-|slither-settings-)/.test(bb.files[0].name)){var ab=new FileReader;ab.onloadend=async function(){var cb=decodeURIComponent(atob(atob(ab.result.split(",")[1])));if(a(cb)){cb=JSON.parse(cb);/* Vanced: guarded restore (one full-storage error used to stop it half way) */var wyE=[],wyZ=[],wyF=[],wyQ,wyK;for(var eb in cb)/^(wyrm|__)/.test(eb)||"tinyscrID"==eb||"myscrversion"==eb||(ZA.includes(eb)?wyZ:wyE).push(eb);wyE.sort(function(x,y){return String(cb[x]).length-String(cb[y]).length});var wyFree=function(){for(var i=localStorage.length-1;0<=i;i--){var k=localStorage.key(i);/^wy_i18n_/.test(k)&&!(k in cb)&&localStorage.removeItem(k)}};for(wyQ=0;wyQ<wyE.length;wyQ++){wyK=wyE[wyQ];try{localStorage.setItem(wyK,cb[wyK])}catch(x){try{wyFree();localStorage.removeItem(wyK);localStorage.setItem(wyK,cb[wyK])}catch(x2){wyF.push(wyK)}}}for(wyQ=0;wyQ<wyZ.length;wyQ++){wyK=wyZ[wyQ];try{await ff(wyK,uf(wyK,cb[wyK]))||wyF.push(wyK)}catch(x){wyF.push(wyK)}}R(J,"settings restored");wyF.length&&alert("Settings restored.\n\nNot enough storage in this browser for: "+wyF.join(", ")+"\nEverything else was restored.");location.reload(!0)}else R(J,"error decoding file content"),bb.value=""};ab.readAsDataURL(bb.files[0])}else R(J,"bad filename selected"),
 bb.value=""},w8=0,u8=!1,l8=0,Q8=0,b8=null,B8="",wsu=null,D8=null,KK_KILL_COUNTER=null,m8=[],x8=[],O8=[],C8=[],H8=[],X8=[],E8=[],M8=[],p8=[],h8=!0,I8=function(){if(ws&&null!=snake&&!snake.I&&playing&&!Ce&&snake.eA!==snake.nA){var bb=performance.now();50>=bb-Ie||(snake.eA=snake.nA,Ie=bb,Es[0]=snake.eA?253:254,ws.send(Es))}},k8=function(bb,ab,cb,eb,gb){if(!Oe||!Oe.push||bb.VA||hg&&bb.EA&&!bb.MA)return!1;var ib=n9(bb.WA),db=n9(bb.KA);if(!ib||!db)return!1;var hb=bb.pA*gb,kb=bb.JA*gb,mb=bb.H*(1-bb.X),jb=
 bb.FA*mb;mb*=bb.ZA;if(0>=jb&&0>=mb)return!0;var nb=bb.SA*gb*gsc,pb=bb.NA*gb*gsc,qb=bb.LA*gsc,lb=0<qb&&nb>.5*qb;qb*=.5;for(var fb=Math.cos(eb),ub=Math.sin(eb),vb=0;2>vb;vb++){var rb=vb?1:-1,ob=Math.cos(eb+rb*Math.PI/2);rb=Math.sin(eb+rb*Math.PI/2);var sb=Xe+(fb*hb+ob*(kb+.5)+ab-view_xx)*gsc,Bb=Ee+(ub*hb+rb*(kb+.5)+cb-view_yy)*gsc;0<jb&&(lb?(Oe.push(sb,Bb,0,nb+qb,-1,jb,0,0,0),Oe.push(sb,Bb,0,nb-qb,-1,jb,ib[0],ib[1],ib[2])):Oe.push(sb,Bb,0,nb,-1,jb,ib[0],ib[1],ib[2]));0<mb&&Oe.push(Xe+(fb*(hb+.5)+bb.mA*
 gb+ob*kb+ab-view_xx)*gsc,Ee+(ub*(hb+.5)+bb.CA*gb+rb*kb+cb-view_yy)*gsc,0,pb,-1,mb,db[0],db[1],db[2])}return!0},U8=localStorage&&"dct"in localStorage?y(localStorage.getItem("dct")):!1,Y8=localStorage&&"notags"in localStorage?y(localStorage.getItem("notags")):!1,y8=localStorage&&"tcl"in localStorage&&isFinite(Number(localStorage.getItem("tcl")))&&1<=Number(localStorage.getItem("tcl"))?Number(localStorage.getItem("tcl")):1,j8=localStorage&&"tsw"in localStorage&&isFinite(Number(localStorage.getItem("tsw")))&&
