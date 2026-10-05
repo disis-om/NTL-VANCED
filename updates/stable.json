@@ -1,12 +1,12 @@
 {
-  "version": "5.69",
+  "version": "5.70",
   "channel": "stable",
   "date": "2026-10-05",
-  "size": 8092458,
-  "sha256": "ce4c9a80bc5dc8e438e725e66e09562cffba5a945490110b004a3780eda4173c",
+  "size": 8098145,
+  "sha256": "c372aafa2466140a246877f0287fdf4a83fc29b74f09428935a3b27e112b6c1f",
   "minLoader": 3,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.69/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.69/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.69/NTL-VANCED-v5.69.zip",
-  "notes": "## Team keys\n- Team keys work again: NTL VANCED now talks to the NTL team service the way NTL does\n\n## Backup & restore\n- Restoring a backup (from NTL or NTL VANCED) no longer stops half way when the browser storage is full\n- Team keys and settings always come back; anything too big to fit is named at the end\n\n## Tour\n- The highlight and its card land on the right spot at any UI size or browser zoom\n- The card no longer covers what it is showing, and the tour re-centres if you zoom mid-tour\n\n# NTL VANCED BY OM RAJPUT.\n"
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.70/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.70/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.70/NTL-VANCED-v5.70.zip",
+  "notes": "## New: Strip look\n- A new look in **Vanced Skins**: snakes are drawn as clean flat strips in their own colour, with a white eye dot and their bones down the middle\n- **Mine** applies it to your snake only; **Everyone** applies it to every snake you see\n- It is only on your screen; other players still see your normal skin\n- Saved with your settings and included in backups\n\n# NTL VANCED BY OM RAJPUT.\n"
 }
