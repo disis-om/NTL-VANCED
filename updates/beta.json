@@ -1,12 +1,12 @@
 {
-  "version": "5.68",
+  "version": "5.69",
   "channel": "stable",
-  "date": "2026-09-28",
-  "size": 8083862,
-  "sha256": "f1d71b977b46ff32dfe88be66dbaa765fc5979e2ab97a5c47c39e9b45a3763ee",
+  "date": "2026-10-05",
+  "size": 8092458,
+  "sha256": "ce4c9a80bc5dc8e438e725e66e09562cffba5a945490110b004a3780eda4173c",
   "minLoader": 3,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.68/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.68/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.68/NTL-VANCED-v5.68.zip",
-  "notes": "## Welcome tour\n- New players and everyone who updates get a guided tour of NTL VANCED on the home screen\n- **SKIP SECTION** jumps ahead; **SKIP** ends it anytime\n- Every Vanced settings page has a bulb **View demo** button for that page only\n- **View full Vanced demo** at the bottom of the sidebar replays everything\n- The tour follows your theme colours\n\n## Languages\n- NTL VANCED now speaks 24 languages: English, हिन्दी, বাংলা, اردو, தமிழ், తెలుగు, मराठी, ગુજરાતી, ਪੰਜਾਬੀ, Español, Português, Français, Deutsch, Italiano, Русский, Türkçe, العربية, Bahasa Indonesia, Tiếng Việt, ไทย, 中文, 日本語, 한국어, Polski\n- Pick it on the tour's welcome page or in Vanced settings › General › **Language**\n- Menus, settings, the tour and Vanced Skins change language together\n- Urdu and Arabic read right to left\n\n## Vanced Skins\n- The Centipede got a new, more realistic head: beaded antennae, fangs that snap on boost and eyes that move like normal slither eyes\n\n## Themes\n- Your wallpaper no longer resets after an update\n\n## Cleaner defaults\n- Lobby after a round, bot thinking lines and the thinking log are now off by default\n- Applied once for everyone on this update; after that your own choice stays\n\n# NTL VANCED BY OM RAJPUT.\n"
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.69/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.69/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.69/NTL-VANCED-v5.69.zip",
+  "notes": "## Team keys\n- Team keys work again: NTL VANCED now talks to the NTL team service the way NTL does\n\n## Backup & restore\n- Restoring a backup (from NTL or NTL VANCED) no longer stops half way when the browser storage is full\n- Team keys and settings always come back; anything too big to fit is named at the end\n\n## Tour\n- The highlight and its card land on the right spot at any UI size or browser zoom\n- The card no longer covers what it is showing, and the tour re-centres if you zoom mid-tour\n\n# NTL VANCED BY OM RAJPUT.\n"
 }
