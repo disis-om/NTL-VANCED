@@ -1218,7 +1218,7 @@ var NTL_SP = (function () {
   }, true);
 
   /* eye renderers ask this before drawing */
-  function noEyes(sn) { if (on) return !cfg.eyes && typeof snake !== "undefined" && sn === snake; return typeof NTL_CR !== "undefined" && NTL_CR.noEyes(sn); }
+  function noEyes(sn) { if (typeof NTL_ST !== "undefined" && NTL_ST.drawn(sn)) return true; if (on) return !cfg.eyes && typeof snake !== "undefined" && sn === snake; return typeof NTL_CR !== "undefined" && NTL_CR.noEyes(sn); }
 
   /* Called from ag() once the segment cache is filled and before any body
      drawing. bb is the 2D context at identity; Zw/Kw are world coords of the
@@ -1340,6 +1340,63 @@ var NTL_SP = (function () {
   return { toggle: toggle, hide: hide, noEyes: noEyes, cfg: cfg, set: set, preview: preview, get on() { return on; }, set on(v) { on = !!v; } };
 })();
 /* ========================== END SPINE MODE ================================= */
+/* ========================== STRIP MODE ===================================== */
+/* Client-side only, picked in Vanced Skins (the "Strip" card). While on, your snake — or, with "Everyone",
+   every snake you see — is drawn as a flat strip in its own colour at its body width, with one white dot for
+   the eyes and its bones (the spine) as a thin white line down the middle. Bead sprites, glow and eyes are
+   not drawn. Nothing is sent to the server; your skin stays what it was.
+   Settings: localStorage.wy_strip = { on, all, bones } (in every settings backup). */
+var NTL_ST = (function () {
+  var KEY = "wy_strip";
+  var cfg = { on: false, all: false, bones: true };
+  try { var j = JSON.parse(localStorage.getItem(KEY) || "null"); if (j) for (var k in cfg) if (k in j) cfg[k] = j[k]; } catch (e) {}
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) {} }
+  function set(key, val) { cfg[key] = val; save(); }
+  /* this snake is drawn as a strip right now */
+  function drawn(sn) { return !!cfg.on && !!sn && (cfg.all || (typeof snake !== "undefined" && sn === snake)); }
+
+  /* same contract as NTL_SP.hide: called from ag() before any body drawing; zeroing _w skips every sprite loop */
+  function hide(bb, cb, Zw, Kw, qw, _w, n, r, pass) {
+    if (pass !== 1) { try { draw(bb, cb, Zw, Kw, _w, n, r); } catch (e) {} }
+    for (var i = 0; i < n; i++) _w[i] = 0;
+  }
+  /* the strip itself; pts given in screen px by the caller via (g, ox, oy) */
+  function stroke(c, xs, ys, on, n, w, col, a, ang, rpx) {
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
+    c.globalCompositeOperation = "source-over"; c.lineCap = "round"; c.lineJoin = "round";
+    c.beginPath();
+    var pen = false;
+    for (var i = 0; i < n; i++) {
+      if (!on[i]) { pen = false; continue; }
+      if (!pen) { c.moveTo(xs[i], ys[i]); pen = true; if (i + 1 >= n || !on[i + 1]) c.lineTo(xs[i] + 0.01, ys[i]); } else c.lineTo(xs[i], ys[i]);
+    }
+    c.globalAlpha = a; c.lineWidth = w; c.strokeStyle = col; c.stroke();
+    if (cfg.bones) { c.globalAlpha = a * 0.85; c.lineWidth = Math.max(1, w * 0.12); c.strokeStyle = "#fff"; c.stroke(); }
+    if (on[0]) {                                               // one white dot where the eyes were
+      c.beginPath(); c.arc(xs[0] + Math.cos(ang) * rpx * 0.25, ys[0] + Math.sin(ang) * rpx * 0.25, Math.max(1.5, w * 0.28), 0, Math.PI * 2);
+      c.globalAlpha = a; c.fillStyle = "#fff"; c.fill();
+    }
+    c.restore();
+  }
+  function draw(bb, cb, Zw, Kw, _w, n, r) {
+    if (n < 1) return;
+    var g = gsc, ox = Xe - view_xx * g, oy = Ee - view_yy * g;
+    var a = Math.max(0, Math.min(1, cb.H * (1 - cb.X)));      // the body's own fade (spawn / death)
+    if (a <= 0.01) return;
+    var xs = new Array(n), ys = new Array(n);
+    for (var i = 0; i < n; i++) { xs[i] = Zw[i] * g + ox; ys[i] = Kw[i] * g + oy; }
+    var ang = typeof cb.ang === "number" ? cb.ang : (n > 1 ? Math.atan2(Kw[0] - Kw[1], Zw[0] - Zw[1]) : 0);
+    stroke(bb, xs, ys, _w, n, Math.max(2, 2 * r * g), cb.cs || "#8ad", a, ang, r * g);
+  }
+  /* the card preview in Vanced Skins: pts = [{x,y,a}] head first, rr = half width in canvas px */
+  function demo(c, pts, rr) {
+    var n = pts.length, xs = [], ys = [], on = [];
+    for (var i = 0; i < n; i++) { xs.push(pts[i].x); ys.push(pts[i].y); on.push(1); }
+    stroke(c, xs, ys, on, n, rr * 2, "#8b8cf0", 1, pts[0].a, rr);
+  }
+  return { hide: hide, drawn: drawn, demo: demo, cfg: cfg, set: set, get on() { return !!cfg.on; }, set on(v) { cfg.on = !!v; save(); }, get all() { return !!cfg.all; } };
+})();
+/* ========================== END STRIP MODE ================================= */
 /* ========================== VANCED SKINS =================================== */
 /* Creature skins for your own snake (drawn on your screen; the game only ever
    gets a normal skin). Picked from the skin editor: a "Vanced Skins" button
@@ -2013,7 +2070,12 @@ var NTL_CR = (function () {
     try { localStorage.setItem("snakercv", "" + id); localStorage.setItem("want_custom_skin", "0"); } catch (e) {}
     try { if (typeof Ov === "function") Ov(); } catch (e) {}
   }
+  /* "strip" (NTL_ST) is a look, not a creature: it keeps your normal skin and takes the place of any creature */
+  function stripOn() { return typeof NTL_ST !== "undefined" && NTL_ST.on; }
+  function selId() { return stripOn() ? "strip" : (cfg.id || ""); }
   function pick(id) {
+    if (id === "strip") { if (typeof NTL_ST === "undefined") return; if (cur()) pick(""); NTL_ST.on = true; render(); return; }
+    if (typeof NTL_ST !== "undefined") NTL_ST.on = false;
     if (id && LIST[id]) {
       if (!cur()) { try { cfg.prev = { rcv: localStorage.getItem("snakercv"), want: localStorage.getItem("want_custom_skin") }; } catch (e) {} }
       cfg.id = id; save(); useSkin(LIST[id].skin);
@@ -2125,6 +2187,9 @@ var NTL_CR = (function () {
     "#wy-cr .op input:before{content:'';position:absolute;left:3px;top:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .2s;}",
     "#wy-cr .op input:checked{background:linear-gradient(90deg,var(--wy-p,#9b7bff),var(--wy-b,#5ecbff));}#wy-cr .op input:checked:before{left:17px;}",
     "#wy-cr .op span{font-size:10.5px;color:#8b93a7;line-height:1.45;}#wy-cr .op b{display:block;font-size:12px;color:#e6e9ef;margin-bottom:1px;}",
+    "#wy-cr .sc{display:flex;gap:4px;margin:0 10px 10px;padding:3px;border-radius:9px;background:rgba(255,255,255,.06);}",
+    "#wy-cr .sc button{flex:1;height:24px;border:0;border-radius:7px;background:transparent;color:#8b93a7;font:bold 10.5px Arial;cursor:pointer;}",
+    "#wy-cr .sc button.on{background:linear-gradient(90deg,var(--wy-p,#9b7bff),var(--wy-b,#5ecbff));color:#fff;}",
     "#wy-cr .nt{margin-top:12px;font-size:10.5px;color:#6b7385;line-height:1.5;}"
   ].join("\n");
   var ov = null, raf = 0, lastSel = -1;
@@ -2139,6 +2204,7 @@ var NTL_CR = (function () {
     for (i = 1; i < m; i++) pts[i].a = Math.atan2(pts[i - 1].y - pts[i].y, pts[i - 1].x - pts[i].x);
     pts[0].a = pts[1].a;
     if (id && LIST[id]) { LIST[id].draw(c, pts, rr, t, !!window.__crBoost, 1, Math.sin(t * 1.3) * 0.9); return; }
+    if (id === "strip" && typeof NTL_ST !== "undefined") { NTL_ST.demo(c, pts, rr); return; }
     c.lineCap = "round"; c.lineJoin = "round";                     // plain snake for "Normal skin"
     c.beginPath(); for (i = m - 1; i >= 0; i--) (i === m - 1 ? c.moveTo : c.lineTo).call(c, pts[i].x, pts[i].y);
     c.strokeStyle = "#8f7bd8"; c.lineWidth = rr * 2; c.stroke();
@@ -2147,15 +2213,21 @@ var NTL_CR = (function () {
   function render() {
     if (!ov) return;
     var items = ov.querySelectorAll(".it");
-    for (var i = 0; i < items.length; i++) { var on = (items[i].getAttribute("data-id") || "") === (cfg.id || ""); items[i].classList.toggle("on", on); items[i].querySelector("i").textContent = on ? "IN USE" : "USE"; }
+    var sid = selId();
+    for (var i = 0; i < items.length; i++) { var on = (items[i].getAttribute("data-id") || "") === sid; items[i].classList.toggle("on", on); items[i].querySelector("i").textContent = on ? "IN USE" : "USE"; }
+    var all = typeof NTL_ST !== "undefined" && NTL_ST.all, sb = ov.querySelectorAll("[data-sc]");
+    for (var k = 0; k < sb.length; k++) sb[k].classList.toggle("on", (sb[k].getAttribute("data-sc") === "all") === all);
   }
   function close() { if (ov) { ov.remove(); ov = null; } if (raf) { cancelAnimationFrame(raf); raf = 0; } lastSel = -1; }
   function open() {
     css(); close();
     ov = document.createElement("div"); ov.id = "wy-cr-ov";
     var h = '<div id="wy-cr"><div class="hd"><b>VANCED SKINS</b><span>creatures for your snake</span><button class="x">CLOSE</button></div><div class="grid">';
-    var ids = [""].concat(Object.keys(LIST));
-    ids.forEach(function (id) { h += '<div class="it" data-id="' + id + '"><canvas></canvas><div class="nm"><span>' + (id ? LIST[id].name : "Normal skin") + "</span><i></i></div></div>"; });
+    var ids = [""].concat(typeof NTL_ST !== "undefined" ? ["strip"] : [], Object.keys(LIST));
+    ids.forEach(function (id) {
+      h += '<div class="it" data-id="' + id + '"><canvas></canvas><div class="nm"><span>' + (id === "strip" ? "Strip" : id ? LIST[id].name : "Normal skin") + "</span><i></i></div>" +
+        (id === "strip" ? '<div class="sc"><button data-sc="mine">Mine</button><button data-sc="all">Everyone</button></div>' : "") + "</div>";
+    });
     h += '</div><div class="opts"><label class="op"><input type="checkbox" data-opt="share"' + (cfg.share ? " checked" : "") + '><span><b>Share my skin</b>other NTL VANCED players see your creature</span></label>' +
       '<label class="op"><input type="checkbox" data-opt="see"' + (cfg.see ? " checked" : "") + '><span><b>See others’ skins</b>show the creatures other Vanced players picked</span></label></div>' +
       '<div class="nt">Players without NTL VANCED see the normal skin closest to the creature’s colours — it is set for you when you pick one, and your previous skin comes back when you pick Normal skin.</div></div>';
@@ -2166,6 +2238,8 @@ var NTL_CR = (function () {
     ov.addEventListener("change", function (e) { var o2 = e.target && e.target.getAttribute && e.target.getAttribute("data-opt"); if (o2) setOpt(o2, e.target.checked); });
     ov.addEventListener("click", function (e) {
       if (e.target === ov || (e.target.classList && e.target.classList.contains("x"))) { close(); return; }
+      var sc = e.target.closest && e.target.closest("[data-sc]");
+      if (sc && typeof NTL_ST !== "undefined") { NTL_ST.set("all", sc.getAttribute("data-sc") === "all"); pick("strip"); return; }
       var it = e.target.closest && e.target.closest(".it"); if (it) pick(it.getAttribute("data-id") || "");
     });
     document.body.appendChild(ov); render();
@@ -2175,7 +2249,7 @@ var NTL_CR = (function () {
     for (var i0 = 0; i0 < cvs.length; i0++) demo(cvs[i0], ids[i0], 0.6);
     (function loop() {
       if (!ov) return;
-      var t = (performance.now() - t0) / 1000, sel = ids.indexOf(cfg.id || "");
+      var t = (performance.now() - t0) / 1000, sel = ids.indexOf(selId());
       if (sel >= 0 && sel !== lastSel && lastSel >= 0) demo(cvs[lastSel], ids[lastSel], 0.6);   // the previous one goes still again
       lastSel = sel; if (sel >= 0) demo(cvs[sel], ids[sel], t);
       raf = requestAnimationFrame(loop);
@@ -5535,6 +5609,7 @@ var NTL_VS = (function () {
   var ov = null, secsRef = null, navsRef = null;   // the open popup's sections / nav items (for the tour)
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
+    { v: "5.70-dev", d: "5 Oct 2026", t: "Strip: a new look in Vanced Skins \u2014 snakes drawn as flat strips in their own colour with a white eye dot and their bones down the middle. Pick it for your snake only (Mine) or for every snake you see (Everyone). It is only on your screen; your skin stays the same for everyone else." },
     { v: "5.69", d: "5 Oct 2026", t: "Tour: the highlight and its card now land on the right spot at any UI size or browser zoom \u2014 it scrolls sideways when needed, puts the card where it hides the least and re-centres when you zoom mid-tour. Team keys work again: NTL’s team service only answers NTL’s own version, so NTL VANCED now sends 9.68 to it (it had been sending its own version and every key was refused). Restore: a backup (from NTL or NTL VANCED) no longer stops half way when the browser storage is full \u2014 team keys and settings always come back, and anything too big to fit is named at the end." },
     { v: "5.68", d: "28 Sep 2026", t: "Welcome tour: after this update a welcome screen and a guided tour walk you through Vanced settings and Vanced Skins. Every settings page has a bulb \u2014 View demo \u2014 for that page, and View full Vanced demo at the bottom of the sidebar replays everything. Themes: your wallpaper now comes back after an update (it used to fall back to the default while the colours stayed). The lobby, the thinking log and the bot\u2019s thinking lines now start off (switched off once on this update) \u2014 turn them on in Vanced settings. Languages: pick yours on the tour\u2019s welcome screen or in Vanced \u203a General \u2014 24 languages, each named in itself. The tour now goes group by group, and the Centipede got a real head: beaded antennae, venom claws and eyes that look where you steer." },
     { v: "5.66", d: "27 Sep 2026", t: "Vanced Skins: a new button in the skin editor opens creature skins for your snake \u2014 Centipede, Dragon, Skeleton, Chinese Dragon, Electric Eel, Train, Robot Snake, Phoenix, Ice Serpent, Caterpillar and Zombie Snake, each with its own boost effect. Other NTL VANCED players in your arena see your creature and you see theirs (Share my skin / See others\u2019 skins on the page, both on). Other players see the normal skin closest to the creature\u2019s colours." },
@@ -8189,7 +8264,7 @@ fj=Dh.yy+Dh.fy;Sh=zb+.5*(fh-zb);Th=Db+.5*(Zb-Db);gj=fh+.5*(kj-fh);Eh=Zb+.5*(fj-Z
 yy:Xh},Wb.push(Lb));dh++;zh<=Oh&&(Mb=Math.sqrt((Lb.xx-vh.xx)*(Lb.xx-vh.xx)+(Lb.yy-vh.yy)*(Lb.yy-vh.yy)),Lb.d=Mb,vh=Lb,zh++);if(1==Yb){Yb=2;Sb=-9999;break}Ub-=Xb;0>=Ub?(Yb=1,$b+=Xb+Ub):$b+=Xb}$b-=ph;Ph=$b/Xb;Ub+=$b;Vh=!0}Vh&&(Ub-=$b)}if(1>=Yb&&(-1E-4<=Ub&&0>=Ub&&(Ub=0),0<=Ub||1==Yb)&&(Tb=cb.B[Ah-1],ah=cb.B[Ah-2],Tb&&(zb=Tb.xx+Tb.fx,Db=Tb.yy+Tb.fy),ah))for(fh=ah.xx+ah.fx,Zb=ah.yy+ah.fy;0<=Ub||1==Yb;){Jh=fh-(zb-fh)*($b-.5);Xh=Zb-(Db-Zb)*($b-.5);dh<Wb.length?(Lb=Wb[dh],Lb.xx=Jh,Lb.yy=Xh):(Lb={xx:Jh,yy:Xh},
 Wb.push(Lb));dh++;zh<=Oh&&(Mb=Math.sqrt((Lb.xx-vh.xx)*(Lb.xx-vh.xx)+(Lb.yy-vh.yy)*(Lb.yy-vh.yy)),Lb.d=Mb,vh=Lb,zh++);if(1==Yb){Yb=2;break}Ub-=Xb;0>=Ub?(Yb=1,$b+=Xb+Ub):$b+=Xb;-1E-4<=Ub&&0>=Ub&&(Ub=0)}}var Fh=zh-1;Fh>Wb.length&&(Fh=Wb.length);Ce&&(Fh=0);if(3<=Fh){for(Sb=Ih=0;Sb<Fh-1;Sb++)Ih+=Wb[Sb].d;var Gh=Wb[0];ph=Ih/(Fh-2);var Nh=1;var Hh=ph;for(Sb=0;Sb<Fh;Sb++)Wb[Sb].ox=Wb[Sb].xx,Wb[Sb].oy=Wb[Sb].yy;for(Sb=1;Sb<Fh;Sb++)for(Lb=Wb[Sb];;){var Bh=Wb[Nh];if(Hh<Bh.d){Lb.xx=Gh.ox+(Bh.ox-Gh.ox)*Hh/Bh.d;
 Lb.yy=Gh.oy+(Bh.oy-Gh.oy)*Hh/Bh.d;var Qh=Math.pow(Sb/Fh,2);Lb.xx+=(Lb.ox-Lb.xx)*Qh;Lb.yy+=(Lb.oy-Lb.yy)*Qh;Hh+=ph;break}else if(Hh-=Bh.d,Gh=Bh,Nh++,Nh>=Fh){Sb=Fh+1;break}}}var nj=Bb=0;for(Sb=0;Sb<dh;Sb++){zb=Wb[Sb].xx;Db=Wb[Sb].yy;Zw[Bb]=zb;Kw[Bb]=Db;qw[Bb]=0;lb&&(nj--,0>=nj&&(nj=3));_w[Bb]=zb>=xc&&Db>=Oc&&zb<=Cc&&Db<=Hc?lb&&3!=nj?1:2:0;1<=Bb&&(wh=zb-wj,xh=Db-xj,qw[Bb]=-4<=wh&&-4<=xh&&4>wh&&4>xh?Vu[32*xh+128<<8|32*wh+128]:-8<=wh&&-8<=xh&&8>wh&&8>xh?Vu[16*xh+128<<8|16*wh+128]:-16<=wh&&-16<=xh&&16>
-wh&&16>xh?Vu[8*xh+128<<8|8*wh+128]:-127<=wh&&-127<=xh&&127>wh&&127>xh?Vu[xh+128<<8|wh+128]:Math.atan2(xh,wh));var wj=zb;var xj=Db;Bb++}2<=dh&&(qw[0]=qw[1],cb.OA=qw[1]+Math.PI)}cb===snake?NTL_SP.on?NTL_SP.hide(bb,cb,Zw,Kw,qw,_w,Bb,eb,jb):NTL_CR.id&&NTL_CR.hide(bb,cb,Zw,Kw,qw,_w,Bb,eb,jb):NTL_CR.other(cb)&&NTL_CR.hideOther(bb,cb,Zw,Kw,qw,_w,Bb,eb,jb);bb.save();bb.translate(Xe,Ee);pb=gsc*eb*52/32;hb=gsc*eb*62/32;Pb=cb.H*(1-cb.X);Pb*=Pb;Vb=1;if(2!==jb){var ij=Oe&&Cg&&Eg&&Oe.available(bb)&&(3===(mg|0)?!!k7:!!F0);ij&&=Oe.bindAtlas(3===(mg|0)?"kmcsnews":"kmcss",3===(mg|0)?k7:F0);if(ij&&pg!==z4.length){pg=z4.length;Mg=new Float32Array(3*pg);for(var Uh=0;Uh<pg;Uh++){var nh=z4[Uh];
+wh&&16>xh?Vu[8*xh+128<<8|8*wh+128]:-127<=wh&&-127<=xh&&127>wh&&127>xh?Vu[xh+128<<8|wh+128]:Math.atan2(xh,wh));var wj=zb;var xj=Db;Bb++}2<=dh&&(qw[0]=qw[1],cb.OA=qw[1]+Math.PI)}NTL_ST.drawn(cb)?NTL_ST.hide(bb,cb,Zw,Kw,qw,_w,Bb,eb,jb):cb===snake?NTL_SP.on?NTL_SP.hide(bb,cb,Zw,Kw,qw,_w,Bb,eb,jb):NTL_CR.id&&NTL_CR.hide(bb,cb,Zw,Kw,qw,_w,Bb,eb,jb):NTL_CR.other(cb)&&NTL_CR.hideOther(bb,cb,Zw,Kw,qw,_w,Bb,eb,jb);bb.save();bb.translate(Xe,Ee);pb=gsc*eb*52/32;hb=gsc*eb*62/32;Pb=cb.H*(1-cb.X);Pb*=Pb;Vb=1;if(2!==jb){var ij=Oe&&Cg&&Eg&&Oe.available(bb)&&(3===(mg|0)?!!k7:!!F0);ij&&=Oe.bindAtlas(3===(mg|0)?"kmcsnews":"kmcss",3===(mg|0)?k7:F0);if(ij&&pg!==z4.length){pg=z4.length;Mg=new Float32Array(3*pg);for(var Uh=0;Uh<pg;Uh++){var nh=z4[Uh];
 Mg[3*Uh]=parseInt(nh.substr(1,2),16)/255;Mg[3*Uh+1]=parseInt(nh.substr(3,2),16)/255;Mg[3*Uh+2]=parseInt(nh.substr(5,2),16)/255}}if(!NTL_PF.on&&cb.BA>cb.C&&(s5&&cb.skb_boost||!Me&&mb||pe&&!mb)){Vb=cb.H*(1-cb.X)*Math.max(0,Math.min(1,(cb.BA-cb.M)/(cb.p-cb.M)));.6<Vb&&(Vb=.6);jh=Math.pow(Vb,.5);Qb=1.5*gsc*eb*(1+.9375*jh);ch=4;lb&&(ch=12);var Zh=ij&&L7&&S7&&Oe.pushSpriteAdd&&Oe.bindSpriteAtlasAdd;Zh&&(Wv!==L7&&Oe.updateSpriteAtlas&&(Oe.updateSpriteAtlas("pci_kfmc",L7),Wv=L7),Oe.bindSpriteAtlasAdd("pci_kfmc",L7)||
 (Zh=!1));if(Zh){var jj=1/(L7.width||1),yj=1/(L7.height||1),rj=cb.sA&&cb.sA.length?cb.sA:null,tj=rj?rj.length:0,tb=S7.length;for(nb=Bb-1;0<=nb;nb--)if(2==_w[nb]){var wb=rj?rj[nb%tj]|0:fb;if(0>wb||wb>=tb)wb=fb<tb?fb:0;var Ab=S7[wb]|0,xb=G7[wb]|0,yb=Pb*jh*.38*(.6+.4*Math.cos(nb/ch-1.15*cb.DA));if(!(0>=yb)){var Gb=4>nb?Qb*(1+(4-nb)*qb):Qb;Oe.pushSpriteAdd(Xe+(Zw[nb]-view_xx)*gsc,Ee+(Kw[nb]-view_yy)*gsc,0,Gb,Gb,yb,Ab*jj,xb*yj,(Ab+62)*jj,(xb+62)*yj)}}}else{Kb=M7[fb];bb.save();bb.globalCompositeOperation=
 "lighter";if(cb.sA&&cb.sA.length){var Cb=cb.sA;bh=Cb.length;for(nb=Bb-1;0<=nb;nb--)2==_w[nb]&&(Eb=Zw[nb],Jb=Kw[nb],Kb=Cb[nb%bh]|0,Kb=M7[Kb],ob=(Eb-view_xx)*gsc,sb=(Jb-view_yy)*gsc,bb.globalAlpha=Pb*jh*.38*(.6+.4*Math.cos(nb/ch-1.15*cb.DA)),bb.translate(ob,sb),4>nb?(Ib=Qb*(1+(4-nb)*qb),bb.drawImage(Kb,-Ib,-Ib,2*Ib,2*Ib)):bb.drawImage(Kb,-Qb,-Qb,2*Qb,2*Qb),bb.translate(-ob,-sb))}else for(nb=Bb-1;0<=nb;nb--)2==_w[nb]&&(Eb=Zw[nb],Jb=Kw[nb],ob=(Eb-view_xx)*gsc,sb=(Jb-view_yy)*gsc,bb.globalAlpha=Pb*jh*
