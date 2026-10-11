@@ -1387,15 +1387,18 @@ var NTL_SP = (function () {
 })();
 /* ========================== END SPINE MODE ================================= */
 /* ========================== STRIP MODE ===================================== */
-/* Client-side only, picked in Vanced Skins (the "Strip" card). While on, your snake — or, with "Everyone",
-   every snake you see — is drawn as a flat strip in its own colour at its body width, with one white dot for
-   the eyes and its bones (the spine) as a thin white line down the middle. Bead sprites, glow and eyes are
-   not drawn. Nothing is sent to the server; your skin stays what it was.
-   Settings: localStorage.wy_strip = { on, all, bones } (in every settings backup). */
+/* Client-side only, picked in Vanced Skins (the Strip cards). While on, your snake — or, with "Everyone", every
+   snake you see — is drawn as a flat strip in its own colour at its body width, with one white dot for the eyes
+   and its bones (the spine) as a thin white line down the middle. Bead sprites, glow and eyes are not drawn.
+   Nothing is sent to the server; your skin stays what it was.
+   Looks: classic, neon, glass, outline, pixel, rainbow, candy.
+   Settings: localStorage.wy_strip = { on, all, bones, look } (in every settings backup). */
 var NTL_ST = (function () {
   var KEY = "wy_strip";
-  var cfg = { on: false, all: false, bones: true };
+  var LOOKS = [["classic", "Strip"], ["neon", "Neon Strip"], ["glass", "Glass Strip"], ["outline", "Outline Strip"], ["pixel", "Pixel Strip"], ["rainbow", "Rainbow Strip"], ["candy", "Candy Strip"]];
+  var cfg = { on: false, all: false, bones: true, look: "classic" };
   try { var j = JSON.parse(localStorage.getItem(KEY) || "null"); if (j) for (var k in cfg) if (k in j) cfg[k] = j[k]; } catch (e) {}
+  if (!LOOKS.some(function (l) { return l[0] === cfg.look; })) cfg.look = "classic";
   function save() { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) {} }
   function set(key, val) { cfg[key] = val; save(); }
   /* this snake is drawn as a strip right now */
@@ -1406,18 +1409,96 @@ var NTL_ST = (function () {
     if (pass !== 1) { try { draw(bb, cb, Zw, Kw, _w, n, r); } catch (e) {} }
     for (var i = 0; i < n; i++) _w[i] = 0;
   }
-  /* the strip itself; pts given in screen px by the caller via (g, ox, oy) */
-  function stroke(c, xs, ys, on, n, w, col, a, ang, rpx) {
+
+  function lighten(col, amt) {                       // "#rrggbb" or "rgb(..)" -> lighter rgb()
+    var m = /^#([0-9a-f]{6})$/i.exec(col || ""), r, g, b;
+    if (m) { r = parseInt(m[1].substr(0, 2), 16); g = parseInt(m[1].substr(2, 2), 16); b = parseInt(m[1].substr(4, 2), 16); }
+    else { var q = /(\d+)\D+(\d+)\D+(\d+)/.exec(col || ""); if (!q) return "#fff"; r = +q[1]; g = +q[2]; b = +q[3]; }
+    return "rgb(" + Math.round(r + (255 - r) * amt) + "," + Math.round(g + (255 - g) * amt) + "," + Math.round(b + (255 - b) * amt) + ")";
+  }
+  function runs(on, n) {                             // contiguous visible runs [a, b]
+    var out = [], a = -1;
+    for (var i = 0; i < n; i++) { if (on[i]) { if (a < 0) a = i; } else if (a >= 0) { out.push([a, i - 1]); a = -1; } }
+    if (a >= 0) out.push([a, n - 1]);
+    return out;
+  }
+  function path(c, xs, ys, on, n) {                  // the centre line, one subpath per visible run
+    c.beginPath();
+    runs(on, n).forEach(function (r) {
+      c.moveTo(xs[r[0]], ys[r[0]]);
+      if (r[1] === r[0]) c.lineTo(xs[r[0]] + 0.01, ys[r[0]]);
+      for (var i = r[0] + 1; i <= r[1]; i++) c.lineTo(xs[i], ys[i]);
+    });
+  }
+  /* closed outline of a run at half-width h (round caps), for glass / outline */
+  function outline(c, xs, ys, a, b, h) {
+    var m = b - a + 1; if (m < 2) { c.moveTo(xs[a] + h, ys[a]); c.arc(xs[a], ys[a], h, 0, Math.PI * 2); return; }
+    var nx = [], ny = [], i, dx, dy, d;
+    for (i = a; i <= b; i++) {
+      var p = i > a ? i - 1 : i, q = i < b ? i + 1 : i;
+      dx = xs[q] - xs[p]; dy = ys[q] - ys[p]; d = Math.sqrt(dx * dx + dy * dy) || 1;
+      nx.push(-dy / d); ny.push(dx / d);
+    }
+    c.moveTo(xs[a] + nx[0] * h, ys[a] + ny[0] * h);
+    for (i = 1; i < m; i++) c.lineTo(xs[a + i] + nx[i] * h, ys[a + i] + ny[i] * h);
+    var ae = Math.atan2(ny[m - 1], nx[m - 1]);                         // angle of the end normal
+    c.arc(xs[b], ys[b], h, ae, ae - Math.PI, true);
+    for (i = m - 1; i >= 0; i--) c.lineTo(xs[a + i] - nx[i] * h, ys[a + i] - ny[i] * h);
+    var a0 = Math.atan2(ny[0], nx[0]);
+    c.arc(xs[a], ys[a], h, a0 + Math.PI, a0, true);
+    c.closePath();
+  }
+
+  /* the strip itself, in screen px: xs/ys per point, on[] visible, w = full width */
+  function stroke(c, xs, ys, on, n, w, col, a, ang, rpx, look) {
     c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
     c.globalCompositeOperation = "source-over"; c.lineCap = "round"; c.lineJoin = "round";
-    c.beginPath();
-    var pen = false;
-    for (var i = 0; i < n; i++) {
-      if (!on[i]) { pen = false; continue; }
-      if (!pen) { c.moveTo(xs[i], ys[i]); pen = true; if (i + 1 >= n || !on[i + 1]) c.lineTo(xs[i] + 0.01, ys[i]); } else c.lineTo(xs[i], ys[i]);
+    var h = w / 2, bone = cfg.bones, i;
+    if (look === "neon") {
+      c.globalCompositeOperation = "lighter";
+      path(c, xs, ys, on, n); c.globalAlpha = a * 0.18; c.lineWidth = w * 2.1; c.strokeStyle = col; c.stroke();
+      c.globalAlpha = a * 0.28; c.lineWidth = w * 1.45; c.stroke();
+      c.globalCompositeOperation = "source-over";
+      c.globalAlpha = a; c.lineWidth = w; c.strokeStyle = lighten(col, 0.25); c.stroke();
+      c.globalAlpha = a * 0.95; c.lineWidth = Math.max(1, w * 0.42); c.strokeStyle = lighten(col, 0.75); c.stroke();
+    } else if (look === "glass" || look === "outline") {
+      c.beginPath(); runs(on, n).forEach(function (r) { outline(c, xs, ys, r[0], r[1], h); });
+      if (look === "glass") { c.globalAlpha = a * 0.3; c.fillStyle = col; c.fill(); c.globalAlpha = a * 0.9; c.lineWidth = Math.max(1.2, w * 0.1); c.strokeStyle = lighten(col, 0.55); c.stroke(); }
+      else { c.globalAlpha = a * 0.1; c.fillStyle = col; c.fill(); c.globalAlpha = a; c.lineWidth = Math.max(1.6, w * 0.16); c.strokeStyle = col; c.stroke(); }
+    } else if (look === "pixel") {
+      var p = Math.max(3, Math.round(w / 3.2)), seen = {}, rad = h * 0.98, cells = Math.ceil(rad / p);
+      c.globalAlpha = a; c.fillStyle = col;
+      for (i = 0; i < n; i += 1) {
+        if (!on[i]) continue;
+        var gx = Math.round(xs[i] / p), gy = Math.round(ys[i] / p);
+        for (var ix = -cells; ix <= cells; ix++) for (var iy = -cells; iy <= cells; iy++) {
+          if ((ix * p) * (ix * p) + (iy * p) * (iy * p) > rad * rad) continue;
+          var kx = gx + ix, ky = gy + iy, key = kx + "," + ky;
+          if (seen[key]) continue; seen[key] = 1;
+          c.fillRect(kx * p - p / 2, ky * p - p / 2, p - 0.6, p - 0.6);
+        }
+      }
+    } else if (look === "rainbow") {
+      var t = performance.now() / 1400, step = 2;
+      c.lineWidth = w;
+      runs(on, n).forEach(function (r) {
+        for (i = r[0]; i < r[1]; i += step) {
+          var e = Math.min(i + step, r[1]);
+          c.beginPath(); c.moveTo(xs[i], ys[i]); for (var k2 = i + 1; k2 <= e; k2++) c.lineTo(xs[k2], ys[k2]);
+          c.globalAlpha = a; c.strokeStyle = "hsl(" + Math.round((i * 5 - t * 120) % 360) + ",85%,60%)"; c.stroke();
+        }
+      });
+    } else if (look === "candy") {
+      path(c, xs, ys, on, n); c.globalAlpha = a; c.lineWidth = w; c.strokeStyle = col; c.stroke();
+      c.lineCap = "butt"; c.setLineDash([w * 0.55, w * 0.85]); c.lineDashOffset = -(performance.now() / 90) % (w * 1.4);
+      c.globalAlpha = a * 0.85; c.lineWidth = w * 0.92; c.strokeStyle = "#fff"; c.stroke(); c.setLineDash([]); c.lineCap = "round";
+    } else {
+      path(c, xs, ys, on, n); c.globalAlpha = a; c.lineWidth = w; c.strokeStyle = col; c.stroke();
     }
-    c.globalAlpha = a; c.lineWidth = w; c.strokeStyle = col; c.stroke();
-    if (cfg.bones) { c.globalAlpha = a * 0.85; c.lineWidth = Math.max(1, w * 0.12); c.strokeStyle = "#fff"; c.stroke(); }
+    if (bone) {
+      path(c, xs, ys, on, n);
+      c.globalAlpha = a * (look === "glass" || look === "outline" ? 0.7 : 0.85); c.lineWidth = Math.max(1, w * 0.12); c.strokeStyle = look === "pixel" ? "rgba(255,255,255,.9)" : "#fff"; c.stroke();
+    }
     if (on[0]) {                                               // one white dot where the eyes were
       c.beginPath(); c.arc(xs[0] + Math.cos(ang) * rpx * 0.25, ys[0] + Math.sin(ang) * rpx * 0.25, Math.max(1.5, w * 0.28), 0, Math.PI * 2);
       c.globalAlpha = a; c.fillStyle = "#fff"; c.fill();
@@ -1432,15 +1513,15 @@ var NTL_ST = (function () {
     var xs = new Array(n), ys = new Array(n);
     for (var i = 0; i < n; i++) { xs[i] = Zw[i] * g + ox; ys[i] = Kw[i] * g + oy; }
     var ang = typeof cb.ang === "number" ? cb.ang : (n > 1 ? Math.atan2(Kw[0] - Kw[1], Zw[0] - Zw[1]) : 0);
-    stroke(bb, xs, ys, _w, n, Math.max(2, 2 * r * g), cb.cs || "#8ad", a, ang, r * g);
+    stroke(bb, xs, ys, _w, n, Math.max(2, 2 * r * g), cb.cs || "#8ad", a, ang, r * g, cfg.look);
   }
   /* the card preview in Vanced Skins: pts = [{x,y,a}] head first, rr = half width in canvas px */
-  function demo(c, pts, rr) {
+  function demo(c, pts, rr, look) {
     var n = pts.length, xs = [], ys = [], on = [];
     for (var i = 0; i < n; i++) { xs.push(pts[i].x); ys.push(pts[i].y); on.push(1); }
-    stroke(c, xs, ys, on, n, rr * 2, "#8b8cf0", 1, pts[0].a, rr);
+    stroke(c, xs, ys, on, n, rr * 2, "#8b8cf0", 1, pts[0].a, rr, look || "classic");
   }
-  return { hide: hide, drawn: drawn, demo: demo, cfg: cfg, set: set, get on() { return !!cfg.on; }, set on(v) { cfg.on = !!v; save(); }, get all() { return !!cfg.all; } };
+  return { hide: hide, drawn: drawn, demo: demo, cfg: cfg, set: set, LOOKS: LOOKS, get on() { return !!cfg.on; }, set on(v) { cfg.on = !!v; save(); }, get all() { return !!cfg.all; } };
 })();
 /* ========================== END STRIP MODE ================================= */
 /* ========================== VANCED SKINS =================================== */
@@ -2118,9 +2199,9 @@ var NTL_CR = (function () {
   }
   /* "strip" (NTL_ST) is a look, not a creature: it keeps your normal skin and takes the place of any creature */
   function stripOn() { return typeof NTL_ST !== "undefined" && NTL_ST.on; }
-  function selId() { return stripOn() ? "strip" : (cfg.id || ""); }
+  function selId() { return stripOn() ? "strip:" + NTL_ST.cfg.look : (cfg.id || ""); }
   function pick(id) {
-    if (id === "strip") { if (typeof NTL_ST === "undefined") return; if (cur()) pick(""); NTL_ST.on = true; render(); return; }
+    if (id.indexOf("strip:") === 0) { if (typeof NTL_ST === "undefined") return; if (cur()) pick(""); NTL_ST.set("look", id.slice(6)); NTL_ST.on = true; render(); return; }
     if (typeof NTL_ST !== "undefined") NTL_ST.on = false;
     if (id && LIST[id]) {
       if (!cur()) { try { cfg.prev = { rcv: localStorage.getItem("snakercv"), want: localStorage.getItem("want_custom_skin") }; } catch (e) {} }
@@ -2233,8 +2314,9 @@ var NTL_CR = (function () {
     "#wy-cr .op input:before{content:'';position:absolute;left:3px;top:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .2s;}",
     "#wy-cr .op input:checked{background:linear-gradient(90deg,var(--wy-p,#9b7bff),var(--wy-b,#5ecbff));}#wy-cr .op input:checked:before{left:17px;}",
     "#wy-cr .op span{font-size:10.5px;color:#8b93a7;line-height:1.45;}#wy-cr .op b{display:block;font-size:12px;color:#e6e9ef;margin-bottom:1px;}",
-    "#wy-cr .sc{display:flex;gap:4px;margin:0 10px 10px;padding:3px;border-radius:9px;background:rgba(255,255,255,.06);}",
-    "#wy-cr .sc button{flex:1;height:24px;border:0;border-radius:7px;background:transparent;color:#8b93a7;font:bold 10.5px Arial;cursor:pointer;}",
+    "#wy-cr .sc{display:flex;gap:4px;align-items:center;margin:12px 0 0;padding:4px;border-radius:11px;background:rgba(255,255,255,.06);}",
+    "#wy-cr .sc span{flex:1;padding-left:8px;font-size:11px;color:#8b93a7;}",
+    "#wy-cr .sc button{width:84px;height:26px;border:0;border-radius:7px;background:transparent;color:#8b93a7;font:bold 10.5px Arial;cursor:pointer;}",
     "#wy-cr .sc button.on{background:linear-gradient(90deg,var(--wy-p,#9b7bff),var(--wy-b,#5ecbff));color:#fff;}",
     "#wy-cr .nt{margin-top:12px;font-size:10.5px;color:#6b7385;line-height:1.5;}"
   ].join("\n");
@@ -2250,7 +2332,7 @@ var NTL_CR = (function () {
     for (i = 1; i < m; i++) pts[i].a = Math.atan2(pts[i - 1].y - pts[i].y, pts[i - 1].x - pts[i].x);
     pts[0].a = pts[1].a;
     if (id && LIST[id]) { LIST[id].draw(c, pts, rr, t, !!window.__crBoost, 1, Math.sin(t * 1.3) * 0.9); return; }
-    if (id === "strip" && typeof NTL_ST !== "undefined") { NTL_ST.demo(c, pts, rr); return; }
+    if (id.indexOf("strip:") === 0 && typeof NTL_ST !== "undefined") { NTL_ST.demo(c, pts, rr, id.slice(6)); return; }
     c.lineCap = "round"; c.lineJoin = "round";                     // plain snake for "Normal skin"
     c.beginPath(); for (i = m - 1; i >= 0; i--) (i === m - 1 ? c.moveTo : c.lineTo).call(c, pts[i].x, pts[i].y);
     c.strokeStyle = "#8f7bd8"; c.lineWidth = rr * 2; c.stroke();
@@ -2269,12 +2351,13 @@ var NTL_CR = (function () {
     css(); close();
     ov = document.createElement("div"); ov.id = "wy-cr-ov";
     var h = '<div id="wy-cr"><div class="hd"><b>VANCED SKINS</b><span>creatures for your snake</span><button class="x">CLOSE</button></div><div class="grid">';
-    var ids = [""].concat(typeof NTL_ST !== "undefined" ? ["strip"] : [], Object.keys(LIST));
+    var stripIds = typeof NTL_ST !== "undefined" ? NTL_ST.LOOKS.map(function (l) { return "strip:" + l[0]; }) : [];
+    var ids = [""].concat(stripIds, Object.keys(LIST));
     ids.forEach(function (id) {
-      h += '<div class="it" data-id="' + id + '"><canvas></canvas><div class="nm"><span>' + (id === "strip" ? "Strip" : id ? LIST[id].name : "Normal skin") + "</span><i></i></div>" +
-        (id === "strip" ? '<div class="sc"><button data-sc="mine">Mine</button><button data-sc="all">Everyone</button></div>' : "") + "</div>";
+      var nm = id.indexOf("strip:") === 0 ? NTL_ST.LOOKS.filter(function (l) { return l[0] === id.slice(6); })[0][1] : id ? LIST[id].name : "Normal skin";
+      h += '<div class="it" data-id="' + id + '"><canvas></canvas><div class="nm"><span>' + nm + "</span><i></i></div></div>";
     });
-    h += '</div><div class="opts"><label class="op"><input type="checkbox" data-opt="share"' + (cfg.share ? " checked" : "") + '><span><b>Share my skin</b>other NTL VANCED players see your creature</span></label>' +
+    h += '</div>' + (stripIds.length ? '<div class="sc"><span>Strip looks show on</span><button data-sc="mine">Mine</button><button data-sc="all">Everyone</button></div>' : "") + '<div class="opts"><label class="op"><input type="checkbox" data-opt="share"' + (cfg.share ? " checked" : "") + '><span><b>Share my skin</b>other NTL VANCED players see your creature</span></label>' +
       '<label class="op"><input type="checkbox" data-opt="see"' + (cfg.see ? " checked" : "") + '><span><b>See others’ skins</b>show the creatures other Vanced players picked</span></label></div>' +
       '<div class="nt">Players without NTL VANCED see the normal skin closest to the creature’s colours — it is set for you when you pick one, and your previous skin comes back when you pick Normal skin.</div></div>';
     ov.innerHTML = h;
@@ -2285,7 +2368,7 @@ var NTL_CR = (function () {
     ov.addEventListener("click", function (e) {
       if (e.target === ov || (e.target.classList && e.target.classList.contains("x"))) { close(); return; }
       var sc = e.target.closest && e.target.closest("[data-sc]");
-      if (sc && typeof NTL_ST !== "undefined") { NTL_ST.set("all", sc.getAttribute("data-sc") === "all"); pick("strip"); return; }
+      if (sc && typeof NTL_ST !== "undefined") { NTL_ST.set("all", sc.getAttribute("data-sc") === "all"); render(); return; }
       var it = e.target.closest && e.target.closest(".it"); if (it) pick(it.getAttribute("data-id") || "");
     });
     document.body.appendChild(ov); render();
@@ -5655,6 +5738,7 @@ var NTL_VS = (function () {
   var ov = null, secsRef = null, navsRef = null;   // the open popup's sections / nav items (for the tour)
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
+    { v: "5.72-dev", d: "12 Oct 2026", t: "Strip looks: Vanced Skins now has seven Strip looks — Strip, Neon, Glass, Outline, Pixel, Rainbow and Candy. Pick one, then choose whether it shows on Mine or on Everyone." },
     { v: "5.71", d: "12 Oct 2026", t: "Refinements. Some changes in Eyes Back mode." },
     { v: "5.70", d: "5 Oct 2026", t: "Strip: a new look in Vanced Skins \u2014 snakes drawn as flat strips in their own colour with a white eye dot and their bones down the middle. Pick it for your snake only (Mine) or for every snake you see (Everyone). It is only on your screen; your skin stays the same for everyone else." },
     { v: "5.69", d: "5 Oct 2026", t: "Tour: the highlight and its card now land on the right spot at any UI size or browser zoom \u2014 it scrolls sideways when needed, puts the card where it hides the least and re-centres when you zoom mid-tour. Team keys work again: NTL’s team service only answers NTL’s own version, so NTL VANCED now sends 9.68 to it (it had been sending its own version and every key was refused). Restore: a backup (from NTL or NTL VANCED) no longer stops half way when the browser storage is full \u2014 team keys and settings always come back, and anything too big to fit is named at the end." },
