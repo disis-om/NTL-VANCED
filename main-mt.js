@@ -2278,6 +2278,168 @@ var NTL_CR = (function () {
     c.restore();
   }
 
+  /* ---- more eyes: many, tiny, huge — all built on bigEye ---- */
+  function boostFx(c, S, rr, t, rgb) { var L = S[S.length - 1]; c.globalCompositeOperation = "lighter"; puff(c, L.x, L.y, L.a + PI, rr, t, 10, 1.2, rgb, 1.3, 4); c.globalCompositeOperation = "source-over"; }
+  function eyeOn(c, s, ox, oy, R, look, headA, t, boost, iris, seed) {   // an eye on a body segment: its pupil looks the way the head looks
+    c.save(); c.translate(s.x, s.y); c.rotate(s.a); bigEye(c, ox, oy, R, (look || 0) + headA - s.a, t, boost, iris, seed); c.restore();
+  }
+  function headBlob(c, rr, rx, ry, fill, edge, dx) { c.beginPath(); c.ellipse(rr * (dx == null ? 0.08 : dx), 0, rr * rx, rr * ry, 0, 0, PI * 2); c.fillStyle = fill; c.fill(); c.lineWidth = Math.max(1, rr * 0.1); c.strokeStyle = edge; c.stroke(); }
+
+  function argus(c, S, rr, t, boost, alpha, look) {
+    var n = S.length; if (n < 3) return;
+    var i, s, H = S[0], wf = function (k) { var u = k / (n - 1); return rr * (u < 0.08 ? 1.0 + u * 2 : 1.12 - u * 0.78); };
+    c.lineCap = "round"; c.lineJoin = "round"; if (boost) boostFx(c, S, rr, t, "90,140,255");
+    outline(c, S, wf); c.fillStyle = "#1d2c63"; c.fill(); c.lineWidth = Math.max(1, rr * 0.1); c.strokeStyle = "#0a1030"; c.stroke();
+    for (i = n - 2; i >= 2; i -= 2) { s = S[i]; var w = wf(i), big = hash(i) > 0.55; eyeOn(c, s, 0, (hash(i + 3) - 0.5) * w * 0.3, w * (big ? 0.62 : 0.4), look, H.a, t, boost, "#ffcf3a", i * 0.41); }
+    c.save(); c.translate(H.x, H.y); c.rotate(H.a);
+    headBlob(c, rr, 1.4, 1.3, "#26397f", "#0a1030");
+    bigEye(c, rr * 0.25, 0, rr * 0.78, look || 0, t, boost, "#ffcf3a", 0.3);
+    bigEye(c, -rr * 0.35, -rr * 0.78, rr * 0.36, look || 0, t, boost, "#ffcf3a", 1.1);
+    bigEye(c, -rr * 0.35, rr * 0.78, rr * 0.36, look || 0, t, boost, "#ffcf3a", 2.2);
+    bigEye(c, rr * 0.95, -rr * 0.55, rr * 0.22, look || 0, t, boost, "#ffcf3a", 3.1);
+    bigEye(c, rr * 0.95, rr * 0.55, rr * 0.22, look || 0, t, boost, "#ffcf3a", 4.2);
+    c.restore();
+  }
+  function spider(c, S, rr, t, boost, alpha, look) {
+    var n = S.length; if (n < 3) return;
+    var i, s, wf = function (k) { var u = k / (n - 1); return rr * (u < 0.1 ? 0.9 + u * 2 : 1.1 - u * 0.8); };
+    c.lineCap = "round"; c.lineJoin = "round"; if (boost) boostFx(c, S, rr, t, "170,90,255");
+    limbs(c, S, rr, t, boost, [3, 6, 9, 12, 15], "#3b2266", "#b79bff", 1.5);
+    outline(c, S, wf); c.fillStyle = "#2a1646"; c.fill(); c.lineWidth = Math.max(1, rr * 0.1); c.strokeStyle = "#0d0618"; c.stroke();
+    for (i = 3; i < n - 2; i += 3) { s = S[i]; c.fillStyle = "#b3122e"; c.beginPath(); c.ellipse(s.x, s.y, wf(i) * 0.36, wf(i) * 0.22, s.a, 0, PI * 2); c.fill(); }
+    var H = S[0]; c.save(); c.translate(H.x, H.y); c.rotate(H.a);
+    headBlob(c, rr, 1.35, 1.25, "#34195a", "#0d0618", 0.1);
+    var E = [[0.62, -0.42, 0.46], [0.62, 0.42, 0.46], [0.12, -0.88, 0.3], [0.12, 0.88, 0.3], [-0.35, -0.42, 0.2], [-0.35, 0.42, 0.2], [-0.7, -0.2, 0.15], [-0.7, 0.2, 0.15]];
+    for (var k = 0; k < E.length; k++) bigEye(c, E[k][0] * rr, E[k][1] * rr, E[k][2] * rr, look || 0, t, boost, "#ff3b3b", k * 0.7);
+    c.restore();
+  }
+  function megaeye(c, S, rr, t, boost, alpha, look) {
+    var n = S.length; if (n < 3) return;
+    var wf = function (k) { return rr * (0.62 - 0.3 * (k / (n - 1))); };
+    c.lineCap = "round"; c.lineJoin = "round"; if (boost) boostFx(c, S, rr, t, "255,120,170");
+    outline(c, S, wf); c.fillStyle = "#e9b7c9"; c.fill(); c.lineWidth = Math.max(1, rr * 0.08); c.strokeStyle = "#7a3550"; c.stroke();
+    line(c, S, 1, n - 1, null); c.strokeStyle = "rgba(190,50,90,.55)"; c.lineWidth = Math.max(1, rr * 0.12); c.stroke();
+    var H = S[0]; c.save(); c.translate(H.x, H.y); c.rotate(H.a);
+    var R = rr * 2.3, cx = rr * 0.35;
+    bigEye(c, cx, 0, R, look || 0, t, boost, "#27c2e8", 0.5);
+    if (((t + 0.5) % 3.8) < 3.55) {                                   // veins at the rim (hidden while it blinks)
+      c.strokeStyle = "rgba(200,40,60,.5)"; c.lineWidth = Math.max(1, rr * 0.06);
+      for (var k = 0; k < 12; k++) {
+        var a = k / 12 * PI * 2 + hash(k) * 0.3, r0 = R * 0.96, r1 = R * (0.8 + hash(k + 9) * 0.08), am = a + 0.12;
+        c.beginPath(); c.moveTo(cx + Math.cos(a) * r0, Math.sin(a) * r0); c.quadraticCurveTo(cx + Math.cos(am) * (r0 + r1) / 2, Math.sin(am) * (r0 + r1) / 2, cx + Math.cos(a) * r1, Math.sin(a) * r1); c.stroke();
+      }
+    }
+    c.restore();
+  }
+  function bean(c, S, rr, t, boost, alpha, look) {
+    var n = S.length; if (n < 3) return;
+    var i, s, wf = function (k) { return rr * (1.1 - 0.45 * (k / (n - 1))); };
+    c.lineCap = "round"; c.lineJoin = "round"; if (boost) boostFx(c, S, rr, t, "255,200,120");
+    outline(c, S, wf); c.fillStyle = "#ffd9a8"; c.fill(); c.lineWidth = Math.max(1, rr * 0.1); c.strokeStyle = "#a0643a"; c.stroke();
+    for (i = 2; i < n - 1; i += 2) { s = S[i]; var p = side2(s, hash(i) > 0.5 ? 1 : -1, wf(i) * 0.45); c.fillStyle = "rgba(230,140,70,.6)"; c.beginPath(); c.arc(p[0], p[1], Math.max(0.8, wf(i) * 0.22), 0, PI * 2); c.fill(); }
+    var H = S[0]; c.save(); c.translate(H.x, H.y); c.rotate(H.a);
+    headBlob(c, rr, 1.15, 1.1, "#ffe3bd", "#a0643a", 0.05);
+    bigEye(c, rr * 0.55, -rr * 0.42, rr * 0.2, look || 0, t, boost, null, 0.2);
+    bigEye(c, rr * 0.55, rr * 0.42, rr * 0.2, look || 0, t, boost, null, 0.2);
+    c.fillStyle = "rgba(255,120,140,.45)"; for (var sd = -1; sd <= 1; sd += 2) { c.beginPath(); c.arc(rr * 0.25, sd * rr * 0.78, rr * 0.2, 0, PI * 2); c.fill(); }
+    c.strokeStyle = "#a0643a"; c.lineWidth = Math.max(1, rr * 0.09); c.beginPath(); c.arc(rr * 0.62, 0, rr * 0.22, -1, 1); c.stroke();
+    c.restore();
+  }
+  function owl(c, S, rr, t, boost, alpha, look) {
+    var n = S.length; if (n < 3) return;
+    var i, s, wf = function (k) { var u = k / (n - 1); return rr * (u < 0.1 ? 1.0 + u * 2 : 1.15 - u * 0.8); };
+    c.lineCap = "round"; c.lineJoin = "round"; if (boost) boostFx(c, S, rr, t, "255,190,90");
+    outline(c, S, wf); c.fillStyle = "#8c5b3b"; c.fill(); c.lineWidth = Math.max(1, rr * 0.1); c.strokeStyle = "#3a2414"; c.stroke();
+    for (i = 2; i < n - 1; i++) { s = S[i]; c.save(); c.translate(s.x, s.y); c.rotate(s.a); c.strokeStyle = "rgba(58,36,20,.7)"; c.lineWidth = Math.max(1, rr * 0.08); c.beginPath(); c.arc(0, 0, wf(i) * 0.6, 2.2, 4.1); c.stroke(); c.restore(); }
+    var H = S[0]; c.save(); c.translate(H.x, H.y); c.rotate(H.a);
+    c.fillStyle = "#6b4328"; for (var sd = -1; sd <= 1; sd += 2) { c.beginPath(); c.moveTo(-rr * 0.5, sd * rr * 1.0); c.lineTo(-rr * 0.95, sd * rr * 1.75); c.lineTo(-rr * 0.05, sd * rr * 1.2); c.closePath(); c.fill(); }   // ear tufts
+    headBlob(c, rr, 1.45, 1.35, "#9a6a45", "#3a2414", 0.05);
+    c.fillStyle = "#f1dcb8"; for (sd = -1; sd <= 1; sd += 2) { c.beginPath(); c.ellipse(rr * 0.4, sd * rr * 0.68, rr * 0.88, rr * 0.88, 0, 0, PI * 2); c.fill(); }   // facial discs
+    bigEye(c, rr * 0.4, -rr * 0.68, rr * 0.7, look || 0, t, boost, "#ffbf1a", 0.4);
+    bigEye(c, rr * 0.4, rr * 0.68, rr * 0.7, look || 0, t, boost, "#ffbf1a", 0.4);
+    c.fillStyle = "#e8a23a"; c.strokeStyle = "#7a4a12"; c.lineWidth = Math.max(1, rr * 0.07); c.beginPath(); c.moveTo(rr * 1.0, -rr * 0.2); c.lineTo(rr * 1.6, 0); c.lineTo(rr * 1.0, rr * 0.2); c.closePath(); c.fill(); c.stroke();
+    c.restore();
+  }
+  function thirdeye(c, S, rr, t, boost, alpha, look) {
+    var n = S.length; if (n < 3) return;
+    var i, s, wf = function (k) { var u = k / (n - 1); return rr * (u < 0.1 ? 1.0 + u * 2 : 1.14 - u * 0.8); };
+    c.lineCap = "round"; c.lineJoin = "round"; if (boost) boostFx(c, S, rr, t, "255,215,90");
+    outline(c, S, wf); c.fillStyle = "#d9ad3f"; c.fill(); c.lineWidth = Math.max(1, rr * 0.1); c.strokeStyle = "#6b4d12"; c.stroke();
+    for (i = 2; i < n - 1; i += 2) { s = S[i]; c.strokeStyle = "rgba(120,70,12,.8)"; c.lineWidth = Math.max(1, rr * 0.08); c.beginPath(); c.arc(s.x, s.y, wf(i) * 0.5, 0, PI * 2); c.stroke(); c.fillStyle = "rgba(120,70,12,.8)"; c.beginPath(); c.arc(s.x, s.y, wf(i) * 0.14, 0, PI * 2); c.fill(); }
+    var H = S[0]; c.save(); c.translate(H.x, H.y); c.rotate(H.a);
+    headBlob(c, rr, 1.4, 1.3, "#e5bb4f", "#6b4d12", 0.08);
+    glowDot(c, -rr * 0.05, 0, rr * 1.2, "170,80,255", 0.45 + 0.2 * Math.sin(t * 2));
+    bigEye(c, rr * 0.55, -rr * 0.65, rr * 0.4, look || 0, t, boost, "#7a4b12", 0.2);
+    bigEye(c, rr * 0.55, rr * 0.65, rr * 0.4, look || 0, t, boost, "#7a4b12", 0.2);
+    bigEye(c, -rr * 0.05, 0, rr * 0.34, look || 0, t, boost, "#a24cff", 1.7);
+    c.restore();
+  }
+  function snail(c, S, rr, t, boost, alpha, look) {
+    var n = S.length; if (n < 3) return;
+    var i, s, wf = function (k) { var u = k / (n - 1); return rr * (u < 0.1 ? 0.95 + u * 1.5 : 1.1 - u * 0.95); };
+    c.lineCap = "round"; c.lineJoin = "round"; if (boost) boostFx(c, S, rr, t, "170,230,90");
+    outline(c, S, wf); c.fillStyle = "#a6d65a"; c.fill(); c.lineWidth = Math.max(1, rr * 0.1); c.strokeStyle = "#4a6e1e"; c.stroke();
+    for (i = 2; i < n - 1; i += 2) { s = S[i]; var p = side2(s, hash(i) > 0.5 ? 1 : -1, wf(i) * 0.4); c.fillStyle = "rgba(90,130,40,.45)"; c.beginPath(); c.arc(p[0], p[1], Math.max(0.8, wf(i) * 0.25), 0, PI * 2); c.fill(); }
+    line(c, S, 1, n - 1, function (k) { return -wf(k) * 0.5; }); c.strokeStyle = "rgba(255,255,255,.4)"; c.lineWidth = Math.max(1, rr * 0.16); c.stroke();   // slime shine
+    var H = S[0]; c.save(); c.translate(H.x, H.y); c.rotate(H.a);
+    for (var sd = -1; sd <= 1; sd += 2) {                              // eyes on swaying stalks
+      var tx = rr * 1.75 + Math.sin(t * 2.2 + sd) * rr * 0.18, ty = sd * rr * 1.15 + Math.cos(t * 1.7 + sd) * rr * 0.12;
+      c.strokeStyle = "#8ebd44"; c.lineWidth = Math.max(1.2, rr * 0.3); c.beginPath(); c.moveTo(rr * 0.55, sd * rr * 0.4); c.quadraticCurveTo(rr * 1.2, sd * rr * 0.5, tx, ty); c.stroke();
+    }
+    headBlob(c, rr, 1.2, 1.1, "#b4e068", "#4a6e1e", 0.05);
+    for (sd = -1; sd <= 1; sd += 2) { bigEye(c, rr * 1.75 + Math.sin(t * 2.2 + sd) * rr * 0.18, sd * rr * 1.15 + Math.cos(t * 1.7 + sd) * rr * 0.12, rr * 0.5, look || 0, t, boost, "#6b4a1a", sd + 3); }
+    c.strokeStyle = "#4a6e1e"; c.lineWidth = Math.max(1, rr * 0.08); c.beginPath(); c.arc(rr * 0.8, 0, rr * 0.25, -1, 1); c.stroke();
+    c.restore();
+  }
+  function mantis(c, S, rr, t, boost, alpha, look) {
+    var n = S.length; if (n < 3) return;
+    var i, s, wf = function (k) { var u = k / (n - 1); return rr * (u < 0.1 ? 0.7 + u * 2 : 0.9 - u * 0.5); };
+    c.lineCap = "round"; c.lineJoin = "round"; if (boost) boostFx(c, S, rr, t, "120,255,100");
+    outline(c, S, wf); c.fillStyle = "#58b043"; c.fill(); c.lineWidth = Math.max(1, rr * 0.1); c.strokeStyle = "#1f4a14"; c.stroke();
+    for (i = 2; i < n - 1; i += 2) { s = S[i]; c.save(); c.translate(s.x, s.y); c.rotate(s.a); c.strokeStyle = "rgba(31,74,20,.7)"; c.lineWidth = Math.max(1, rr * 0.09); c.beginPath(); c.moveTo(0, -wf(i) * 0.9); c.lineTo(0, wf(i) * 0.9); c.stroke(); c.restore(); }
+    var H = S[0]; c.save(); c.translate(H.x, H.y); c.rotate(H.a);
+    c.strokeStyle = "#2f7a22"; c.lineWidth = Math.max(1, rr * 0.07);                                     // antennae
+    for (var sd = -1; sd <= 1; sd += 2) { c.beginPath(); c.moveTo(rr * 0.7, sd * rr * 0.3); c.quadraticCurveTo(rr * 1.4, sd * rr * 0.6, rr * 1.9 + Math.sin(t * 3 + sd) * rr * 0.1, sd * rr * 1.25); c.stroke(); }
+    headBlob(c, rr, 1.0, 1.05, "#6bc255", "#1f4a14", 0.1);
+    c.fillStyle = "#6bc255"; c.beginPath(); c.moveTo(rr * 0.55, -rr * 0.5); c.lineTo(rr * 1.35, 0); c.lineTo(rr * 0.55, rr * 0.5); c.closePath(); c.fill(); c.stroke();
+    for (sd = -1; sd <= 1; sd += 2) {                                                                    // big compound eyes
+      var ex = rr * 0.3, ey = sd * rr * 0.95, g = c.createRadialGradient(ex - rr * 0.15, ey - rr * 0.2, 0, ex, ey, rr * 0.85);
+      g.addColorStop(0, "#e0344a"); g.addColorStop(1, "#7a0c1c");
+      c.fillStyle = g; c.beginPath(); c.ellipse(ex, ey, rr * 0.62, rr * 0.8, 0, 0, PI * 2); c.fill(); c.strokeStyle = "#3a050c"; c.lineWidth = Math.max(1, rr * 0.07); c.stroke();
+      c.strokeStyle = "rgba(255,170,170,.25)"; c.lineWidth = Math.max(0.6, rr * 0.04);                  // facets
+      for (var q = -2; q <= 2; q++) { c.beginPath(); c.moveTo(ex + q * rr * 0.22, ey - rr * 0.6); c.lineTo(ex + q * rr * 0.22, ey + rr * 0.6); c.stroke(); c.beginPath(); c.moveTo(ex - rr * 0.5, ey + q * rr * 0.26); c.lineTo(ex + rr * 0.5, ey + q * rr * 0.26); c.stroke(); }
+      var px = ex + Math.cos(look || 0) * rr * 0.2, py = ey + Math.sin(look || 0) * rr * 0.26;          // the pupil that follows the turn
+      c.fillStyle = "#120305"; c.beginPath(); c.arc(px, py, rr * (boost ? 0.14 : 0.2), 0, PI * 2); c.fill(); c.fillStyle = "rgba(255,255,255,.8)"; c.beginPath(); c.arc(px - rr * 0.06, py - rr * 0.07, rr * 0.05, 0, PI * 2); c.fill();
+    }
+    c.restore();
+  }
+  function eyechain(c, S, rr, t, boost, alpha, look) {
+    var n = S.length; if (n < 3) return;
+    var i, H = S[0], wf = function (k) { return rr * (1.05 - 0.5 * (k / (n - 1))); };
+    c.lineCap = "round"; c.lineJoin = "round"; if (boost) boostFx(c, S, rr, t, "255,255,255");
+    for (i = n - 1; i >= 1; i -= 2) eyeOn(c, S[i], 0, 0, wf(i) * 1.02, look, H.a, t, false, "hsl(" + ((i * 37) % 360) + ",70%,50%)", i * 0.3);
+    eyeOn(c, H, rr * 0.1, 0, rr * 1.35, look, H.a, t, boost, "#ff2a6d", 0);
+  }
+  function jelly(c, S, rr, t, boost, alpha, look) {
+    var n = S.length; if (n < 3) return;
+    var i, s, wf = function (k) { var u = k / (n - 1); return rr * (u < 0.1 ? 1.0 + u * 2 : 1.15 - u * 0.75); };
+    c.lineCap = "round"; c.lineJoin = "round"; if (boost) boostFx(c, S, rr, t, "120,220,255");
+    var L = S[n - 1];                                                                                     // tentacles behind the tail
+    c.strokeStyle = "rgba(190,240,255,.6)"; c.lineWidth = Math.max(1, rr * 0.13);
+    for (var k = -1; k <= 1; k++) {
+      c.beginPath(); c.moveTo(L.x, L.y);
+      for (var j = 1; j <= 8; j++) { var d = j * rr * 0.45, w = Math.sin(t * 4 + j * 0.8 + k * 1.7) * rr * 0.28 * (j / 8) + k * rr * 0.16 * (j / 8); c.lineTo(L.x + Math.cos(L.a + PI) * d + Math.cos(L.a + PI / 2) * w, L.y + Math.sin(L.a + PI) * d + Math.sin(L.a + PI / 2) * w); }
+      c.stroke();
+    }
+    outline(c, S, wf); c.fillStyle = "rgba(130,220,255,.5)"; c.fill(); c.lineWidth = Math.max(1, rr * 0.09); c.strokeStyle = "rgba(255,255,255,.7)"; c.stroke();
+    for (i = 3; i < n - 1; i += 3) { s = S[i]; glowDot(c, s.x, s.y, wf(i) * 1.3, "120,220,255", 0.25); }
+    var H = S[0]; c.save(); c.translate(H.x, H.y); c.rotate(H.a);
+    headBlob(c, rr, 1.4, 1.3, "rgba(150,230,255,.6)", "rgba(255,255,255,.75)", 0.05);
+    bigEye(c, rr * 0.5, -rr * 0.45, rr * 0.45, (look || 0) * 0.4 + 0.9, t, boost, "#ff7ad9", 0.2);       // cross-eyed
+    bigEye(c, rr * 0.5, rr * 0.45, rr * 0.45, (look || 0) * 0.4 - 0.9, t, boost, "#ff7ad9", 0.2);
+    c.restore();
+  }
+
   /* id → { name, skin (the closest normal skin by slither's colours), draw }
      centipede → 29 (dark grey 80,80,80 + yellow 238,238,112) · dragon → 63 (red 255,64,64 + dark grey 80,80,80) ·
      skeleton → 65 (white 255,255,255 + pale yellow 238,238,112) · chinese, phoenix → 56 (orange 240,144,32) ·
@@ -2296,7 +2458,17 @@ var NTL_CR = (function () {
     caterpillar: { num: 10, name: "Caterpillar", skin: 27, draw: caterpillar },
     zombie: { num: 11, name: "Zombie Snake", skin: 29, draw: zombie },
     cyclops: { num: 12, name: "Cyclops", skin: 64, draw: cyclops },
-    evileye: { num: 13, name: "Evil Eye", skin: 63, draw: evileye }
+    evileye: { num: 13, name: "Evil Eye", skin: 63, draw: evileye },
+    argus: { num: 14, name: "Argus", skin: 64, draw: argus },
+    spider: { num: 15, name: "Spider Eyes", skin: 29, draw: spider },
+    megaeye: { num: 16, name: "Mega Eye", skin: 65, draw: megaeye },
+    bean: { num: 17, name: "Bean", skin: 56, draw: bean },
+    owl: { num: 18, name: "Owl", skin: 56, draw: owl },
+    thirdeye: { num: 19, name: "Third Eye", skin: 29, draw: thirdeye },
+    snail: { num: 20, name: "Snail", skin: 27, draw: snail },
+    mantis: { num: 21, name: "Mantis", skin: 27, draw: mantis },
+    eyechain: { num: 22, name: "Eyeball Chain", skin: 65, draw: eyechain },
+    jelly: { num: 23, name: "Jelly", skin: 49, draw: jelly }
   };
   function cur() { return (cfg.id && LIST[cfg.id]) || null; }
   /* strip looks travel as skin 101 + their index (the backend takes 1..255); 0 = no strip */
@@ -2332,7 +2504,7 @@ var NTL_CR = (function () {
     var want = typeof cb.J === "number" ? cb.J : (typeof cb.ang === "number" ? cb.ang : 0), head = S[0].a;
     var rel = Math.atan2(Math.sin(want - head), Math.cos(want - head)), prevLook = typeof cb.__crLook === "number" ? cb.__crLook : rel;
     cb.__crLook = prevLook + (rel - prevLook) * 0.18;
-    C.draw(bb, S, r * g, performance.now() / 1000, cb.BA > cb.C, a, cb.__crLook);
+    try { C.draw(bb, S, r * g, performance.now() / 1000, cb.BA > cb.C, a, cb.__crLook); } catch (e) {}
     bb.restore();
   }
   /* called from ag(); pass 1 = GL sprite pass, 0/2 = 2D pass */
@@ -2496,7 +2668,7 @@ var NTL_CR = (function () {
     for (var i = 0; i < m; i++) { var u = i / (m - 1); pts.push({ x: (W * 0.84 - u * W * 0.72) * S, y: (Hh * 0.5 + Math.sin(u * 7 - t * 2.2) * Hh * 0.16 * (0.3 + u)) * S, a: 0 }); }
     for (i = 1; i < m; i++) pts[i].a = Math.atan2(pts[i - 1].y - pts[i].y, pts[i - 1].x - pts[i].x);
     pts[0].a = pts[1].a;
-    if (id && LIST[id]) { LIST[id].draw(c, pts, rr, t, !!window.__crBoost, 1, Math.sin(t * 1.3) * 0.9); return; }
+    if (id && LIST[id]) { try { c.save(); LIST[id].draw(c, pts, rr, t, !!window.__crBoost, 1, Math.sin(t * 1.3) * 0.9); } catch (e) {} c.restore(); return; }
     if (id.indexOf("strip:") === 0 && typeof NTL_ST !== "undefined") { NTL_ST.demo(c, pts, rr, id.slice(6)); return; }
     c.lineCap = "round"; c.lineJoin = "round";                     // plain snake for "Normal skin"
     c.beginPath(); for (i = m - 1; i >= 0; i--) (i === m - 1 ? c.moveTo : c.lineTo).call(c, pts[i].x, pts[i].y);
@@ -5903,7 +6075,7 @@ var NTL_VS = (function () {
   var ov = null, secsRef = null, navsRef = null;   // the open popup's sections / nav items (for the tour)
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
-    { v: "5.72-dev", d: "12 Oct 2026", t: "Strip looks: Vanced Skins now has fifteen Strip looks — Strip, Neon, Glass, Outline, Pixel, Rainbow, Candy, Tube, Chrome, Lava, Ice, Galaxy, Ghost, Bead and Zigzag. Pick one, then choose whether it shows on Mine or on Everyone. Strip looks and every creature show to other NTL VANCED players (Share my skin). Two single-eyed creatures too: Cyclops and Evil Eye, with one big eye that follows where you turn and blinks." },
+    { v: "5.72-dev", d: "12 Oct 2026", t: "Strip looks: Vanced Skins now has fifteen Strip looks — Strip, Neon, Glass, Outline, Pixel, Rainbow, Candy, Tube, Chrome, Lava, Ice, Galaxy, Ghost, Bead and Zigzag. Pick one, then choose whether it shows on Mine or on Everyone. Strip looks and every creature show to other NTL VANCED players (Share my skin). Twelve eyed creatures too, from one huge eye to many tiny ones: Cyclops, Evil Eye, Argus, Spider Eyes, Mega Eye, Bean, Owl, Third Eye, Snail, Mantis, Eyeball Chain and Jelly. Their eyes follow where you turn, blink, and narrow when you boost." },
     { v: "5.71", d: "12 Oct 2026", t: "Refinements. Some changes in Eyes Back mode." },
     { v: "5.70", d: "5 Oct 2026", t: "Strip: a new look in Vanced Skins \u2014 snakes drawn as flat strips in their own colour with a white eye dot and their bones down the middle. Pick it for your snake only (Mine) or for every snake you see (Everyone). It is only on your screen; your skin stays the same for everyone else." },
     { v: "5.69", d: "5 Oct 2026", t: "Tour: the highlight and its card now land on the right spot at any UI size or browser zoom \u2014 it scrolls sideways when needed, puts the card where it hides the least and re-centres when you zoom mid-tour. Team keys work again: NTL’s team service only answers NTL’s own version, so NTL VANCED now sends 9.68 to it (it had been sending its own version and every key was refused). Restore: a backup (from NTL or NTL VANCED) no longer stops half way when the browser storage is full \u2014 team keys and settings always come back, and anything too big to fit is named at the end." },
