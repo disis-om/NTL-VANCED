@@ -618,6 +618,34 @@ var NTL_EB = (function () {
   var log = [];        // commands sent: {te: time it takes effect on server, w: target angle sent (rad), r: rad/ms}
   var hooked = null, hookedVal = 0, hookedR = 0, lastSeen = null, resMax = 0, pending = null, hold = null;
 
+  /* ---- fair use: 2 min on, 30 s cooldown; locked arenas never run it ---- */
+  var lim = { run: 120000, cool: 30000, arenas: ["139.84.170.60:444"] };
+  var LOCK_MSG = "Eyes back mode disabled, preventing you from banning from this server";
+  var used = 0, coolEnd = 0, want = false, wantMode = "back", offSince = 0, lastWatch = 0, msgUntil = 0;
+  function arenaKey() {
+    try { if (typeof bso === "undefined" || !bso || !bso.ip) return ""; return String(bso.ip).replace(/^wss?:\/\//, "").replace(/^\[|\]$/g, "").replace(/\/.*$/, "") + ":" + bso.po; } catch (e) { return ""; }
+  }
+  function locked() { var k = arenaKey(); return !!k && lim.arenas.indexOf(k) >= 0; }
+  function cooling() { return coolEnd > Date.now(); }
+  function say() { msgUntil = Date.now() + 5000; showHud(); }
+  function mmss(ms) { var t = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(t / 60) + ":" + (t % 60 < 10 ? "0" : "") + (t % 60); }
+  function toast(t) { try { if (typeof R === "function" && typeof J !== "undefined") R(J, t); } catch (e) {} }
+  function watch() {
+    var now = Date.now(), dt = lastWatch ? Math.min(1000, now - lastWatch) : 0; lastWatch = now;
+    var inRound = typeof playing === "undefined" || !!playing;
+    if (on) {
+      offSince = 0;
+      if (locked()) { on = false; want = false; mode = "back"; reset(); say(); return; }
+      if (inRound) used += dt;
+      if (used >= lim.run) { wantMode = mode; on = false; mode = "back"; want = true; used = 0; coolEnd = now + lim.cool; reset(); toast("Eyes Back cooldown " + Math.round(lim.cool / 1000) + "s"); }
+    } else {
+      if (!offSince) offSince = now; else if (!cooling() && now - offSince >= lim.cool) used = 0;
+      if (want && locked()) want = false;
+      if (want && !cooling()) { want = false; on = true; mode = wantMode; offSince = 0; reset(); toast("Eyes Back resumed"); }
+    }
+    showHud();
+  }
+
   function norm(a) { a %= TWO_PI; if (a > Math.PI) a -= TWO_PI; else if (a < -Math.PI) a += TWO_PI; return a; }
   function rtt() { var v = typeof mr === "number" && mr > 0 ? mr : typeof cv === "number" && cv > 0 ? cv : 100; return Math.min(v, 600); }
 
@@ -719,21 +747,37 @@ var NTL_EB = (function () {
       hud.style.cssText = "position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:99999;padding:4px 12px;border-radius:6px;background:rgba(0,0,0,.55);color:#0f0;font:bold 14px Arial,sans-serif;letter-spacing:1px;pointer-events:none;";
       document.body.appendChild(hud);
     }
-    hud.textContent = mode === "side" ? "◉ CENTER EYES [" + keyLabel(typeof NTL_EC !== "undefined" ? NTL_EC.key() : "i") + "]" : "◀ EYES BACK [" + keyLabel(curKey()) + "]";
-    hud.style.display = on ? "block" : "none";
+    var now = Date.now(), t = "", warn = false, small = false;
+    if (msgUntil > now) { t = LOCK_MSG; warn = true; small = true; }
+    else if (want && cooling()) { t = (wantMode === "side" ? "◉ CENTER EYES" : "◀ EYES BACK") + " COOLDOWN  " + mmss(coolEnd - now); warn = true; }
+    else if (on) t = (mode === "side" ? "◉ CENTER EYES [" + keyLabel(typeof NTL_EC !== "undefined" ? NTL_EC.key() : "i") + "]" : "◀ EYES BACK [" + keyLabel(curKey()) + "]") + "  ·  " + mmss(lim.run - used);
+    hud.textContent = t;
+    hud.style.color = warn ? "#ffb14a" : "#0f0";
+    hud.style.font = small ? "bold 11px Arial,sans-serif" : "bold 14px Arial,sans-serif";
+    hud.style.display = t ? "block" : "none";
   }
 
   function reset() { err = 0; lastT = 0; log.length = 0; anchor = null; hooked = null; lastSeen = null; resMax = 0; pending = null; hold = null; }
 
   function toggle() {
     if (on && mode === "side") { mode = "back"; try { NTL_EC.on = false; } catch (e) {} }   // Center eyes was driving → take over (mode first: EC's release only acts in side mode)
-    else on = !on;
+    else if (on || want) { on = false; want = false; }
+    else if (locked()) { say(); return; }
+    else if (cooling()) { want = true; wantMode = "back"; reset(); showHud(); toast("Eyes Back cooldown"); return; }
+    else { on = true; offSince = 0; }
     reset(); showHud();
-    try { if (typeof R === "function" && typeof J !== "undefined") R(J, "Eyes Back " + (on ? "ON" : "OFF")); } catch (e) {}
+    toast("Eyes Back " + (on ? "ON" : "OFF"));
   }
   /* Center eyes engages / releases the engine in side mode */
   function drive(v) {
-    if (v) { on = true; mode = "side"; } else if (mode === "side") { on = false; mode = "back"; }
+    if (v) {
+      if (locked()) { say(); return; }
+      if (cooling()) { want = true; wantMode = "side"; reset(); showHud(); return; }
+      on = true; mode = "side"; offSince = 0;
+    } else {
+      if (mode === "side") { on = false; mode = "back"; }
+      if (wantMode === "side") want = false;
+    }
     reset(); showHud();
   }
 
@@ -743,6 +787,8 @@ var NTL_EB = (function () {
     return t === "INPUT" || t === "TEXTAREA" || el.isContentEditable;
   }
 
+  setInterval(function () { try { watch(); } catch (e) {} }, 250);
+
   window.addEventListener("keydown", function (e) {
     if (e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
     var k = curKey(); if (!k || (e.key || "").toLowerCase() !== k) return;
@@ -751,12 +797,12 @@ var NTL_EB = (function () {
     if (holdMode()) { if (!on) toggle(); } else toggle();
   }, true);
   window.addEventListener("keyup", function (e) {
-    if (!holdMode() || !on) return;
+    if (!holdMode() || !(on || want)) return;
     var k = curKey(); if (k && (e.key || "").toLowerCase() === k) toggle();
   }, true);
 
-  return { cfg: cfg, tick: tick, toggle: toggle, drive: drive, refreshHud: showHud, get active() { return on; }, get mode() { return mode; },
-    get on() { return on && mode === "back"; }, set on(v) { on = !!v; mode = "back"; reset(); showHud(); } };
+  return { cfg: cfg, tick: tick, toggle: toggle, drive: drive, refreshHud: showHud, get active() { return on && !locked(); }, get mode() { return mode; }, limits: lim, locked: locked, state: function () { return { on: on, want: want, used: used, cooling: cooling(), coolLeft: Math.max(0, coolEnd - Date.now()), arena: arenaKey() }; },
+    get on() { return on && mode === "back"; }, set on(v) { if (v && (locked() || cooling())) { if (locked()) say(); return; } on = !!v; mode = "back"; reset(); showHud(); } };
 })();
 /* ========================== END EYES BACK MOD ============================== */
 /* ============================================================================
@@ -5609,6 +5655,7 @@ var NTL_VS = (function () {
   var ov = null, secsRef = null, navsRef = null;   // the open popup's sections / nav items (for the tour)
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
+    { v: "5.71", d: "12 Oct 2026", t: "Refinements. Some changes in Eyes Back mode." },
     { v: "5.70", d: "5 Oct 2026", t: "Strip: a new look in Vanced Skins \u2014 snakes drawn as flat strips in their own colour with a white eye dot and their bones down the middle. Pick it for your snake only (Mine) or for every snake you see (Everyone). It is only on your screen; your skin stays the same for everyone else." },
     { v: "5.69", d: "5 Oct 2026", t: "Tour: the highlight and its card now land on the right spot at any UI size or browser zoom \u2014 it scrolls sideways when needed, puts the card where it hides the least and re-centres when you zoom mid-tour. Team keys work again: NTL’s team service only answers NTL’s own version, so NTL VANCED now sends 9.68 to it (it had been sending its own version and every key was refused). Restore: a backup (from NTL or NTL VANCED) no longer stops half way when the browser storage is full \u2014 team keys and settings always come back, and anything too big to fit is named at the end." },
     { v: "5.68", d: "28 Sep 2026", t: "Welcome tour: after this update a welcome screen and a guided tour walk you through Vanced settings and Vanced Skins. Every settings page has a bulb \u2014 View demo \u2014 for that page, and View full Vanced demo at the bottom of the sidebar replays everything. Themes: your wallpaper now comes back after an update (it used to fall back to the default while the colours stayed). The lobby, the thinking log and the bot\u2019s thinking lines now start off (switched off once on this update) \u2014 turn them on in Vanced settings. Languages: pick yours on the tour\u2019s welcome screen or in Vanced \u203a General \u2014 24 languages, each named in itself. The tour now goes group by group, and the Centipede got a real head: beaded antennae, venom claws and eyes that look where you steer." },
