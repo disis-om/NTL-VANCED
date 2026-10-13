@@ -1,12 +1,12 @@
 {
-  "version": "5.71",
+  "version": "5.72",
   "channel": "stable",
-  "date": "2026-10-11",
-  "size": 8101291,
-  "sha256": "61b45729dc16dbe13cc7e97d9838dbbe12849bf6a9d2553cd4f2f3e3e85a900e",
+  "date": "2026-10-13",
+  "size": 8135793,
+  "sha256": "19eb1079be98f76531a81df9d2d87afa0ba422ec0d2c3cf29b94d360d2833162",
   "minLoader": 3,
-  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.71/main-mt.js",
-  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.71/main-mt.js",
-  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.71/NTL-VANCED-v5.71.zip",
-  "notes": "## Refinements\n- Some changes in Eyes Back mode\n\n# NTL VANCED BY OM RAJPUT.\n"
+  "url": "https://cdn.jsdelivr.net/gh/disis-om/NTL-VANCED@v5.72/main-mt.js",
+  "fallbackUrl": "https://raw.githubusercontent.com/disis-om/NTL-VANCED/v5.72/main-mt.js",
+  "zip": "https://github.com/disis-om/NTL-VANCED/releases/download/v5.72/NTL-VANCED-v5.72.zip",
+  "notes": "## Vanced Skins\n- 15 Strip looks: Strip, Neon, Glass, Outline, Pixel, Rainbow, Candy, Tube, Chrome, Lava, Ice, Galaxy, Ghost, Bead and Zigzag\n- 12 new eyed creatures, from one huge eye to many tiny ones: Cyclops, Evil Eye, Argus, Spider Eyes, Mega Eye, Bean, Owl, Third Eye, Snail, Mantis, Eyeball Chain and Jelly\n- Their eyes follow where you turn, blink, and narrow when you boost\n- Strip looks show on Mine or on Everyone, your choice\n\n## Seen by other players\n- Your creature or Strip look is now shared inside the game itself, the same way tags are\n- Other NTL VANCED players and Wyrm players see your skin, and you see theirs\n- Players on the official game or plain NTL see the closest normal skin\n- While a Vanced Skin is on, tags and cosmetics are switched off; pick Normal skin to get them back\n\n# NTL VANCED BY OM RAJPUT.\n"
 }

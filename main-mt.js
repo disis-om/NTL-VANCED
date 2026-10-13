@@ -1628,7 +1628,7 @@ var NTL_ST = (function () {
    boost glow and death glow are never drawn. NTL_SP.noEyes() asks noEyes().
    Settings: localStorage.wy_creature = { id, prev: { rcv, want, custom } }. */
 var NTL_CR = (function () {
-  var KEY = "wy_creature", cfg = { id: "", prev: null, share: true, see: true };
+  var KEY = "wy_creature", cfg = { id: "", prev: null, share: true, see: true, held: null };
   try { var j = JSON.parse(localStorage.getItem(KEY) || "null"); if (j) for (var k in cfg) if (k in j) cfg[k] = j[k]; } catch (e) {}
   function save() { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) {} }
   var PI = Math.PI;
@@ -2532,11 +2532,52 @@ var NTL_CR = (function () {
     try { localStorage.setItem("snakercv", "" + id); localStorage.setItem("want_custom_skin", "0"); } catch (e) {}
     try { if (typeof Ov === "function") Ov(); } catch (e) {}
   }
+  /* Tags and cosmetics wait while a Vanced Skin is on (5.72): its number rides where a tag would. The tag and
+     cosmetic you had are kept and come back with Normal skin. */
+  function vsOn() { return !!cur() || stripOn(); }
+  function holdExtras() {
+    if (cfg.held) return;
+    try { cfg.held = { tag: localStorage.getItem("tag"), cos: localStorage.getItem("cosmetic") }; } catch (e) { cfg.held = { tag: null, cos: null }; }
+    save();
+    try { localStorage.setItem("tag", "-1"); localStorage.setItem("cosmetic", "-1"); } catch (e) {}
+    /* z8 = "chosen by hand": with it set, NTL does not hang a preset's official antenna tag back on */
+    try { if (typeof d8 !== "undefined") { d8 = -1; z8 = !0; } } catch (e) {}
+    try { if (typeof snake !== "undefined" && snake) { snake.vA = -1; if (typeof R3 === "function") R3(snake); } } catch (e) {}
+  }
+  function releaseExtras() {
+    var h = cfg.held; if (!h) return;
+    cfg.held = null; save();
+    try { if (h.tag != null) localStorage.setItem("tag", h.tag); if (h.cos != null) localStorage.setItem("cosmetic", h.cos); } catch (e) {}
+    try { var tg = Number(h.tag); if (typeof d8 !== "undefined" && h.tag != null && isFinite(tg)) { d8 = tg; z8 = tg !== -1; } } catch (e) {}
+  }
+  function extras() { if (vsOn()) holdExtras(); else releaseExtras(); }
+  var toastEl = null, toastT = 0;
+  function toast(text) {
+    try {
+      if (!toastEl || !toastEl.isConnected) {
+        toastEl = document.createElement("div");
+        toastEl.style.cssText = "position:fixed;left:50%;bottom:16%;transform:translateX(-50%);z-index:2147483600;max-width:min(420px,88vw);padding:10px 16px;border-radius:12px;background:rgba(14,15,20,.94);border:1px solid rgba(255,255,255,.14);color:#e6e9ef;font:12px/1.45 Arial,'Helvetica Neue',Helvetica,sans-serif;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5);pointer-events:none;transition:opacity .25s;";
+        document.body.appendChild(toastEl);
+      }
+      toastEl.textContent = text; toastEl.style.opacity = "1";
+      clearTimeout(toastT); toastT = setTimeout(function () { if (toastEl) toastEl.style.opacity = "0"; }, 2600);
+    } catch (e) {}
+  }
+  /* the skin editor's tag (#stagh) and cosmetic (#scosh) buttons do nothing while a Vanced Skin is on */
+  ["pointerdown", "mousedown", "touchstart", "click"].forEach(function (type) {
+    document.addEventListener(type, function (e) {
+      if (!vsOn()) return;
+      var t = e.target && e.target.closest && e.target.closest("#scosh, #stagh");
+      if (!t) return;
+      e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      if (type === "click" || type === "touchstart") toast("A Vanced Skin is on, so tags and cosmetics are off. Pick Normal skin in Vanced Skins to use them again.");
+    }, { capture: true, passive: false });
+  });
   /* "strip" (NTL_ST) is a look, not a creature: it keeps your normal skin and takes the place of any creature */
   function stripOn() { return typeof NTL_ST !== "undefined" && NTL_ST.on; }
   function selId() { return stripOn() ? "strip:" + NTL_ST.cfg.look : (cfg.id || ""); }
   function pick(id) {
-    if (id.indexOf("strip:") === 0) { if (typeof NTL_ST === "undefined") return; if (cur()) pick(""); NTL_ST.set("look", id.slice(6)); NTL_ST.on = true; render(); return; }
+    if (id.indexOf("strip:") === 0) { if (typeof NTL_ST === "undefined") return; if (cur()) pick(""); NTL_ST.set("look", id.slice(6)); NTL_ST.on = true; extras(); render(); return; }
     if (typeof NTL_ST !== "undefined") NTL_ST.on = false;
     if (id && LIST[id]) {
       if (!cur()) { try { cfg.prev = { rcv: localStorage.getItem("snakercv"), want: localStorage.getItem("want_custom_skin") }; } catch (e) {} }
@@ -2552,83 +2593,42 @@ var NTL_CR = (function () {
         } catch (e) {}
       }
     }
+    extras();
     render();
   }
 
-  /* ---- sync with other NTL VANCED players (Wyrm backend, /v1/vanced/skins/socket) ----
-     Like slither itself tells everyone which skin a snake wears when it appears: when you spawn with a creature your
-     client says "arena A, snake #id (nick N) wears creature k" to a room for that arena, and every Vanced player in
-     that room draws it on the snake the game already shows them. Nothing goes into a game packet. Death / Home /
-     quit clears it. A viewer only trusts a claim whose nick matches the snake it sees, and draws at most MAXREMOTE
-     creatures (the nearest ones). Settings: cfg.share (send mine), cfg.see (show others) — both on by default. */
-  var WS_URL = "wss://wyrm-api.77-245-76-86.sslip.io/v1/vanced/skins/socket", MAXREMOTE = 8;
-  var net = { ws: null, open: false, ready: false, backoff: 2000, retryAt: 0, lastUse: 0, pingT: 0, arena: "", life: "", lifeKey: "", pub: "", remote: new Map(), near: new Set(), nearAt: 0 };
-  function rid(nb) { var a = new Uint8Array(nb), s2 = ""; try { crypto.getRandomValues(a); } catch (e) { for (var q = 0; q < nb; q++) a[q] = Math.random() * 256 | 0; } for (var q2 = 0; q2 < nb; q2++) s2 += (a[q2] < 16 ? "0" : "") + a[q2].toString(16); return s2; }
-  function clientId() { var c2 = ""; try { c2 = localStorage.getItem("wy_vs_cid") || ""; } catch (e) {} if (!/^[0-9a-f]{32}$/.test(c2)) { c2 = rid(16); try { localStorage.setItem("wy_vs_cid", c2); } catch (e) {} } return c2; }
+  /* ---- sync with other players: the number rides in the join's skin-block corner (5.72) ----
+     Where NTL puts a tag: 254, 86 ('V'), preset or 255, 0, 0, 0, n, n ^ 0x5C. NTL and the official game read
+     kind 86 as "no tag" and draw the preset; NTL VANCED and Wyrm read n and draw the skin. No server in
+     between. A viewer draws at most MAXREMOTE skins (the nearest ones). cfg.share (send mine), cfg.see
+     (show others) — both on by default. */
+  var MAXREMOTE = 8, near = new Set(), nearAt = 0;
   function inRound() { try { return !!playing && !Ce && typeof snake !== "undefined" && !!snake; } catch (e) { return false; } }
-  function arenaNow() {
-    try { if (typeof bso === "undefined" || !bso || !bso.ip || !bso.po) return ""; var ip = String(bso.ip); return (ip.indexOf(":") >= 0 ? "[" + ip.replace(/^\[|\]$/g, "") + "]" : ip) + ":" + bso.po; } catch (e) { return ""; }
+  /* the number my join's corner carries, 0 = none */
+  function wire() { if (!cfg.share) return 0; var C = cur(); return C ? C.num : stripNum(); }
+  /* a received skin block's corner -> the skin's number, or 0 */
+  function fromCorner(cb) {
+    if (!cb || cb.length < 8 || cb[0] !== 254 || cb[1] !== 86 || cb[3] || cb[4] || cb[5] || cb[7] !== (cb[6] ^ 0x5C)) return 0;
+    var n = cb[6], strips = typeof NTL_ST !== "undefined" ? NTL_ST.LOOKS.length : 0;
+    return BYNUM[n] || (n > STRIP_BASE && n <= STRIP_BASE + strips) ? n : 0;
   }
-  function wsSend(m) { if (net.ws && net.open) { try { net.ws.send(JSON.stringify(m)); } catch (e) {} } }
-  function netConnect() {
-    if (net.ws || Date.now() < net.retryAt) return;
-    var ws; try { ws = new WebSocket(WS_URL); } catch (e) { net.retryAt = Date.now() + net.backoff; net.backoff = Math.min(30000, net.backoff * 2); return; }
-    net.ws = ws; net.open = false; net.ready = false;
-    ws.onopen = function () { net.open = true; wsSend({ t: "hello", cid: clientId() }); };
-    ws.onmessage = function (ev) {
-      var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
-      if (m.t === "ready") { net.ready = true; net.backoff = 2000; net.arena = ""; net.pub = ""; return; }   // (re)join + (re)publish on the next tick
-      if (m.t === "snap" && m.arena === net.arena) { net.remote.clear(); (m.list || []).forEach(function (x) { net.remote.set(x.id, x); }); return; }
-      if (m.t === "add" && m.arena === net.arena && m.s) {
-        var s3 = m.s, sn = snakeById(s3.id);
-        if (sn && typeof sn.xx === "number" && Math.abs(sn.xx - s3.x) + Math.abs(sn.yy - s3.y) > 3000) return;   // claimed far from where that snake is
-        net.remote.set(s3.id, s3); return;
-      }
-      if (m.t === "del" && m.arena === net.arena) { var cur2 = net.remote.get(m.id); if (cur2 && (!m.life || cur2.life === m.life)) net.remote.delete(m.id); return; }
-    };
-    ws.onclose = function () { net.ws = null; net.open = false; net.ready = false; net.remote.clear(); net.retryAt = Date.now() + net.backoff; net.backoff = Math.min(30000, net.backoff * 2); };
-    ws.onerror = function () {};
-  }
-  function netClose() { if (net.ws) { try { net.ws.close(1000, "idle"); } catch (e) {} } net.ws = null; net.open = false; net.ready = false; net.remote.clear(); net.arena = ""; net.pub = ""; }
-  function snakeById(id) { try { var L2 = ef || []; for (var i = 0; i < L2.length; i++) if (L2[i] && L2[i].id === id) return L2[i]; } catch (e) {} return null; }
-  function netTick() {
-    var now2 = Date.now(), round = inRound();
-    if (round && (cfg.share || cfg.see)) net.lastUse = now2;
-    if (!net.lastUse || now2 - net.lastUse > 60000) { if (net.ws) netClose(); return; }   // not playing for a minute: hang up
-    netConnect(); if (!net.ready) return;
-    if (now2 - net.pingT > 25000) { net.pingT = now2; wsSend({ t: "ping" }); }
-    var arena = round ? arenaNow() : "";
-    if (arena && arena !== net.arena) { net.arena = arena; net.remote.clear(); wsSend({ t: "join", arena: arena }); }
-    /* my life: publish while alive with a creature, clear on death / quit / no creature / sharing off */
-    var C = cur(), num = C ? C.num : stripNum(), alive = round && arena && snake.id != null && !snake.I && !snake.dead;
-    var key = alive ? arena + "|" + snake.id : "";
-    if (key && key !== net.lifeKey) { net.lifeKey = key; net.life = rid(12); net.pub = ""; }
-    var want = alive && num && cfg.share ? key + "|" + num : "";
-    if (want && want !== net.pub) {
-      net.pub = want;
-      wsSend({ t: "pub", arena: arena, id: snake.id, nick: String(snake.ssn || "").slice(0, 24), skin: num, life: net.life, x: Math.round(snake.xx), y: Math.round(snake.yy) });
-    } else if (!want && net.pub) { wsSend({ t: "clear", life: net.life }); net.pub = ""; }
-    if (!alive) net.lifeKey = "";
-  }
-  /* which remote creature (if any) to draw on this snake: nick must match, and only the MAXREMOTE nearest */
+  /* which skin (if any) to draw on this snake: the one its corner named, only the MAXREMOTE nearest */
   function remoteFor(sn) {
-    if (!cfg.see || !sn || !net.remote.size || !inRound()) return null;
-    var r2 = net.remote.get(sn.id); if (!r2) return null;
-    if (r2.nick !== String(sn.ssn || "").slice(0, 24)) return null;
+    if (!cfg.see || !sn || !inRound() || (typeof snake !== "undefined" && sn === snake)) return null;
+    var k = sn.__vsk | 0; if (!k) return null;
     var now2 = Date.now();
-    if (now2 - net.nearAt > 300) {                            // refresh the nearest set a few times a second
-      net.nearAt = now2; net.near.clear();
+    if (now2 - nearAt > 300) {                                // refresh the nearest set a few times a second
+      nearAt = now2; near.clear();
       var list = [];
-      try { for (var i = 0; i < ef.length; i++) { var o = ef[i]; if (o && o !== snake && net.remote.has(o.id)) list.push([Math.abs(o.xx - snake.xx) + Math.abs(o.yy - snake.yy), o.id]); } } catch (e) {}
+      try { for (var i = 0; i < ef.length; i++) { var o = ef[i]; if (o && o !== snake && o.__vsk) list.push([Math.abs(o.xx - snake.xx) + Math.abs(o.yy - snake.yy), o.id]); } } catch (e) {}
       list.sort(function (a2, b2) { return a2[0] - b2[0]; });
-      for (var k2 = 0; k2 < list.length && k2 < MAXREMOTE; k2++) net.near.add(list[k2][1]);
+      for (var k2 = 0; k2 < list.length && k2 < MAXREMOTE; k2++) near.add(list[k2][1]);
     }
-    var co = BYNUM[r2.skin];
-    if (!co && r2.skin > STRIP_BASE && typeof NTL_ST !== "undefined" && NTL_ST.LOOKS[r2.skin - STRIP_BASE - 1]) co = { strip: NTL_ST.LOOKS[r2.skin - STRIP_BASE - 1][0] };   // a strip look
-    return net.near.has(sn.id) ? (co || null) : null;
+    var co = BYNUM[k];
+    if (!co && k > STRIP_BASE && typeof NTL_ST !== "undefined" && NTL_ST.LOOKS[k - STRIP_BASE - 1]) co = { strip: NTL_ST.LOOKS[k - STRIP_BASE - 1][0] };   // a strip look
+    return near.has(sn.id) ? (co || null) : null;
   }
-  setInterval(function () { try { netTick(); } catch (e) {} }, 500);
-  function setOpt(k3, v3) { cfg[k3] = !!v3; save(); if (k3 === "see" && !v3) net.near.clear(); }
+  function setOpt(k3, v3) { cfg[k3] = !!v3; save(); if (k3 === "see" && !v3) near.clear(); }
 
   /* ---- the page ---- */
   var CSS = [
@@ -2694,9 +2694,9 @@ var NTL_CR = (function () {
       var nm = id.indexOf("strip:") === 0 ? NTL_ST.LOOKS.filter(function (l) { return l[0] === id.slice(6); })[0][1] : id ? LIST[id].name : "Normal skin";
       h += '<div class="it" data-id="' + id + '"><canvas></canvas><div class="nm"><span>' + nm + "</span><i></i></div></div>";
     });
-    h += '</div>' + (stripIds.length ? '<div class="sc"><span>Strip looks show on</span><button data-sc="mine">Mine</button><button data-sc="all">Everyone</button></div>' : "") + '<div class="opts"><label class="op"><input type="checkbox" data-opt="share"' + (cfg.share ? " checked" : "") + '><span><b>Share my skin</b>other NTL VANCED players see your creature</span></label>' +
-      '<label class="op"><input type="checkbox" data-opt="see"' + (cfg.see ? " checked" : "") + '><span><b>See others’ skins</b>show the creatures other Vanced players picked</span></label></div>' +
-      '<div class="nt">Players without NTL VANCED see the normal skin closest to the creature’s colours — it is set for you when you pick one, and your previous skin comes back when you pick Normal skin.</div></div>';
+    h += '</div>' + (stripIds.length ? '<div class="sc"><span>Strip looks show on</span><button data-sc="mine">Mine</button><button data-sc="all">Everyone</button></div>' : "") + '<div class="opts"><label class="op"><input type="checkbox" data-opt="share"' + (cfg.share ? " checked" : "") + '><span><b>Share my skin</b>other NTL VANCED and Wyrm players see your skin</span></label>' +
+      '<label class="op"><input type="checkbox" data-opt="see"' + (cfg.see ? " checked" : "") + '><span><b>See others’ skins</b>show the skins other NTL VANCED and Wyrm players picked</span></label></div>' +
+      '<div class="nt">Players without NTL VANCED or Wyrm see the normal skin closest to the creature’s colours — it is set for you when you pick one, and your previous skin comes back when you pick Normal skin. While a Vanced Skin is on, tags and cosmetics are off: the skin travels where a tag would.</div></div>';
     ov.innerHTML = h;
     ["mousedown", "mouseup", "click", "dblclick", "wheel", "touchstart", "touchmove", "touchend", "pointerdown", "pointerup", "contextmenu", "keydown", "keyup"].forEach(function (t) {
       ov.addEventListener(t, function (e) { e.stopPropagation(); }, { passive: t === "wheel" || t.indexOf("touch") === 0 });
@@ -2748,12 +2748,13 @@ var NTL_CR = (function () {
     var cs = getComputedStyle(ref), shown = cs.display !== "none" && cs.visibility !== "hidden";
     holder.style.cssText = "position:fixed;z-index:50;display:" + (shown ? "block" : "none") + ";bottom:" + cs.bottom + ";transform:" + (ref.style.transform || "none") + ";transform-origin:" + cs.transformOrigin + ";opacity:" + cs.opacity + ";left:" + ((parseFloat(ref.style.left) || ref.getBoundingClientRect().left) + 110) + "px;";
     if (!shown && ov && ov.__fromEditor) close();   // opened from the skin editor: leaving it closes the page
+    ["scosh", "stagh"].forEach(function (bid) { var b = document.getElementById(bid); if (b) { var want = vsOn() ? "0.38" : ""; if (b.style.opacity !== want) b.style.opacity = want; } });
   }
   function boot() { if (!document.body) { setTimeout(boot, 50); return; } setInterval(tick, 400); }
   boot();
 
   return { hide: hide, hideOther: hideOther, other: remoteFor, noEyes: noEyes, open: open, close: close, pick: pick, cfg: cfg, LIST: LIST, setOpt: setOpt,
-    get sync() { return { connected: net.ready, arena: net.arena, published: !!net.pub, remote: net.remote.size }; }, get id() { return cur() ? cfg.id : ""; } };
+    wire: wire, fromCorner: fromCorner, get on() { return vsOn(); }, get id() { return cur() ? cfg.id : ""; } };
 })();
 /* ========================== END VANCED SKINS =============================== */
 /* ========================== PRO GUARD ====================================== */
@@ -6075,7 +6076,7 @@ var NTL_VS = (function () {
   var ov = null, secsRef = null, navsRef = null;   // the open popup's sections / nav items (for the tour)
   var VER = (function () { try { return (typeof WYRM_VER !== "undefined" && WYRM_VER) || localStorage.getItem("wyrmversion") || ""; } catch (e) { return ""; } })();
   var CHANGELOG = [
-    { v: "5.72-dev", d: "12 Oct 2026", t: "Strip looks: Vanced Skins now has fifteen Strip looks — Strip, Neon, Glass, Outline, Pixel, Rainbow, Candy, Tube, Chrome, Lava, Ice, Galaxy, Ghost, Bead and Zigzag. Pick one, then choose whether it shows on Mine or on Everyone. Strip looks and every creature show to other NTL VANCED players (Share my skin). Twelve eyed creatures too, from one huge eye to many tiny ones: Cyclops, Evil Eye, Argus, Spider Eyes, Mega Eye, Bean, Owl, Third Eye, Snail, Mantis, Eyeball Chain and Jelly. Their eyes follow where you turn, blink, and narrow when you boost." },
+    { v: "5.72", d: "13 Oct 2026", t: "Vanced Skins: 15 Strip looks (Strip, Neon, Glass, Outline, Pixel, Rainbow, Candy, Tube, Chrome, Lava, Ice, Galaxy, Ghost, Bead, Zigzag) and 12 new eyed creatures (Cyclops, Evil Eye, Argus, Spider Eyes, Mega Eye, Bean, Owl, Third Eye, Snail, Mantis, Eyeball Chain, Jelly) whose eyes follow your turns, blink and narrow on boost. Your creature or Strip look is now shared inside the game itself, like tags, so other NTL VANCED and Wyrm players see it and you see theirs; others see the closest normal skin. While a Vanced Skin is on, tags and cosmetics are off." },
     { v: "5.71", d: "12 Oct 2026", t: "Refinements. Some changes in Eyes Back mode." },
     { v: "5.70", d: "5 Oct 2026", t: "Strip: a new look in Vanced Skins \u2014 snakes drawn as flat strips in their own colour with a white eye dot and their bones down the middle. Pick it for your snake only (Mine) or for every snake you see (Everyone). It is only on your screen; your skin stays the same for everyone else." },
     { v: "5.69", d: "5 Oct 2026", t: "Tour: the highlight and its card now land on the right spot at any UI size or browser zoom \u2014 it scrolls sideways when needed, puts the card where it hides the least and re-centres when you zoom mid-tour. Team keys work again: NTL’s team service only answers NTL’s own version, so NTL VANCED now sends 9.68 to it (it had been sending its own version and every key was refused). Restore: a backup (from NTL or NTL VANCED) no longer stops half way when the browser storage is full \u2014 team keys and settings always come back, and anything too big to fit is named at the end." },
@@ -8690,7 +8691,7 @@ Eb.onload=function(){return function(){this.kfmc.getContext("2d").drawImage(this
 cb="00"+Math.min(255,Math.max(0,Math.round(.5*(255+hb.o)))).toString(16);bb=bb.substr(bb.length-2);ab=ab.substr(ab.length-2);cb=cb.substr(cb.length-2);hb.Hf="#"+bb+ab+cb;hb.N=1;hb.M=ew+nw*hb.N;hb.C=hb.M+.1;hb.p=vw;hb.Z=new Float32Array(ow);hb.K=new Float32Array(ow);hb.q=new Float32Array(ow);hb.F=0;hb._=0;hb.fx=0;hb.fy=0;hb.m=0;hb.Y=new Float32Array(Qw);hb.U=0;hb.j=0;hb.k=0;hb.xA=gb;hb.OA=gb;hb.AA=1;hb.S=42;hb.fam=0;hb.rsc=0;hb.ang=gb;hb.J=gb;hb.R=gb;hb.mA=0;hb.CA=0;hb.O=2;hb.W=null;ib?(hb.W=ib[ib.length-
 1],hb.B=ib,hb.sct=ib.length,ib[0].dying&&hb.sct--):(hb.B=[],hb.sct=0);hb.ef=0;hb.ff=new Float32Array(iw);hb.Af=0;hb.$A=0;hb.nf=hb.sct+Math.min(1,hb.fam);hb.RA=hb.nf-.6;hb.T=1;hb.I=!1;hb.X=0;hb.H=0;hb.rA=0;hb.V=0;hb.L=0;hb.gptz=[];hb.__gl_acc_pushed=0;hb.__gl_joker_pushed=0;hb.__gl_slug_pushed=0;hb.__gl_cusk_eye_pushed=0;hb.__gl_eyes_pushed=0;ef.push(hb);os.set(hb.id,hb);return hb},o7=18,d7="1n17tKWRcde6ZehB",z7=function(bb,ab,cb){ab=Number(ab);Number.isFinite(ab)||(ab=0);ab|=0;var eb=0,gb=0,ib=0;
 bb.PA=ab;bb.SA=6;bb.NA=3.5;bb.TA=2.3;bb.WA="#ffffff";bb.FA=.75;bb.ZA=1;bb.KA="#000000";bb.UA=!1;bb.EA=!1;bb.mf=!1;bb.pA=6;bb.JA=6;bb.GA=.1;bb.VA=!1;bb.hA=!1;bb.IA=!1;bb.LA=0;bb.Qf=0;bb.MA=!1;Number.isFinite(bb.vA)?bb.vA|=0:bb.vA=-1;if(null!=cb){var db=cb.length;if(10<=db){for(var hb,kb=8,mb=[],jb,nb;kb<db;)if(jb=cb[kb],kb++,kb<db&&(nb=cb[kb],kb++,1==nu[nb]))for(hb=0;hb<jb;hb++)mb.push(nb);0<mb.length&&(bb.sA=mb,ab=bb.sA[0],bb.zA=ab,bb.cs=z4[ab],bb.MA=!0)}cb[1]==o7&&(255!=cb[2]?(bb.MA=!1,ab=bb.zA=
-bb.PA=cb[2]):(bb.MA=!0,ab=bb.zA=bb.PA=cb[9]),bb.vA=cb[6]>=Pv?-1:cb[6],254!=cb[0]&&(bb.vA=-1));38==cb[1]&&(255!=cb[2]?(bb.MA=!1,ab=bb.zA=bb.PA=cb[2]):(bb.MA=!0,ab=bb.zA=bb.PA=cb[9]),bb.vA=168>cb[6]?cb[6]+200:cb[6]+500,cb[6]>=fstags.length&&(bb.vA=-1))}T0.has(bb.id)&&(bb.vA=T0.get(bb.id));if(!bb.MA){if(24==ab){bb.UA=!0;bb.vf=0;bb.tf="#00688c";bb.af="#64c8e7";bb.rf=!0;bb.Pf=.35;bb.sf=!1;kb=8;bb.cA=new Float32Array(kb);bb.wA=new Float32Array(kb);bb.uA=new Float32Array(kb);bb.lA=new Float32Array(kb);bb.QA=
+bb.PA=cb[2]):(bb.MA=!0,ab=bb.zA=bb.PA=cb[9]),bb.vA=cb[6]>=Pv?-1:cb[6],254!=cb[0]&&(bb.vA=-1));38==cb[1]&&(255!=cb[2]?(bb.MA=!1,ab=bb.zA=bb.PA=cb[2]):(bb.MA=!0,ab=bb.zA=bb.PA=cb[9]),bb.vA=168>cb[6]?cb[6]+200:cb[6]+500,cb[6]>=fstags.length&&(bb.vA=-1));bb.__vsk=typeof NTL_CR!=="undefined"?NTL_CR.fromCorner(cb):0;bb.__vsk&&255!=cb[2]&&(bb.MA=!1,ab=bb.zA=bb.PA=cb[2])}null==cb&&(bb.__vsk=0);T0.has(bb.id)&&(bb.vA=T0.get(bb.id));if(!bb.MA){if(24==ab){bb.UA=!0;bb.vf=0;bb.tf="#00688c";bb.af="#64c8e7";bb.rf=!0;bb.Pf=.35;bb.sf=!1;kb=8;bb.cA=new Float32Array(kb);bb.wA=new Float32Array(kb);bb.uA=new Float32Array(kb);bb.lA=new Float32Array(kb);bb.QA=
 new Float32Array(kb);bb.bA=new Float32Array(kb);for(--kb;0<=kb;kb--)bb.cA[kb]=bb.xx,bb.wA[kb]=bb.yy;-1==bb.vA&&(bb.vA=14);bb.if=-10;bb.gf=-10;bb.df=20;bb.zf=20;bb.cf=1;bb.wf=.75}else if(25==ab){bb.WA="#ff5609";bb.FA=1;bb.UA=!0;bb.vf=0;bb.tf="#000000";bb.af="#5630d7";bb.Pf=1;bb.sf=!0;kb=9;bb.cA=new Float32Array(kb);bb.wA=new Float32Array(kb);bb.uA=new Float32Array(kb);bb.lA=new Float32Array(kb);bb.QA=new Float32Array(kb);bb.bA=new Float32Array(kb);for(--kb;0<=kb;kb--)bb.cA[kb]=bb.xx,bb.wA[kb]=bb.yy;
 -1==bb.vA&&(bb.vA=13);bb.if=-5;bb.gf=-10;bb.df=20;bb.zf=20;bb.cf=1.6;bb.wf=1}else if(27==ab)bb.EA=!0,bb.ebi=Sw,bb.ebiw=64,bb.ebih=64,bb.ebisz=29,bb.epi=Gw,bb.epiw=48,bb.epih=48,bb.episz=14,bb.TA=4,bb.Qf=.06;else if(37==ab){bb.FA=1;bb.UA=!0;bb.vf=0;bb.tf="#301400";bb.af="#ff6813";bb.rf=!0;bb.Pf=.5;bb.sf=!0;kb=9;bb.cA=new Float32Array(kb);bb.wA=new Float32Array(kb);bb.uA=new Float32Array(kb);bb.lA=new Float32Array(kb);bb.QA=new Float32Array(kb);bb.bA=new Float32Array(kb);for(--kb;0<=kb;kb--)bb.cA[kb]=
 bb.xx,bb.wA[kb]=bb.yy;-1==bb.vA&&(bb.vA=1);bb.if=-39;bb.gf=-63;bb.df=172;bb.zf=113;bb.cf=.42;bb.wf=1}else if(39==ab){bb.FA=1;bb.UA=!0;bb.vf=0;bb.tf="#1d3245";bb.af="#44d4ff";bb.rf=!0;bb.Pf=.43;bb.sf=!0;kb=9;bb.cA=new Float32Array(kb);bb.wA=new Float32Array(kb);bb.uA=new Float32Array(kb);bb.lA=new Float32Array(kb);bb.QA=new Float32Array(kb);bb.bA=new Float32Array(kb);for(--kb;0<=kb;kb--)bb.cA[kb]=bb.xx,bb.wA[kb]=bb.yy;-1==bb.vA&&(bb.vA=5);bb.if=-36;bb.gf=-100;bb.df=190;bb.zf=188;bb.cf=.25;bb.wf=1}else if(40==
@@ -8809,8 +8810,8 @@ vv[998]="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAB
 vv[996]="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH4gMZDREnA+J3xAAAALNJREFUKM/Vkj0KwzAMhZ/aTobexUfw0tmGUrp0yAF6roKHQKbOzgmsoxgM3YIylBpcpwSyVfBAEvoE+iERwRbbYaNtBg9LSWaWcRyRUoK1FlpraopEpJK1VnxWlbquk++6Kogxis9KABR94BhjBVczDsNQ/H4i9BPhenwBAEII6zMCwHn/PpPPan2rzrni+6wqyBjzG9Ra0+N2aro/75dms7T0OcwsIQSklOCcWzwH/c/LzcIffCGUvXH2AAAAAElFTkSuQmCC",Gi<av||1E3>=Gi&&Gi>=T4||(Gi=1E3),Gi=localStorage&&"doti"in localStorage?localStorage.getItem("doti"):
 1E3,Gi<av||1E3>=Gi&&Gi>=T4||(Gi=1E3),!SA&&(x3=!1,q1=setInterval(O3,25)),zs())},W4=[],F4=[],Z4=!1,K4=function(){qA.bgimg="";cf(["bgimg"]).then(function(bb){if(bb){if(R(J,"custom background image deleted"),bb=document.getElementById("bg-value"))bb.value=2,bb.onchange()}else R(J,"failed to delete custom background image")})},q4=!1,_4=.98,$4=0,A0=150,f0=3.5,e0=4,n0=function(){rv=0;pl.length=0;T0.clear();hl=0;bso.ip+":"+bso.po!=ae&&(Uf(),ve=!1,w9(),E(),W4.length=0);ps=!1;gi.length=F4.length=0;oi.clear();
 fi=!1;ks=0;tf.gA&&(tf.HA=0);tf.lf="grow";window.KK_getRank=function(){KK_RANKING=Gc};u8=!1;Xf=localStorage&&"dynmm"in localStorage?y(localStorage.getItem("dynmm")):!0;ii||(tf.gA=!1);oa=0;var bb=asciize(yz.value);24<bb.length&&(bb=bb.substr(0,24));cu=bb;Ca&&(bb=Nf);var ab=~~(65*Math.random());try{var cb=localStorage.getItem("snakercv");cb==""+Number(cb)&&(ab=Number(cb))}catch(hb){}cb=[];var eb=!1,gb="",ib=ab;try{var db="1"==localStorage.getItem("want_custom_skin");gb=localStorage.getItem("custom_skin")}catch(hb){}if(db&&
-gb&&0<gb.length)for(gb=(""+gb).split(","),cb=new Uint8Array(gb.length),eb=0;eb<gb.length;eb++)cb[eb]=Number(gb[eb]);Ca?(Tf=ab+" "+(db?"1":"0")+" "+cb,cb=[],ab=~~(65*Math.random())):(Tf="",300<cb.length&&(cb=cb.slice(0,300)));gb=Ov();q=new Uint8Array(6+bb.length+(cb.length||Ca?cb.length:gb?0:8+$0(ib).length));q[0]=115;q[1]=r8;q[2]=ab;q[3]=bb.length;ab=4;for(eb=0;eb<bb.length;eb++)q[ab]=bb.charCodeAt(eb),ab++;q[ab++]=0;q[ab++]=Qs();if(!cb.length&&!Ca&&!gb){cb=new Uint8Array(8+$0(ib).length);for(eb=
-0;8>eb;eb++)cb[eb]=A5[eb];eb=$0(ib);for(P=0;P<eb.length;P++)cb[P+8]=eb[P]}cb.length&&!Ca&&(cb[2]=db?255:ib,199<d8&&368>d8&&d8<fstags.length+200?(cb[1]=38,cb[6]=d8-200,cb[0]=255):667<d8&&756>d8&&d8<fstags.length+500?(cb[1]=38,cb[6]=d8-500,cb[0]=255):0<=d8&&d8<Pv&&(cb[1]=o7,cb[6]=Number(d8),cb[0]=254));for(eb=0;eb<cb.length;eb++)q[ab++]=cb[eb];id(q);ku=!0;Uu=1;Yu=0;yu=1;0==yQ&&(ku=!1,Uu=0,yu=1.7);1==Ae&&(ku=!1,Uu=0);Eu=performance.now()},Oe=function(){var bb,ab,cb,eb,gb;function ib(tb,wb,Ab){tb=ob.createShader(tb);
+gb&&0<gb.length)for(gb=(""+gb).split(","),cb=new Uint8Array(gb.length),eb=0;eb<gb.length;eb++)cb[eb]=Number(gb[eb]);Ca?(Tf=ab+" "+(db?"1":"0")+" "+cb,cb=[],ab=~~(65*Math.random())):(Tf="",300<cb.length&&(cb=cb.slice(0,300)));gb=Ov()&&!(typeof NTL_CR!=="undefined"&&NTL_CR.wire());q=new Uint8Array(6+bb.length+(cb.length||Ca?cb.length:gb?0:8+$0(ib).length));q[0]=115;q[1]=r8;q[2]=ab;q[3]=bb.length;ab=4;for(eb=0;eb<bb.length;eb++)q[ab]=bb.charCodeAt(eb),ab++;q[ab++]=0;q[ab++]=typeof NTL_CR!=="undefined"&&NTL_CR.wire()?255:Qs();if(!cb.length&&!Ca&&!gb){cb=new Uint8Array(8+$0(ib).length);for(eb=
+0;8>eb;eb++)cb[eb]=A5[eb];eb=$0(ib);for(P=0;P<eb.length;P++)cb[P+8]=eb[P]}cb.length&&!Ca&&(cb[2]=db?255:ib,199<d8&&368>d8&&d8<fstags.length+200?(cb[1]=38,cb[6]=d8-200,cb[0]=255):667<d8&&756>d8&&d8<fstags.length+500?(cb[1]=38,cb[6]=d8-500,cb[0]=255):0<=d8&&d8<Pv&&(cb[1]=o7,cb[6]=Number(d8),cb[0]=254));(function(vn){vn&&8<=cb.length&&!Ca&&(cb[0]=254,cb[1]=86,cb[3]=0,cb[4]=0,cb[5]=0,cb[6]=vn,cb[7]=vn^92)})(typeof NTL_CR!=="undefined"?NTL_CR.wire():0);for(eb=0;eb<cb.length;eb++)q[ab++]=cb[eb];id(q);ku=!0;Uu=1;Yu=0;yu=1;0==yQ&&(ku=!1,Uu=0,yu=1.7);1==Ae&&(ku=!1,Uu=0);Eu=performance.now()},Oe=function(){var bb,ab,cb,eb,gb;function ib(tb,wb,Ab){tb=ob.createShader(tb);
 ob.shaderSource(tb,wb);ob.compileShader(tb);if(!ob.getShaderParameter(tb,ob.COMPILE_STATUS)){try{Ab&&(Ab.msg=ob.getShaderInfoLog(tb)||"")}catch(xb){}ob.deleteShader(tb);return null}return tb}function db(tb,wb,Ab){var xb=ob.createProgram();ob.attachShader(xb,tb);ob.attachShader(xb,wb);ob.linkProgram(xb);if(!ob.getProgramParameter(xb,ob.LINK_STATUS)){try{Ab&&(Ab.msg=ob.getProgramInfoLog(xb)||"")}catch(yb){}ob.deleteProgram(xb);return null}return xb}function hb(){yj?rj=Date.now()+500:Zh=!0}function kb(){if(Zh)return!1;
 if(nh)return!0;if(yj&&Date.now()<rj)return!1;try{rb=document.createElement("canvas");rb.width=1;rb.height=1;ob=rb.getContext("webgl2",{premultipliedAlpha:!0,antialias:!1,alpha:!0,depth:!1,stencil:!1,preserveDrawingBuffer:!1,powerPreference:"high-performance"});if(!ob)return hb(),!1;jj=ob.getParameter(ob.MAX_TEXTURE_SIZE)|0;var tb=ib(ob.VERTEX_SHADER,"#version 300 es\nprecision highp float;\nlayout(location=0) in vec2 aCorner;\nlayout(location=1) in vec2 aCenter;\nlayout(location=2) in float aAngle;\nlayout(location=3) in float aSize;\nlayout(location=4) in float aFrame;\nlayout(location=5) in float aAlpha;\nlayout(location=6) in vec3 aRGB;\nuniform vec2 uViewport;\nout vec2 vUV;\nout float vFrame;\nout float vAlpha;\nout vec3 vRGB;\nvoid main(){\n  float s = sin(aAngle), c = cos(aAngle);\n  vec2 r = vec2(aCorner.x*c - aCorner.y*s, aCorner.x*s + aCorner.y*c);\n  vec2 p = aCenter + r * aSize * 2.0;\n  vec2 clip = (p / uViewport) * 2.0 - 1.0;\n  clip.y = -clip.y;\n  gl_Position = vec4(clip, 0.0, 1.0);\n  vUV = aCorner + 0.5;\n  vFrame = aFrame;\n  vAlpha = aAlpha;\n  vRGB = aRGB;\n}\n"),
 wb=ib(ob.FRAGMENT_SHADER,"#version 300 es\nprecision highp float;\nin vec2 vUV;\nin float vFrame;\nin float vAlpha;\nin vec3 vRGB;\nuniform sampler2D uAtlas;\nuniform float uTilesPerRow;\nuniform float uTilePx;\nout vec4 outColor;\nvoid main(){\n  if (vFrame < -4.5) {\n    vec2 d = vec2(vUV.x - 0.5, vUV.y - 34.0/62.0);\n    float dist = length(d) * 62.0;\n    float v = 1.0 - min(abs((dist - 15.0) * 0.1), 1.0);\n    if (v <= 0.0) discard;\n    outColor = vec4(0.0, 0.0, 0.0, v * 0.25 * vAlpha);\n  } else if (vFrame < -3.5) {\n    vec2 d = vUV - 0.5;\n    float dist = length(d) * 52.0;\n    float v = abs(dist - 16.0);\n    if (v > 4.0) discard;\n    v = (1.0 - v / 4.0) * 0.8;\n    outColor = vec4(0.0, 0.0, 0.0, v * vAlpha);\n  } else if (vFrame < -2.5) {\n    vec2 d = vUV - 0.5;\n    float r2 = dot(d, d);\n    if (r2 > 0.25) discard;\n    float a = 1.0 - r2 * 4.0;\n    a = a * a;\n    outColor = vec4(vRGB * a * vAlpha, a * vAlpha);\n  } else if (vFrame < -1.5) {\n    outColor = vec4(vRGB * vAlpha, vAlpha);\n  } else if (vFrame < 0.0) {\n    vec2 d = vUV - 0.5;\n    float dist = length(d);\n    float fw = fwidth(dist);\n    float a = clamp(0.5 - (dist - 0.5) / max(fw, 1e-5), 0.0, 1.0);\n    if (a <= 0.0) discard;\n    outColor = vec4(vRGB * vAlpha * a, vAlpha * a);\n  } else {\n    float tile = floor(vFrame + 0.5);\n    float inset = 0.5 / uTilePx;\n    float localU = clamp(vUV.x, inset, 1.0 - inset);\n    float localV = clamp(vUV.y, inset, 1.0 - inset);\n    vec2 uv = vec2((tile + localU) / uTilesPerRow, localV);\n    vec4 t = texture(uAtlas, uv);\n    outColor = vec4(t.rgb * vAlpha, t.a * vAlpha);\n  }\n}\n");
